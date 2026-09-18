@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -24,14 +25,16 @@ type Handler struct {
 	cfg      *config.Config
 	redis    *storage.RedisClient
 	pg       *storage.PostgresDB
+	ch       *storage.ClickHouseDB
 	siteKeys sync.Map // Cache em memória para validação ultra-rápida de site_key
 }
 
-func NewHandler(cfg *config.Config, rdb *storage.RedisClient, pg *storage.PostgresDB) *Handler {
+func NewHandler(cfg *config.Config, rdb *storage.RedisClient, pg *storage.PostgresDB, ch *storage.ClickHouseDB) *Handler {
 	return &Handler{
 		cfg:   cfg,
 		redis: rdb,
 		pg:    pg,
+		ch:    ch,
 	}
 }
 
@@ -146,21 +149,42 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		eventName = "page_view"
 	}
 
+	// 9. Detecção de Robô e Navegações Automatizadas (Stealth Tagging)
+	isBot, botReason := DetectBot(ua, eventName, req.ClientSignals)
+	if isBot {
+		log.Printf("[BotDetector] Robô identificado site=%s reason=%s event=%s ip=%s ua=%s", siteID, botReason, eventName, ip, ua)
+		if h.redis != nil && h.redis.Client != nil {
+			isConv := isConversionEvent(eventName)
+			go func(r string, conv bool) {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				_ = h.redis.Client.HIncrBy(ctx, "stats:bots:reasons", r, 1).Err()
+				_ = h.redis.Client.Incr(ctx, "stats:bots:total").Err()
+				if conv {
+					_ = h.redis.Client.Incr(ctx, "stats:bots:protected_conversions").Err()
+				}
+			}(botReason, isConv)
+		}
+	}
+
 	payload := EventPayload{
-		EventID:     eventID,
-		SiteID:      siteID,
-		SiteKey:     siteKey,
-		VisitorID:   visitorID,
-		SessionID:   sessionID,
-		EventName:   eventName,
-		EventTime:   time.Now().UTC(),
-		IPAddress:   ip,
-		UserAgent:   ua,
-		DeviceType:  deviceType,
-		Attribution: attrParams,
-		UserData:    req.UserData,
-		CustomData:  req.CustomData,
-		CreatedAt:   time.Now().UTC(),
+		EventID:       eventID,
+		SiteID:        siteID,
+		SiteKey:       siteKey,
+		VisitorID:     visitorID,
+		SessionID:     sessionID,
+		EventName:     eventName,
+		EventTime:     time.Now().UTC(),
+		IPAddress:     ip,
+		UserAgent:     ua,
+		DeviceType:    deviceType,
+		Attribution:   attrParams,
+		UserData:      req.UserData,
+		CustomData:    req.CustomData,
+		ClientSignals: req.ClientSignals,
+		IsBot:         isBot,
+		BotReason:     botReason,
+		CreatedAt:     time.Now().UTC(),
 	}
 
 	if isNewVisitor {
@@ -243,4 +267,9 @@ func detectDeviceType(ua string) string {
 		return "mobile"
 	}
 	return "desktop"
+}
+
+func isConversionEvent(eventName string) bool {
+	name := strings.ToLower(strings.TrimSpace(eventName))
+	return name == "lead" || name == "purchase" || name == "whatsapp_click" || name == "form_submit" || name == "contact"
 }

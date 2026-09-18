@@ -76,6 +76,46 @@
         return match ? decodeURIComponent(match[3]) : '';
     }
 
+    // Telemetria passiva de interação e detecção de automação
+    var pageLoadTime = Date.now();
+    var hasInteracted = false;
+    var firstInteractionTime = 0;
+
+    function onFirstInteraction() {
+        if (!hasInteracted) {
+            hasInteracted = true;
+            firstInteractionTime = Date.now();
+        }
+    }
+    if (window.addEventListener) {
+        window.addEventListener('mousemove', onFirstInteraction, { once: true, passive: true });
+        window.addEventListener('scroll', onFirstInteraction, { once: true, passive: true });
+        window.addEventListener('touchstart', onFirstInteraction, { once: true, passive: true });
+        window.addEventListener('keydown', onFirstInteraction, { once: true, passive: true });
+    }
+
+    function getClientSignals() {
+        var now = Date.now();
+        var nav = window.navigator || {};
+        var scr = window.screen || {};
+        var isWebdriver = !!(nav.webdriver);
+        var isHeadless = !!(
+            window._phantom ||
+            window.callPhantom ||
+            window.__puppeteer_evaluation_script__ ||
+            window.__nightmare
+        );
+
+        return {
+            webdriver: isWebdriver,
+            headless: isHeadless,
+            screen_w: scr.width || 0,
+            screen_h: scr.height || 0,
+            time_to_interact_ms: firstInteractionTime ? (firstInteractionTime - pageLoadTime) : 0,
+            time_on_page_ms: Math.max(0, now - pageLoadTime)
+        };
+    }
+
     // 5. Função Principal de Disparo de Eventos
     function trackEvent(eventName, userData, customData) {
         if (!siteKey) {
@@ -101,7 +141,8 @@
             url: window.location.href,
             referrer: document.referrer || '',
             user_data: userData,
-            custom_data: customData
+            custom_data: customData,
+            client_signals: getClientSignals()
         };
 
         var jsonStr = JSON.stringify(payload);

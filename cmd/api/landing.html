@@ -537,11 +537,36 @@
                 </div>
             </div>
 
-            <!-- Card Direito: Auditoria de Segurança • Domínios Bloqueados -->
+            <!-- Card Direito: Auditoria de Segurança • Domínios Bloqueados & Filtro de Robôs -->
             <div class="code-box">
                 <div class="code-box-header">
-                    <span class="code-box-title">🛡️ Auditoria de Segurança • Domínios Fora do Escopo</span>
+                    <span class="code-box-title">🛡️ Auditoria de Segurança • Domínios & Robôs</span>
                     <span id="alerts-count-badge" class="badge badge-danger">Carregando...</span>
+                </div>
+
+                <!-- Barra de Métricas de Robôs Interceptados (Stealth Tagging) -->
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 0.6rem 0.8rem; margin-bottom: 0.8rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: #93c5fd;">🤖 Filtro de Robôs (Stealth Tagging)</span>
+                        <span id="bot-source-badge" class="badge" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; font-size: 0.65rem;">Live</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.4rem;">
+                        <div>
+                            <div style="font-size: 0.7rem; color: #94a3b8;">Total Robôs Interceptados</div>
+                            <div id="stat-total-bots" style="font-size: 1.15rem; font-weight: 700; color: #f8fafc;">0</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.7rem; color: #34d399;">Conversões Protegidas (Ads)</div>
+                            <div id="stat-protected-conv" style="font-size: 1.15rem; font-weight: 700; color: #34d399;">0</div>
+                        </div>
+                    </div>
+                    <div id="bot-reasons-container" style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem;">
+                        <span style="font-size: 0.72rem; color: #64748b;">Nenhum robô detectado ainda.</span>
+                    </div>
+                </div>
+
+                <div style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem;">
+                    Tentativas de Origens Fora da Whitelist:
                 </div>
                 <div class="list-container" id="alerts-container">
                     <p style="color: #64748b; font-size: 0.85rem;">Verificando tentativas de requisições fora do escopo...</p>
@@ -981,8 +1006,37 @@
             }
         }
 
+        async function loadBotStats() {
+            try {
+                const res = await fetch('/api/v1/security/bot-stats');
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                document.getElementById('stat-total-bots').textContent = (data.total_bots || 0).toLocaleString();
+                document.getElementById('stat-protected-conv').textContent = (data.protected_conversions || 0).toLocaleString();
+                document.getElementById('bot-source-badge').textContent = data.source === 'clickhouse' ? 'ClickHouse DB' : (data.source === 'redis' ? 'Redis Buffer' : 'Ativo');
+
+                const reasonsContainer = document.getElementById('bot-reasons-container');
+                if (data.reasons && Object.keys(data.reasons).length > 0) {
+                    let rHtml = '';
+                    for (const [r, count] of Object.entries(data.reasons)) {
+                        rHtml += `<span style="font-size: 0.7rem; padding: 0.15rem 0.45rem; border-radius: 4px; background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.25);">
+                            ${r}: <b>${count}</b>
+                        </span>`;
+                    }
+                    reasonsContainer.innerHTML = rHtml;
+                } else {
+                    reasonsContainer.innerHTML = '<span style="font-size: 0.72rem; color: #64748b;">Nenhum robô registrado até o momento.</span>';
+                }
+            } catch (e) {
+                console.error("Erro ao carregar bot stats:", e);
+            }
+        }
+
         // Inicialização
         checkAuth();
+        loadBotStats();
+        setInterval(loadBotStats, 15000);
     </script>
 </body>
 </html>

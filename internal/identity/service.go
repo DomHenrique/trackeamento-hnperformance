@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -168,6 +169,11 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 
 // checkAndRouteDispatch verifica se o evento é uma conversão e envia para a fila de despacho do Meta/Google/CRM
 func (s *Service) checkAndRouteDispatch(ctx context.Context, ev *collector.EventPayload, firstTouch map[string]interface{}) error {
+	if ev.IsBot {
+		log.Printf("[Identity] Interceptado: conversão '%s' originada de robô (motivo: %s). Despacho externo abortado para proteger Ads.", ev.EventName, ev.BotReason)
+		return nil
+	}
+
 	name := strings.ToLower(ev.EventName)
 	isConversion := name == "lead" || name == "purchase" || name == "whatsapp_click" || name == "form_submit" || name == "contact"
 

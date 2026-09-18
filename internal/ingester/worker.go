@@ -181,7 +181,7 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 			utm_source, utm_medium, utm_campaign, utm_content, utm_term,
 			gclid, gbraid, wbraid, fbclid, ttclid,
 			ip_address, user_agent, device_type,
-			custom_data_json, created_at
+			custom_data_json, is_bot, bot_reason, created_at
 		)
 	`)
 	if err != nil {
@@ -195,6 +195,11 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 		sessionUUID, _ := uuid.Parse(strings.TrimPrefix(ev.SessionID, "s_"))
 
 		customJSON, _ := json.Marshal(ev.CustomData)
+
+		var isBotVal uint8
+		if ev.IsBot {
+			isBotVal = 1
+		}
 
 		err := batch.Append(
 			eventUUID,
@@ -220,6 +225,8 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 			ev.UserAgent,
 			ev.DeviceType,
 			string(customJSON),
+			isBotVal,
+			ev.BotReason,
 			ev.CreatedAt,
 		)
 		if err != nil {

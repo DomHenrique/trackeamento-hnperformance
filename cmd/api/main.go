@@ -41,7 +41,15 @@ func main() {
 		defer pg.Close()
 	}
 
-	// 3. Inicializa Serviço de Autenticação e Bootstrap do Admin
+	// 3. Conexão opcional com ClickHouse (métricas analíticas e telemetria de robôs)
+	ch, err := storage.NewClickHouse(cfg)
+	if err != nil {
+		log.Printf("Aviso: Falha ao conectar no ClickHouse na API: %v (estatísticas analíticas indisponíveis)", err)
+	} else {
+		defer ch.Close()
+	}
+
+	// 4. Inicializa Serviço de Autenticação e Bootstrap do Admin
 	var authSvc *auth.Service
 	if pg != nil && pg.Pool != nil {
 		authSvc = auth.NewService(pg.Pool)
@@ -52,10 +60,10 @@ func main() {
 		cancel()
 	}
 
-	// 4. Inicializa o Handler do Coletor
-	handler := collector.NewHandler(cfg, rdb, pg)
+	// 5. Inicializa o Handler do Coletor
+	handler := collector.NewHandler(cfg, rdb, pg, ch)
 
-	// 5. Inicializa o app Fiber de ultra-performance
+	// 6. Inicializa o app Fiber de ultra-performance
 	app := fiber.New(fiber.Config{
 		ServerHeader:          "HN-Tracking-Engine",
 		DisableStartupMessage: false,
@@ -96,6 +104,9 @@ func main() {
 
 	// Endpoint de Alertas de Segurança (Domínios não autorizados)
 	app.Get("/api/v1/alerts", handler.HandleListAlerts)
+
+	// Endpoint de Telemetria de Robôs e Navegações Suspeitas
+	app.Get("/api/v1/security/bot-stats", handler.HandleGetBotStats)
 
 	// Endpoints de Autenticação
 	if authSvc != nil {
