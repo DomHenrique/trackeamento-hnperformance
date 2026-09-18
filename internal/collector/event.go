@@ -11,7 +11,8 @@ type EventRequest struct {
 	EventName  string                 `json:"event_name"`
 	EventID    string                 `json:"event_id,omitempty"` // Se passado pelo frontend para deduplicação com Meta Pixel
 	SessionID  string                 `json:"session_id,omitempty"`
-	URL        string                 `json:"url"`
+	URL        string                 `json:"url,omitempty"`
+	PageURL    string                 `json:"page_url,omitempty"`
 	Referrer   string                 `json:"referrer,omitempty"`
 	UserData   map[string]interface{} `json:"user_data,omitempty"`   // email, phone, name
 	CustomData map[string]interface{} `json:"custom_data,omitempty"` // value, currency, etc.

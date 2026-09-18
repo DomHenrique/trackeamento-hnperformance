@@ -118,6 +118,9 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	// 6. URL e Referrer
 	pageURL := req.URL
 	if pageURL == "" {
+		pageURL = req.PageURL
+	}
+	if pageURL == "" {
 		pageURL = c.Get("Referer")
 	}
 	referrer := req.Referrer
