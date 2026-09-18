@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -196,4 +197,209 @@ func (h *Handler) HandleListAlerts(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(alerts)
+}
+
+// InvalidateSiteCache invalida a entrada em memória correspondente ao siteID
+func (h *Handler) InvalidateSiteCache(siteID string) {
+	h.siteKeys.Range(func(key, val interface{}) bool {
+		if meta, ok := val.(*SiteMetadata); ok && meta.ID == siteID {
+			h.siteKeys.Delete(key)
+		}
+		return true
+	})
+}
+
+type SiteItem struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Domain string `json:"domain"`
+	APIKey string `json:"api_key"`
+}
+
+// HandleListSites retorna a lista de sites ativos para o dropdown da UI
+func (h *Handler) HandleListSites(c *fiber.Ctx) error {
+	if h.pg == nil || h.pg.Pool == nil {
+		return c.Status(fiber.StatusOK).JSON([]SiteItem{})
+	}
+
+	rows, err := h.pg.Pool.Query(c.Context(), "SELECT id::text, name, domain, api_key FROM sites WHERE is_active = true ORDER BY name ASC")
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	defer rows.Close()
+
+	sites := make([]SiteItem, 0)
+	for rows.Next() {
+		var s SiteItem
+		if err := rows.Scan(&s.ID, &s.Name, &s.Domain, &s.APIKey); err == nil {
+			sites = append(sites, s)
+		}
+	}
+	return c.Status(fiber.StatusOK).JSON(sites)
+}
+
+type AllowedDomainItem struct {
+	ID        string    `json:"id"`
+	SiteID    string    `json:"site_id"`
+	SiteName  string    `json:"site_name,omitempty"`
+	Domain    string    `json:"domain"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// HandleListDomains retorna os domínios permitidos
+func (h *Handler) HandleListDomains(c *fiber.Ctx) error {
+	if h.pg == nil || h.pg.Pool == nil {
+		return c.Status(fiber.StatusOK).JSON([]AllowedDomainItem{})
+	}
+
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	var query string
+	var args []interface{}
+
+	if siteID != "" {
+		query = `
+			SELECT d.id::text, d.site_id::text, s.name, d.domain, d.is_active, d.created_at
+			FROM site_allowed_domains d
+			JOIN sites s ON s.id = d.site_id
+			WHERE d.site_id = $1
+			ORDER BY d.created_at DESC
+		`
+		args = append(args, siteID)
+	} else {
+		query = `
+			SELECT d.id::text, d.site_id::text, s.name, d.domain, d.is_active, d.created_at
+			FROM site_allowed_domains d
+			JOIN sites s ON s.id = d.site_id
+			ORDER BY d.created_at DESC
+		`
+	}
+
+	rows, err := h.pg.Pool.Query(c.Context(), query, args...)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	defer rows.Close()
+
+	domains := make([]AllowedDomainItem, 0)
+	for rows.Next() {
+		var item AllowedDomainItem
+		if err := rows.Scan(&item.ID, &item.SiteID, &item.SiteName, &item.Domain, &item.IsActive, &item.CreatedAt); err == nil {
+			domains = append(domains, item)
+		}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(domains)
+}
+
+// HandleAddDomain cadastra um novo domínio autorizado para um site
+func (h *Handler) HandleAddDomain(c *fiber.Ctx) error {
+	var req struct {
+		SiteID string `json:"site_id"`
+		Domain string `json:"domain"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "dados invalidos"})
+	}
+
+	siteID := strings.TrimSpace(req.SiteID)
+	domain := cleanHost(req.Domain)
+	if siteID == "" || domain == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "site_id e domain sao obrigatorios"})
+	}
+
+	if h.pg == nil || h.pg.Pool == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "banco de dados indisponivel"})
+	}
+
+	var newID string
+	err := h.pg.Pool.QueryRow(c.Context(), `
+		INSERT INTO site_allowed_domains (site_id, domain, is_active)
+		VALUES ($1, $2, true)
+		ON CONFLICT (site_id, domain) DO UPDATE SET is_active = true
+		RETURNING id::text
+	`, siteID, domain).Scan(&newID)
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("erro ao salvar dominio: %v", err)})
+	}
+
+	// Invalida cache para ativação em tempo real
+	h.InvalidateSiteCache(siteID)
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"status":  "created",
+		"id":      newID,
+		"site_id": siteID,
+		"domain":  domain,
+	})
+}
+
+// HandleDeleteDomain remove ou desativa um domínio
+func (h *Handler) HandleDeleteDomain(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "id obrigatorio"})
+	}
+
+	if h.pg == nil || h.pg.Pool == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "banco de dados indisponivel"})
+	}
+
+	var siteID string
+	err := h.pg.Pool.QueryRow(c.Context(), "DELETE FROM site_allowed_domains WHERE id = $1 RETURNING site_id::text", id).Scan(&siteID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "dominio nao encontrado"})
+	}
+
+	// Invalida cache
+	h.InvalidateSiteCache(siteID)
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "deleted"})
+}
+
+// HandleApproveDomain aprova um domínio bloqueado direto dos alertas e remove o alerta correspondente
+func (h *Handler) HandleApproveDomain(c *fiber.Ctx) error {
+	var req struct {
+		SiteID string `json:"site_id"`
+		Domain string `json:"domain"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "dados invalidos"})
+	}
+
+	siteID := strings.TrimSpace(req.SiteID)
+	domain := cleanHost(req.Domain)
+	if siteID == "" || domain == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "site_id e domain sao obrigatorios"})
+	}
+
+	if h.pg == nil || h.pg.Pool == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "banco de dados indisponivel"})
+	}
+
+	// 1. Insere ou ativa no site_allowed_domains
+	var newID string
+	err := h.pg.Pool.QueryRow(c.Context(), `
+		INSERT INTO site_allowed_domains (site_id, domain, is_active)
+		VALUES ($1, $2, true)
+		ON CONFLICT (site_id, domain) DO UPDATE SET is_active = true
+		RETURNING id::text
+	`, siteID, domain).Scan(&newID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("erro ao aprovar dominio: %v", err)})
+	}
+
+	// 2. Remove o alerta daquele domínio não autorizado para limpar o card
+	_, _ = h.pg.Pool.Exec(c.Context(), "DELETE FROM site_domain_alerts WHERE site_id = $1 AND unauthorized_domain = $2", siteID, domain)
+
+	// 3. Invalida o cache
+	h.InvalidateSiteCache(siteID)
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":  "approved",
+		"id":      newID,
+		"site_id": siteID,
+		"domain":  domain,
+	})
 }

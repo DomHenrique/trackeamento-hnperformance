@@ -56,6 +56,8 @@ services:
       - ENV=production
       - TRACKING_DOMAIN=trackeamento.hnperformancedigital.com.br
       - HTTP_PORT=8080
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-hn_admin_secret_pass_2026}
       - REDIS_ADDR=redis:6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_secret_pass}
       - POSTGRES_HOST=postgres

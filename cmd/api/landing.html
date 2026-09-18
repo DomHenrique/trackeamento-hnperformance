@@ -10,11 +10,12 @@
     <style>
         :root {
             --bg: #090d16;
-            --card-bg: rgba(18, 26, 43, 0.7);
+            --card-bg: rgba(18, 26, 43, 0.75);
             --card-border: rgba(255, 255, 255, 0.08);
             --primary: #3b82f6;
             --primary-glow: rgba(59, 130, 246, 0.25);
             --accent: #10b981;
+            --danger: #ef4444;
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
             --code-bg: #050811;
@@ -34,31 +35,104 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             padding: 2rem 1rem;
             position: relative;
             overflow-x: hidden;
         }
 
-        /* Ambient Glow Background */
         body::before {
             content: '';
             position: absolute;
-            top: 15%;
+            top: 10%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 600px;
-            height: 350px;
+            width: 700px;
+            height: 400px;
             background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, rgba(16, 185, 129, 0.05) 50%, transparent 70%);
             z-index: 0;
             pointer-events: none;
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1080px;
             width: 100%;
             position: relative;
             z-index: 1;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .top-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 700;
+            font-size: 1.1rem;
+            background: linear-gradient(135deg, #ffffff 40%, #93c5fd 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .auth-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            padding: 0.45rem 0.9rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .btn:hover {
+            background: rgba(59, 130, 246, 0.35);
+            border-color: #60a5fa;
+            color: #ffffff;
+        }
+
+        .btn-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-success:hover {
+            background: rgba(16, 185, 129, 0.35);
+            border-color: #10b981;
+            color: #ffffff;
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: #ef4444;
+            color: #ffffff;
         }
 
         header {
@@ -96,7 +170,7 @@
         }
 
         h1 {
-            font-size: 2.5rem;
+            font-size: 2.4rem;
             font-weight: 800;
             letter-spacing: -0.03em;
             background: linear-gradient(135deg, #ffffff 40%, #93c5fd 100%);
@@ -107,9 +181,9 @@
         }
 
         p.subtitle {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             color: var(--text-muted);
-            max-width: 600px;
+            max-width: 650px;
             margin: 0 auto;
             line-height: 1.6;
         }
@@ -117,7 +191,7 @@
         /* Services Grid */
         .services-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
             gap: 1rem;
             margin-bottom: 2rem;
         }
@@ -162,29 +236,128 @@
             line-height: 1.4;
         }
 
-        /* Tech Details Box */
+        /* Side-by-Side Management & Security Grid */
+        .security-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .security-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .code-box {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: 14px;
             padding: 1.5rem;
             backdrop-filter: blur(12px);
-            margin-bottom: 1.5rem;
+            display: flex;
+            flex-direction: column;
         }
 
         .code-box-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 0.75rem;
+            margin-bottom: 1rem;
         }
 
         .code-box-title {
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             font-weight: 600;
             color: #cbd5e1;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        /* Form Inputs */
+        .form-row {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        input[type="text"], input[type="password"], select {
+            background: rgba(5, 8, 17, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            color: #f1f5f9;
+            padding: 0.55rem 0.85rem;
+            font-size: 0.85rem;
+            font-family: inherit;
+            width: 100%;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus, select:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        select option {
+            background: #090d16;
+            color: #f8fafc;
+        }
+
+        .list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            max-height: 320px;
+            overflow-y: auto;
+            padding-right: 0.3rem;
+        }
+
+        .list-container::-webkit-scrollbar {
+            width: 5px;
+        }
+        .list-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .item-card {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 0.75rem 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .item-domain {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #e2e8f0;
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .badge-wildcard {
+            background: rgba(59, 130, 246, 0.15);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
         pre {
@@ -210,26 +383,85 @@
             margin-right: 0.5rem;
         }
 
+        /* Modal Backdrop & Dialog */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(6px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+
+        .modal-dialog {
+            background: #0d1322;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            max-width: 480px;
+            width: 100%;
+            padding: 1.75rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            animation: modalFadeIn 0.2s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .modal-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .modal-body {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
         footer {
             text-align: center;
             color: #64748b;
             font-size: 0.85rem;
             margin-top: 2rem;
-        }
-
-        footer a {
-            color: #94a3b8;
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-
-        footer a:hover {
-            color: #f1f5f9;
+            padding-bottom: 2rem;
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Top Bar with Auth State -->
+        <div class="top-bar">
+            <div class="top-brand">
+                <span>⚡ HN Performance • Engine</span>
+            </div>
+            <div class="auth-actions" id="auth-header-area">
+                <button class="btn" onclick="openModal('modal-login')">🔐 Acesso Operador</button>
+            </div>
+        </div>
+
         <header>
             <div class="status-badge">
                 <span class="pulse-dot"></span>
@@ -239,6 +471,7 @@
             <p class="subtitle">Infraestrutura server-side de alto desempenho em Go para coleta de eventos, atribuição first-touch e despacho para Meta CAPI e Google Ads.</p>
         </header>
 
+        <!-- Services Status Grid -->
         <div class="services-grid">
             <div class="service-card">
                 <div class="service-header">
@@ -273,7 +506,51 @@
             </div>
         </div>
 
-        <div class="code-box">
+        <!-- Side-by-Side: Domínios Permitidos vs Auditoria de Segurança -->
+        <div class="security-grid">
+            <!-- Card Esquerdo: Gestão de Domínios Permitidos -->
+            <div class="code-box">
+                <div class="code-box-header">
+                    <span class="code-box-title">🌐 Domínios Autorizados (Whitelist)</span>
+                    <span id="domains-count-badge" class="badge badge-wildcard">0 Domínios</span>
+                </div>
+
+                <!-- Formulário de adição (disponível quando autenticado) -->
+                <div id="add-domain-box" style="margin-bottom: 1rem;">
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <select id="select-site-filter" onchange="loadDomainsForSelectedSite()" style="flex: 1;">
+                            <option value="">Carregando sites...</option>
+                        </select>
+                    </div>
+                    <div class="form-row" id="form-domain-add-row" style="display: none;">
+                        <input type="text" id="input-new-domain" placeholder="Ex: meudominio.com.br ou lp.cliente.com">
+                        <button class="btn btn-success" onclick="handleAddDomain()">+ Adicionar</button>
+                    </div>
+                    <div id="login-prompt-domain" style="font-size: 0.8rem; color: #64748b; padding: 0.4rem 0;">
+                        Faça login como operador para adicionar ou gerenciar domínios.
+                    </div>
+                </div>
+
+                <!-- Lista de Domínios Cadastrados -->
+                <div class="list-container" id="domains-list-container">
+                    <p style="color: #64748b; font-size: 0.85rem;">Carregando domínios...</p>
+                </div>
+            </div>
+
+            <!-- Card Direito: Auditoria de Segurança • Domínios Bloqueados -->
+            <div class="code-box">
+                <div class="code-box-header">
+                    <span class="code-box-title">🛡️ Auditoria de Segurança • Domínios Fora do Escopo</span>
+                    <span id="alerts-count-badge" class="badge badge-danger">Carregando...</span>
+                </div>
+                <div class="list-container" id="alerts-container">
+                    <p style="color: #64748b; font-size: 0.85rem;">Verificando tentativas de requisições fora do escopo...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Snippet de Instalação -->
+        <div class="code-box" style="margin-bottom: 1.5rem;">
             <div class="code-box-header">
                 <span class="code-box-title">Instalação do Rastreador no Site</span>
             </div>
@@ -285,7 +562,8 @@
 &lt;/script&gt;</code></pre>
         </div>
 
-        <div class="code-box">
+        <!-- Endpoints da API -->
+        <div class="code-box" style="margin-bottom: 1.5rem;">
             <div class="code-box-header">
                 <span class="code-box-title">Endpoints Disponíveis</span>
             </div>
@@ -302,17 +580,9 @@
                 <div>
                     <span class="endpoint-pill">GET</span> <code style="color: #cbd5e1;">/api/v1/alerts</code> — Registro de domínios não autorizados bloqueados
                 </div>
-            </div>
-        </div>
-
-        <!-- Painel de Auditoria de Alertas de Segurança -->
-        <div class="code-box">
-            <div class="code-box-header">
-                <span class="code-box-title">🛡️ Auditoria de Segurança • Domínios Fora do Escopo</span>
-                <span id="alerts-count-badge" style="font-size: 0.75rem; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 0.2rem 0.6rem; border-radius: 9999px; font-weight: 600;">Carregando...</span>
-            </div>
-            <div id="alerts-container" style="font-size: 0.85rem; color: #94a3b8;">
-                <p>Verificando tentativas de requisições fora do escopo...</p>
+                <div>
+                    <span class="endpoint-pill">GET/POST</span> <code style="color: #cbd5e1;">/api/v1/domains</code> — Gestão da lista de domínios permitidos
+                </div>
             </div>
         </div>
 
@@ -321,7 +591,312 @@
         </footer>
     </div>
 
+    <!-- MODAL 1: Login de Operador / Admin -->
+    <div class="modal-backdrop" id="modal-login">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <span class="modal-title">🔐 Acesso Operador HN</span>
+                <button onclick="closeModal('modal-login')" style="background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer;">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem; color: #cbd5e1;">Usuário</label>
+                        <input type="text" id="login-username" placeholder="Usuário administrador ou operador">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem; color: #cbd5e1;">Senha</label>
+                        <input type="password" id="login-password" placeholder="Sua senha">
+                    </div>
+                    <div id="login-error" style="color: #f87171; font-size: 0.8rem; display: none;"></div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('modal-login')">Cancelar</button>
+                <button class="btn btn-success" onclick="submitLogin()">Entrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Confirmação de Aprovação de Domínio (Anti-Clique Acidental) -->
+    <div class="modal-backdrop" id="modal-confirm-approve">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <span class="modal-title" style="color: #fbbf24;">⚠️ Confirmar Aprovação de Domínio</span>
+                <button onclick="closeModal('modal-confirm-approve')" style="background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer;">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Você está prestes a autorizar o seguinte domínio para rastreamento:</p>
+                <div style="background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.8rem; margin: 0.8rem 0;">
+                    <div style="font-family: 'JetBrains Mono', monospace; color: #f87171; font-weight: 600; font-size: 1rem;" id="approve-domain-target"></div>
+                    <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.3rem;" id="approve-site-target"></div>
+                </div>
+                <p style="font-size: 0.85rem; color: #cbd5e1;">
+                    Ao confirmar, todos os eventos legítimos e subdomínios desse endereço passarão a ser aceitos imediatamente e despachados para Meta CAPI e Google Ads.
+                </p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('modal-confirm-approve')">Cancelar</button>
+                <button class="btn btn-success" id="btn-confirm-approve-action">Confirmar e Liberar Tráfego</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Cadastro de Novo Operador (Visível para Admin) -->
+    <div class="modal-backdrop" id="modal-create-user">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <span class="modal-title">👤 Cadastrar Novo Usuário</span>
+                <button onclick="closeModal('modal-create-user')" style="background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer;">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem; color: #cbd5e1;">Nome de Usuário</label>
+                        <input type="text" id="new-user-username" placeholder="Ex: operador_sps">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem; color: #cbd5e1;">Senha</label>
+                        <input type="password" id="new-user-password" placeholder="Mínimo 6 caracteres">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem; color: #cbd5e1;">Perfil de Acesso</label>
+                        <select id="new-user-role">
+                            <option value="operator">Operador (Gerencia Domínios e Alertas)</option>
+                            <option value="admin">Administrador (Cria Usuários)</option>
+                        </select>
+                    </div>
+                    <div id="new-user-error" style="color: #f87171; font-size: 0.8rem; display: none;"></div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal('modal-create-user')">Cancelar</button>
+                <button class="btn btn-success" onclick="submitCreateUser()">Salvar Usuário</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let currentUser = null;
+        let pendingApprove = null;
+
+        function openModal(id) {
+            document.getElementById(id).style.display = 'flex';
+        }
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        // 1. Checagem de Autenticação
+        async function checkAuth() {
+            try {
+                const res = await fetch('/api/v1/auth/me');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.authenticated) {
+                        currentUser = data.user;
+                        renderAuthHeader();
+                        document.getElementById('form-domain-add-row').style.display = 'flex';
+                        document.getElementById('login-prompt-domain').style.display = 'none';
+                        loadSitesAndDomains();
+                        loadSecurityAlerts();
+                        return;
+                    }
+                }
+            } catch (e) {}
+
+            currentUser = null;
+            renderAuthHeader();
+            document.getElementById('form-domain-add-row').style.display = 'none';
+            document.getElementById('login-prompt-domain').style.display = 'block';
+            loadSitesAndDomains();
+            loadSecurityAlerts();
+        }
+
+        function renderAuthHeader() {
+            const area = document.getElementById('auth-header-area');
+            if (!currentUser) {
+                area.innerHTML = '<button class="btn" onclick="openModal(\'modal-login\')">🔐 Acesso Operador</button>';
+                return;
+            }
+
+            let html = `
+                <div style="font-size: 0.85rem; color: #34d399; display: flex; align-items: center; gap: 0.5rem;">
+                    <span>● ${currentUser.username} (${currentUser.role})</span>
+                </div>
+            `;
+            if (currentUser.role === 'admin') {
+                html += `<button class="btn" onclick="openModal('modal-create-user')" style="font-size: 0.75rem;">➕ Novo Usuário</button>`;
+            }
+            html += `<button class="btn btn-danger" onclick="logout()" style="font-size: 0.75rem;">🚪 Sair</button>`;
+            area.innerHTML = html;
+        }
+
+        async function submitLogin() {
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            const errDiv = document.getElementById('login-error');
+            errDiv.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    errDiv.textContent = data.error || 'Erro ao autenticar';
+                    errDiv.style.display = 'block';
+                    return;
+                }
+                closeModal('modal-login');
+                checkAuth();
+            } catch (e) {
+                errDiv.textContent = 'Falha na conexão com o servidor';
+                errDiv.style.display = 'block';
+            }
+        }
+
+        async function logout() {
+            await fetch('/api/v1/auth/logout', { method: 'POST' });
+            currentUser = null;
+            checkAuth();
+        }
+
+        async function submitCreateUser() {
+            const username = document.getElementById('new-user-username').value.trim();
+            const password = document.getElementById('new-user-password').value;
+            const role = document.getElementById('new-user-role').value;
+            const errDiv = document.getElementById('new-user-error');
+            errDiv.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/v1/auth/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, role })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    errDiv.textContent = data.error || 'Erro ao cadastrar';
+                    errDiv.style.display = 'block';
+                    return;
+                }
+                closeModal('modal-create-user');
+                alert(`Usuário '${username}' cadastrado com sucesso!`);
+            } catch (e) {
+                errDiv.textContent = 'Erro ao processar criação';
+                errDiv.style.display = 'block';
+            }
+        }
+
+        // 2. Carregamento de Sites & Domínios
+        async function loadSitesAndDomains() {
+            try {
+                const res = await fetch('/api/v1/sites');
+                const sites = await res.json();
+                const select = document.getElementById('select-site-filter');
+                select.innerHTML = '';
+                
+                if (!sites || sites.length === 0) {
+                    select.innerHTML = '<option value="">Nenhum site encontrado</option>';
+                    return;
+                }
+
+                sites.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = `${s.name} (${s.domain})`;
+                    select.appendChild(opt);
+                });
+
+                loadDomainsForSelectedSite();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadDomainsForSelectedSite() {
+            const siteID = document.getElementById('select-site-filter').value;
+            const container = document.getElementById('domains-list-container');
+            const badge = document.getElementById('domains-count-badge');
+            
+            if (!siteID) {
+                container.innerHTML = '<p style="color: #64748b;">Selecione um site acima.</p>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/v1/domains?site_id=${siteID}`);
+                const domains = await res.json();
+                badge.textContent = `${domains.length} Domínio(s)`;
+
+                if (!domains || domains.length === 0) {
+                    container.innerHTML = '<p style="color: #64748b; font-size: 0.85rem;">Nenhum domínio cadastrado para este site.</p>';
+                    return;
+                }
+
+                let html = '';
+                domains.forEach(d => {
+                    html += `
+                        <div class="item-card">
+                            <div>
+                                <span class="item-domain">${d.domain}</span>
+                                <span class="badge badge-wildcard" style="margin-left: 0.4rem;">*.subdomínios</span>
+                            </div>
+                            ${currentUser ? `<button class="btn btn-danger" onclick="handleDeleteDomain('${d.id}')" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Remover</button>` : ''}
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch (e) {
+                container.innerHTML = '<p style="color: #f87171;">Erro ao carregar domínios.</p>';
+            }
+        }
+
+        async function handleAddDomain() {
+            const siteID = document.getElementById('select-site-filter').value;
+            const input = document.getElementById('input-new-domain');
+            const domain = input.value.trim();
+
+            if (!siteID || !domain) {
+                alert('Informe um domínio válido.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/v1/domains', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: siteID, domain: domain })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert(err.error || 'Erro ao adicionar domínio');
+                    return;
+                }
+                input.value = '';
+                loadDomainsForSelectedSite();
+                loadSecurityAlerts();
+            } catch (e) {
+                alert('Erro de conexão ao adicionar domínio');
+            }
+        }
+
+        async function handleDeleteDomain(id) {
+            if (!confirm('Deseja realmente remover este domínio da whitelist?')) return;
+            try {
+                const res = await fetch(`/api/v1/domains/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    loadDomainsForSelectedSite();
+                }
+            } catch (e) {
+                alert('Erro ao remover domínio');
+            }
+        }
+
+        // 3. Auditoria de Segurança & Aprovação com Modal
         async function loadSecurityAlerts() {
             try {
                 const res = await fetch('/api/v1/alerts');
@@ -336,34 +911,78 @@
                     badge.style.background = 'rgba(16, 185, 129, 0.15)';
                     badge.style.color = '#34d399';
                     badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-                    container.innerHTML = '<p style="color: #34d399; display: flex; align-items: center; gap: 0.5rem;"><span>✔</span> Nenhum domínio suspeito ou não autorizado detectado. Todos os eventos são legítimos.</p>';
+                    container.innerHTML = '<p style="color: #34d399; font-size: 0.85rem; padding: 0.5rem 0;">✔ Nenhum domínio fora do escopo detectado.</p>';
                     return;
                 }
 
-                badge.textContent = `${data.length} Domínio(s) Barrado(s)`;
-                let html = '<div style="display: flex; flex-direction: column; gap: 0.6rem;">';
+                badge.textContent = `${data.length} Bloqueio(s)`;
+                badge.style.background = 'rgba(239, 68, 68, 0.2)';
+                badge.style.color = '#f87171';
+                badge.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+
+                let html = '';
                 data.forEach(item => {
                     const date = new Date(item.last_attempt_at).toLocaleString('pt-BR');
                     html += `
-                        <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 0.85rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <div class="item-card" style="border-color: rgba(239, 68, 68, 0.25);">
                             <div>
-                                <span style="color: #f87171; font-weight: 600; font-family: 'JetBrains Mono', monospace;">${item.unauthorized_domain || '(desconhecido)'}</span>
-                                <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.2rem;">Último IP: ${item.last_ip || 'N/A'} • Visto em: ${date}</div>
+                                <span class="item-domain" style="color: #f87171;">${item.unauthorized_domain}</span>
+                                <span class="badge badge-danger" style="margin-left: 0.4rem;">${item.attempts_count}x barrado</span>
+                                <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.2rem;">
+                                    Site: <b>${item.site_name || 'Geral'}</b> • IP: ${item.last_ip || 'N/A'} • ${date}
+                                </div>
                             </div>
-                            <div style="text-align: right;">
-                                <span style="background: rgba(239, 68, 68, 0.15); color: #fca5a5; font-size: 0.8rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 4px;">${item.attempts_count} bloqueio(s)</span>
-                            </div>
+                            ${currentUser ? `
+                                <button class="btn btn-success" onclick="promptApproveDomain('${item.site_id}', '${item.unauthorized_domain}', '${item.site_name || ''}')" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;">
+                                    ✓ Aprovar
+                                </button>
+                            ` : ''}
                         </div>
                     `;
                 });
-                html += '</div>';
                 container.innerHTML = html;
             } catch (e) {
                 document.getElementById('alerts-count-badge').textContent = 'Erro';
-                document.getElementById('alerts-container').innerHTML = '<p style="color: #64748b;">Falha ao carregar alertas em tempo real.</p>';
+                document.getElementById('alerts-container').innerHTML = '<p style="color: #64748b; font-size: 0.85rem;">Falha ao carregar alertas.</p>';
             }
         }
-        loadSecurityAlerts();
+
+        // Abre o modal de confirmação anti-clique acidental
+        function promptApproveDomain(siteId, domain, siteName) {
+            pendingApprove = { siteId, domain };
+            document.getElementById('approve-domain-target').textContent = domain;
+            document.getElementById('approve-site-target').textContent = `Site Destino: ${siteName || siteId}`;
+            
+            document.getElementById('btn-confirm-approve-action').onclick = confirmApproveAction;
+            openModal('modal-confirm-approve');
+        }
+
+        async function confirmApproveAction() {
+            if (!pendingApprove) return;
+            const { siteId, domain } = pendingApprove;
+
+            try {
+                const res = await fetch('/api/v1/domains/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: siteId, domain: domain })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert(err.error || 'Erro ao aprovar');
+                    return;
+                }
+                closeModal('modal-confirm-approve');
+                pendingApprove = null;
+                loadDomainsForSelectedSite();
+                loadSecurityAlerts();
+            } catch (e) {
+                alert('Erro ao conectar ao servidor para aprovar domínio');
+            }
+        }
+
+        // Inicialização
+        checkAuth();
     </script>
 </body>
 </html>

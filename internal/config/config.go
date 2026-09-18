@@ -11,6 +11,10 @@ type Config struct {
 	TrackingDomain string
 	HTTPPort       string
 
+	// Admin
+	AdminUser     string
+	AdminPassword string
+
 	// Redis
 	RedisAddr           string
 	RedisPassword       string
@@ -47,6 +51,8 @@ func Load() *Config {
 		Env:            getEnv("ENV", "development"),
 		TrackingDomain: getEnv("TRACKING_DOMAIN", "localhost"),
 		HTTPPort:       getEnv("HTTP_PORT", "8080"),
+		AdminUser:     getEnv("ADMIN_USER", "admin"),
+		AdminPassword: getEnv("ADMIN_PASSWORD", "hn_admin_secret_pass_2026"),
 
 		RedisAddr:           getEnv("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword:       getEnv("REDIS_PASSWORD", "redis_secret_pass"),

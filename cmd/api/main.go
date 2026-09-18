@@ -2,16 +2,19 @@ package main
 
 import (
 	_ "embed"
+	"context"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
+	"tracking-engine/internal/auth"
 	"tracking-engine/internal/collector"
 	"tracking-engine/internal/config"
 	"tracking-engine/internal/storage"
@@ -38,10 +41,21 @@ func main() {
 		defer pg.Close()
 	}
 
-	// 3. Inicializa o Handler do Coletor
+	// 3. Inicializa Serviço de Autenticação e Bootstrap do Admin
+	var authSvc *auth.Service
+	if pg != nil && pg.Pool != nil {
+		authSvc = auth.NewService(pg.Pool)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := authSvc.EnsureAdminUser(ctx, cfg.AdminUser, cfg.AdminPassword); err != nil {
+			log.Printf("[Auth] Erro ao provisionar admin: %v", err)
+		}
+		cancel()
+	}
+
+	// 4. Inicializa o Handler do Coletor
 	handler := collector.NewHandler(cfg, rdb, pg)
 
-	// 4. Inicializa o app Fiber de ultra-performance
+	// 5. Inicializa o app Fiber de ultra-performance
 	app := fiber.New(fiber.Config{
 		ServerHeader:          "HN-Tracking-Engine",
 		DisableStartupMessage: false,
@@ -53,8 +67,8 @@ func main() {
 		AllowOriginsFunc: func(origin string) bool {
 			return true
 		},
-		AllowMethods:     "GET,POST,OPTIONS",
-		AllowHeaders:     "Origin,Content-Type,Accept,X-Site-Key",
+		AllowMethods:     "GET,POST,DELETE,OPTIONS",
+		AllowHeaders:     "Origin,Content-Type,Accept,X-Site-Key,Authorization",
 		AllowCredentials: true,
 	}))
 
@@ -82,6 +96,21 @@ func main() {
 
 	// Endpoint de Alertas de Segurança (Domínios não autorizados)
 	app.Get("/api/v1/alerts", handler.HandleListAlerts)
+
+	// Endpoints de Autenticação
+	if authSvc != nil {
+		app.Post("/api/v1/auth/login", authSvc.HandleLogin)
+		app.Post("/api/v1/auth/logout", authSvc.HandleLogout)
+		app.Get("/api/v1/auth/me", authSvc.HandleMe)
+		app.Post("/api/v1/auth/users", authSvc.HandleCreateUser)
+	}
+
+	// Endpoints de Gestão de Domínios
+	app.Get("/api/v1/sites", handler.HandleListSites)
+	app.Get("/api/v1/domains", handler.HandleListDomains)
+	app.Post("/api/v1/domains", handler.HandleAddDomain)
+	app.Delete("/api/v1/domains/:id", handler.HandleDeleteDomain)
+	app.Post("/api/v1/domains/approve", handler.HandleApproveDomain)
 
 	// Endpoint para servir o SDK JS do Tracker
 	app.Get("/sdk/tracker.js", func(c *fiber.Ctx) error {
