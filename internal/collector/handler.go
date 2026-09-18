@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -179,10 +180,13 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (string, 
 	if h.pg != nil && h.pg.Pool != nil {
 		var siteID string
 		var isActive bool
-		err := h.pg.Pool.QueryRow(ctx, "SELECT id, is_active FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive)
+		err := h.pg.Pool.QueryRow(ctx, "SELECT id::text, is_active FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive)
 		if err == nil && isActive {
 			h.siteKeys.Store(siteKey, siteID)
 			return siteID, true
+		}
+		if err != nil {
+			fmt.Printf("[Collector] Erro ao validar site_key '%s': %v\n", siteKey, err)
 		}
 	}
 
