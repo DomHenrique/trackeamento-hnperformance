@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: tracking-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=false"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Redirecionamento automático HTTP -> HTTPS
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # Let's Encrypt SSL Automático
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@hnperformancedigital.com.br}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./data/letsencrypt:/letsencrypt"
+    networks:
+      - tracking-net
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: tracking-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis_secret_pass}"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - "./data/redis:/data"
+    networks:
+      - tracking-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: tracking-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tracking_db}
+      POSTGRES_USER: ${POSTGRES_USER:-tracking_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_secret_pass}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - "./data/postgres:/var/lib/postgresql/data"
+      - "./migrations/postgres:/docker-entrypoint-initdb.d"
+    networks:
+      - tracking-net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    container_name: tracking-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-tracking_events}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_secret_pass}
+    ports:
+      - "127.0.0.1:8123:8123" # HTTP Interface
+      - "127.0.0.1:9000:9000" # Native Client
+    volumes:
+      - "./data/clickhouse:/var/lib/clickhouse"
+      - "./migrations/clickhouse:/docker-entrypoint-initdb.d"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    networks:
+      - tracking-net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: tracking-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tracking-api.rule=Host(`${TRACKING_DOMAIN:-trackeamento.hnperformancedigital.com.br}`)"
+      - "traefik.http.routers.tracking-api.entrypoints=websecure"
+      - "traefik.http.routers.tracking-api.tls=true"
+      - "traefik.http.routers.tracking-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.tracking-api.loadbalancer.server.port=8080"
+    networks:
+      - tracking-net
+
+  ingester:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingester
+    container_name: tracking-ingester
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - clickhouse
+    networks:
+      - tracking-net
+
+  dispatcher:
+    build:
+      context: .
+      dockerfile: Dockerfile.dispatcher
+    container_name: tracking-dispatcher
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - tracking-net
+
+networks:
+  tracking-net:
+    driver: bridge

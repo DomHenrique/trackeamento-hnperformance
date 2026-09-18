@@ -1,0 +1,33 @@
+# Binários e compilações
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+dist/
+
+# Dependências e caches
+vendor/
+
+# Arquivos de ambiente e segredos locais
+.env
+*.local
+
+# Volumes e dados locais dos containers
+data/
+letsencrypt/
+data/redis/
+data/postgres/
+data/clickhouse/
+
+# OpenSpec e Agent configs
+openspec/
+.agent/
+
+# IDEs e editores
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
