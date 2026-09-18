@@ -1,0 +1,62 @@
+package collector
+
+import (
+	"testing"
+)
+
+func TestCleanHost(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"https://spspower.com.br", "spspower.com.br"},
+		{"http://spspower.com.br:8080/caminho?a=1", "spspower.com.br"},
+		{"lp.spspower.com.br", "lp.spspower.com.br"},
+		{"https://sub.dominio.com.br:443", "sub.dominio.com.br"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		got := cleanHost(tt.input)
+		if got != tt.expected {
+			t.Errorf("cleanHost(%q) = %q, esperado %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestIsDomainAllowed(t *testing.T) {
+	allowed := []string{"spspower.com.br", "hnperformancedigital.com.br"}
+
+	tests := []struct {
+		host     string
+		isDev    bool
+		expected bool
+	}{
+		// Domínios exatos
+		{"spspower.com.br", false, true},
+		{"hnperformancedigital.com.br", false, true},
+
+		// Subdomínios permitidos automaticamente
+		{"lp.spspower.com.br", false, true},
+		{"checkout.spspower.com.br", false, true},
+		{"app.sub.hnperformancedigital.com.br", false, true},
+
+		// Tentativas fraudulentas (homógrafos / sufixos sem ponto)
+		{"fakespspower.com.br", false, false},
+		{"spspower.com.br.evil.com", false, false},
+		{"outrosite.com.br", false, false},
+		{"", false, false},
+
+		// Desenvolvimento (localhost / 127.0.0.1)
+		{"localhost", true, true},
+		{"127.0.0.1", true, true},
+		{"localhost", false, false},
+	}
+
+	for _, tt := range tests {
+		got := IsDomainAllowed(tt.host, allowed, tt.isDev)
+		if got != tt.expected {
+			t.Errorf("IsDomainAllowed(%q, allowed, %v) = %v, esperado %v", tt.host, tt.isDev, got, tt.expected)
+		}
+	}
+}

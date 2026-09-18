@@ -80,6 +80,9 @@ func main() {
 	app.Post("/api/v1/collect", handler.HandleCollect)
 	app.Post("/t", handler.HandleCollect)
 
+	// Endpoint de Alertas de Segurança (Domínios não autorizados)
+	app.Get("/api/v1/alerts", handler.HandleListAlerts)
+
 	// Endpoint para servir o SDK JS do Tracker
 	app.Get("/sdk/tracker.js", func(c *fiber.Ctx) error {
 		c.Set("Content-Type", "application/javascript; charset=utf-8")

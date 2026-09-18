@@ -58,12 +58,13 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	}
 
 	// Validação da site_key com cache
-	siteID, valid := h.validateSiteKey(c.Context(), siteKey)
+	siteMeta, valid := h.validateSiteKey(c.Context(), siteKey)
 	if !valid {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "site_key invalida ou inativa",
 		})
 	}
+	siteID := siteMeta.ID
 
 	// 1. Gerenciamento do Cookie 1st-Party _vid
 	visitorID := c.Cookies(VisitorCookieName)
@@ -125,6 +126,17 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	}
 	referrer := req.Referrer
 
+	// Validação de Domínio de Origem (Whitelist com suporte a subdomínios)
+	originDomain := ExtractOriginDomain(c, &req)
+	isDev := h.cfg.Env == "development"
+	if !IsDomainAllowed(originDomain, siteMeta.AllowedDomains, isDev) {
+		h.RecordDomainAlert(siteID, originDomain, ip, ua, pageURL)
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error":  "dominio de origem nao autorizado",
+			"domain": originDomain,
+		})
+	}
+
 	// 7. Extração de parâmetros de Atribuição
 	attrParams := attribution.ParseURL(pageURL, referrer)
 
@@ -172,11 +184,11 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (string, bool) {
+func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMetadata, bool) {
 	// 1. Tenta memória
 	if val, ok := h.siteKeys.Load(siteKey); ok {
-		siteID := val.(string)
-		return siteID, siteID != ""
+		meta := val.(*SiteMetadata)
+		return meta, meta != nil && meta.ID != ""
 	}
 
 	// 2. Tenta PostgreSQL se disponível
@@ -185,8 +197,24 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (string, 
 		var isActive bool
 		err := h.pg.Pool.QueryRow(ctx, "SELECT id::text, is_active FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive)
 		if err == nil && isActive {
-			h.siteKeys.Store(siteKey, siteID)
-			return siteID, true
+			domains := []string{}
+			rows, errRows := h.pg.Pool.Query(ctx, "SELECT domain FROM site_allowed_domains WHERE site_id = $1 AND is_active = true", siteID)
+			if errRows == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var d string
+					if errScan := rows.Scan(&d); errScan == nil && d != "" {
+						domains = append(domains, d)
+					}
+				}
+			}
+
+			meta := &SiteMetadata{
+				ID:             siteID,
+				AllowedDomains: domains,
+			}
+			h.siteKeys.Store(siteKey, meta)
+			return meta, true
 		}
 		if err != nil {
 			fmt.Printf("[Collector] Erro ao validar site_key '%s': %v\n", siteKey, err)
@@ -195,11 +223,15 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (string, 
 
 	// Em ambiente dev ou caso o banco ainda esteja populando chaves, aceita como teste
 	if h.cfg.Env == "development" || strings.HasPrefix(siteKey, "test_") {
-		h.siteKeys.Store(siteKey, "00000000-0000-0000-0000-000000000001")
-		return "00000000-0000-0000-0000-000000000001", true
+		meta := &SiteMetadata{
+			ID:             "00000000-0000-0000-0000-000000000001",
+			AllowedDomains: []string{"localhost", "127.0.0.1"},
+		}
+		h.siteKeys.Store(siteKey, meta)
+		return meta, true
 	}
 
-	return "", false
+	return nil, false
 }
 
 func detectDeviceType(ua string) string {

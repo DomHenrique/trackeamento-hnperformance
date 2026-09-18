@@ -299,6 +299,20 @@
                 <div>
                     <span class="endpoint-pill">POST</span> <code style="color: #cbd5e1;">/api/v1/collect</code> — Endpoint de ingestão de eventos
                 </div>
+                <div>
+                    <span class="endpoint-pill">GET</span> <code style="color: #cbd5e1;">/api/v1/alerts</code> — Registro de domínios não autorizados bloqueados
+                </div>
+            </div>
+        </div>
+
+        <!-- Painel de Auditoria de Alertas de Segurança -->
+        <div class="code-box">
+            <div class="code-box-header">
+                <span class="code-box-title">🛡️ Auditoria de Segurança • Domínios Fora do Escopo</span>
+                <span id="alerts-count-badge" style="font-size: 0.75rem; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 0.2rem 0.6rem; border-radius: 9999px; font-weight: 600;">Carregando...</span>
+            </div>
+            <div id="alerts-container" style="font-size: 0.85rem; color: #94a3b8;">
+                <p>Verificando tentativas de requisições fora do escopo...</p>
             </div>
         </div>
 
@@ -306,5 +320,50 @@
             <p>&copy; 2026 HN Performance Digital • Todos os direitos reservados</p>
         </footer>
     </div>
+
+    <script>
+        async function loadSecurityAlerts() {
+            try {
+                const res = await fetch('/api/v1/alerts');
+                if (!res.ok) throw new Error('Falha ao carregar alertas');
+                const data = await res.json();
+                
+                const badge = document.getElementById('alerts-count-badge');
+                const container = document.getElementById('alerts-container');
+                
+                if (!data || data.length === 0) {
+                    badge.textContent = '0 Ocorrências';
+                    badge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    badge.style.color = '#34d399';
+                    badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                    container.innerHTML = '<p style="color: #34d399; display: flex; align-items: center; gap: 0.5rem;"><span>✔</span> Nenhum domínio suspeito ou não autorizado detectado. Todos os eventos são legítimos.</p>';
+                    return;
+                }
+
+                badge.textContent = `${data.length} Domínio(s) Barrado(s)`;
+                let html = '<div style="display: flex; flex-direction: column; gap: 0.6rem;">';
+                data.forEach(item => {
+                    const date = new Date(item.last_attempt_at).toLocaleString('pt-BR');
+                    html += `
+                        <div style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 0.85rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <div>
+                                <span style="color: #f87171; font-weight: 600; font-family: 'JetBrains Mono', monospace;">${item.unauthorized_domain || '(desconhecido)'}</span>
+                                <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.2rem;">Último IP: ${item.last_ip || 'N/A'} • Visto em: ${date}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <span style="background: rgba(239, 68, 68, 0.15); color: #fca5a5; font-size: 0.8rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 4px;">${item.attempts_count} bloqueio(s)</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            } catch (e) {
+                document.getElementById('alerts-count-badge').textContent = 'Erro';
+                document.getElementById('alerts-container').innerHTML = '<p style="color: #64748b;">Falha ao carregar alertas em tempo real.</p>';
+            }
+        }
+        loadSecurityAlerts();
+    </script>
 </body>
 </html>
