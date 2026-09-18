@@ -46,7 +46,9 @@ func main() {
 	// Middlewares
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "*",
+		AllowOriginsFunc: func(origin string) bool {
+			return true
+		},
 		AllowMethods:     "GET,POST,OPTIONS",
 		AllowHeaders:     "Origin,Content-Type,Accept,X-Site-Key",
 		AllowCredentials: true,
