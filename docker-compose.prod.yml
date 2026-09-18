@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    container_name: tracking_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis_secret_pass}"]
+    volumes:
+      - tracking_redis_data:/data
+    networks:
+      - tracking_internal
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: tracking_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tracking_db}
+      POSTGRES_USER: ${POSTGRES_USER:-tracking_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_secret_pass}
+    volumes:
+      - tracking_postgres_data:/var/lib/postgresql/data
+      - ./migrations/postgres:/docker-entrypoint-initdb.d
+    networks:
+      - tracking_internal
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    container_name: tracking_clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-tracking_events}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_secret_pass}
+    volumes:
+      - tracking_clickhouse_data:/var/lib/clickhouse
+      - ./migrations/clickhouse:/docker-entrypoint-initdb.d
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    networks:
+      - tracking_internal
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: tracking_api
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      - ENV=production
+      - TRACKING_DOMAIN=trackeamento.hnperformancedigital.com.br
+      - HTTP_PORT=8080
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_secret_pass}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-tracking_db}
+      - POSTGRES_USER=${POSTGRES_USER:-tracking_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres_secret_pass}
+      - POSTGRES_SSLMODE=disable
+      - CLICKHOUSE_ADDR=clickhouse:9000
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB:-tracking_events}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-clickhouse_secret_pass}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=rede_gridd"
+      - "traefik.http.routers.tracking-api.entrypoints=websecure"
+      - "traefik.http.routers.tracking-api.rule=Host(`trackeamento.hnperformancedigital.com.br`)"
+      - "traefik.http.routers.tracking-api.tls=true"
+      - "traefik.http.routers.tracking-api.tls.certresolver=letsencryptresolver"
+      - "traefik.http.services.tracking-api.loadbalancer.server.port=8080"
+    networks:
+      - tracking_internal
+      - rede_gridd
+
+  ingester:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingester
+    container_name: tracking_ingester
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - clickhouse
+    environment:
+      - ENV=production
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_secret_pass}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-tracking_db}
+      - POSTGRES_USER=${POSTGRES_USER:-tracking_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres_secret_pass}
+      - POSTGRES_SSLMODE=disable
+      - CLICKHOUSE_ADDR=clickhouse:9000
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB:-tracking_events}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-clickhouse_secret_pass}
+      - INGESTER_BATCH_SIZE=2000
+      - INGESTER_FLUSH_INTERVAL_SEC=2
+    networks:
+      - tracking_internal
+
+  dispatcher:
+    build:
+      context: .
+      dockerfile: Dockerfile.dispatcher
+    container_name: tracking_dispatcher
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      - ENV=production
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_secret_pass}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-tracking_db}
+      - POSTGRES_USER=${POSTGRES_USER:-tracking_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres_secret_pass}
+      - POSTGRES_SSLMODE=disable
+      - DISPATCHER_WORKERS=8
+      - DISPATCHER_MAX_RETRIES=5
+      - DISPATCHER_TIMEOUT_SEC=10
+    networks:
+      - tracking_internal
+
+volumes:
+  tracking_redis_data:
+  tracking_postgres_data:
+  tracking_clickhouse_data:
+
+networks:
+  tracking_internal:
+    driver: bridge
+  rede_gridd:
+    external: true
