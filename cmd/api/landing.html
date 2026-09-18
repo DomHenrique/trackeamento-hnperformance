@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HN Tracking Engine — Servidor de Rastreamento & Atribuição</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #090d16;
+            --card-bg: rgba(18, 26, 43, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --primary: #3b82f6;
+            --primary-glow: rgba(59, 130, 246, 0.25);
+            --accent: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --code-bg: #050811;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Glow Background */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 15%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 350px;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, rgba(16, 185, 129, 0.05) 50%, transparent 70%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            border-radius: 9999px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 1.25rem;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #ffffff 40%, #93c5fd 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.75rem;
+        }
+
+        p.subtitle {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* Services Grid */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .service-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 1.25rem;
+            backdrop-filter: blur(12px);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .service-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .service-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .service-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #10b981;
+        }
+
+        .service-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* Tech Details Box */
+        .code-box {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 1.5rem;
+            backdrop-filter: blur(12px);
+            margin-bottom: 1.5rem;
+        }
+
+        .code-box-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .code-box-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #cbd5e1;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        pre {
+            background: var(--code-bg);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: #e2e8f0;
+            line-height: 1.5;
+        }
+
+        .endpoint-pill {
+            display: inline-block;
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            margin-right: 0.5rem;
+        }
+
+        footer {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.85rem;
+            margin-top: 2rem;
+        }
+
+        footer a {
+            color: #94a3b8;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        footer a:hover {
+            color: #f1f5f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="status-badge">
+                <span class="pulse-dot"></span>
+                <span>Motor Operacional • 100% Online</span>
+            </div>
+            <h1>HN Tracking Engine</h1>
+            <p class="subtitle">Infraestrutura server-side de alto desempenho em Go para coleta de eventos, atribuição first-touch e despacho para Meta CAPI e Google Ads.</p>
+        </header>
+
+        <div class="services-grid">
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-title">⚡ API Coletora (Go Fiber)</span>
+                    <span class="status-dot"></span>
+                </div>
+                <p class="service-desc">Processamento sub-milissegundo, emissão de cookie 1st-party _vid e normalização de eventos.</p>
+            </div>
+
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-title">📬 Redis Streams</span>
+                    <span class="status-dot"></span>
+                </div>
+                <p class="service-desc">Buffer de streaming resiliente para absorção de picos e descolamento assíncrono.</p>
+            </div>
+
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-title">📊 ClickHouse OLAP</span>
+                    <span class="status-dot"></span>
+                </div>
+                <p class="service-desc">Armazenamento colunar de alta performance para bilhões de eventos analíticos brutos.</p>
+            </div>
+
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-title">🧬 Grafo de Identidade</span>
+                    <span class="status-dot"></span>
+                </div>
+                <p class="service-desc">PostgreSQL com unificação de perfil de visitantes, SHA-256 e first-touch UTMs/GCLID.</p>
+            </div>
+        </div>
+
+        <div class="code-box">
+            <div class="code-box-header">
+                <span class="code-box-title">Instalação do Rastreador no Site</span>
+            </div>
+            <pre><code>&lt;!-- Insira no &lt;head&gt; do seu site --&gt;
+&lt;script 
+  defer 
+  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
+  data-site-key="SUA_CHAVE_DO_SITE"&gt;
+&lt;/script&gt;</code></pre>
+        </div>
+
+        <div class="code-box">
+            <div class="code-box-header">
+                <span class="code-box-title">Endpoints Disponíveis</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div>
+                    <span class="endpoint-pill">GET</span> <code style="color: #cbd5e1;">/health</code> — Status de saúde do serviço
+                </div>
+                <div>
+                    <span class="endpoint-pill">GET</span> <code style="color: #cbd5e1;">/sdk/tracker.js</code> — Script JS minificado de rastreamento (&lt; 4KB)
+                </div>
+                <div>
+                    <span class="endpoint-pill">POST</span> <code style="color: #cbd5e1;">/api/v1/collect</code> — Endpoint de ingestão de eventos
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2026 HN Performance Digital • Todos os direitos reservados</p>
+        </footer>
+    </div>
+</body>
+</html>

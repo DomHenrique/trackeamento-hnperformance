@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"log"
 	"os"
 	"os/signal"
@@ -15,6 +16,9 @@ import (
 	"tracking-engine/internal/config"
 	"tracking-engine/internal/storage"
 )
+
+//go:embed landing.html
+var landingHTML []byte
 
 func main() {
 	cfg := config.Load()
@@ -57,6 +61,12 @@ func main() {
 	if cfg.Env == "development" {
 		app.Use(logger.New())
 	}
+
+	// Landing page de status e documentação na raiz
+	app.Get("/", func(c *fiber.Ctx) error {
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		return c.Send(landingHTML)
+	})
 
 	// Health check
 	app.Get("/health", func(c *fiber.Ctx) error {
