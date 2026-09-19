@@ -220,6 +220,9 @@ func main() {
 	app.Get("/api/v1/analytics/pages", authMiddleware, handler.HandleAnalyticsPages)
 	app.Get("/api/v1/analytics/leads", authMiddleware, handler.HandleAnalyticsLeads)
 	app.Get("/api/v1/analytics/leads/export", authMiddleware, handler.HandleExportLeadsCSV)
+	app.Get("/api/v1/analytics/funnel", authMiddleware, handler.HandleAnalyticsFunnel)
+	app.Get("/api/v1/analytics/attribution/paths", authMiddleware, handler.HandleAnalyticsAttributionPaths)
+	app.Get("/api/v1/analytics/visitor/journey", authMiddleware, handler.HandleAnalyticsVisitorJourney)
 
 	// Endpoint para servir o SDK JS do Tracker
 	app.Get("/sdk/tracker.js", func(c *fiber.Ctx) error {

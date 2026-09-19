@@ -158,5 +158,76 @@ func (h *Handler) HandleExportLeadsCSV(c *fiber.Ctx) error {
 	return c.Send(buf.Bytes())
 }
 
+// HandleAnalyticsFunnel retorna as 4 etapas de conversão e taxas de abandono
+func (h *Handler) HandleAnalyticsFunnel(c *fiber.Ctx) error {
+	if h.ch == nil || h.ch.Conn == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "ClickHouse analítico indisponível",
+		})
+	}
+
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
+
+	funnel, err := h.ch.GetFunnelAnalysis(c.Context(), siteID, rangeStr)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Erro ao consultar análise de funil: %v", err),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(funnel)
+}
+
+// HandleAnalyticsAttributionPaths retorna as top sequências de canais e comparativo First vs Last Touch
+func (h *Handler) HandleAnalyticsAttributionPaths(c *fiber.Ctx) error {
+	if h.ch == nil || h.ch.Conn == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "ClickHouse analítico indisponível",
+		})
+	}
+
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
+	limit := c.QueryInt("limit", 15)
+
+	paths, err := h.ch.GetAttributionPaths(c.Context(), siteID, rangeStr, limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Erro ao consultar caminhos de atribuição: %v", err),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(paths)
+}
+
+// HandleAnalyticsVisitorJourney retorna todos os eventos ordenados cronologicamente de um visitante
+func (h *Handler) HandleAnalyticsVisitorJourney(c *fiber.Ctx) error {
+	if h.ch == nil || h.ch.Conn == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "ClickHouse analítico indisponível",
+		})
+	}
+
+	visitorID := strings.TrimSpace(c.Query("visitor_id"))
+	siteID := strings.TrimSpace(c.Query("site_id"))
+
+	if visitorID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "O parâmetro 'visitor_id' é obrigatório",
+		})
+	}
+
+	journey, err := h.ch.GetVisitorJourney(c.Context(), visitorID, siteID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Erro ao consultar jornada do visitante: %v", err),
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(journey)
+}
+
 // Ensure storage import is kept clean
 var _ = storage.ParseDateRange
+

@@ -427,6 +427,249 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* Estilos de Funis & Atribuição */
+        .subtab-nav {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.75rem;
+            overflow-x: auto;
+        }
+
+        .subtab-btn {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 0.55rem 1.15rem;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .subtab-btn:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--border-hover);
+        }
+
+        .subtab-btn.active {
+            color: #fff;
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--primary);
+            font-weight: 600;
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
+        }
+
+        .subtab-pane {
+            display: none;
+        }
+
+        .subtab-pane.active {
+            display: block;
+        }
+
+        /* Funil de Etapas Visual */
+        .funnel-step-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            transition: border-color 0.2s;
+        }
+
+        .funnel-step-card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .funnel-step-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .funnel-step-title {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .funnel-step-num {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--primary);
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .funnel-progress-bg {
+            width: 100%;
+            height: 12px;
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .funnel-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #38bdf8);
+            border-radius: 6px;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .funnel-dropoff-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            color: var(--danger);
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin: -0.25rem 0 0.5rem;
+            padding: 0.25rem 0.5rem;
+            background: rgba(239, 68, 68, 0.08);
+            border-radius: 6px;
+            border: 1px dashed rgba(239, 68, 68, 0.25);
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .bottleneck-callout {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: #fbbf24;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        /* Caminhos de Mídia */
+        .path-chain {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+
+        .channel-pill {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-weight: 600;
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            text-transform: capitalize;
+        }
+
+        .channel-pill.google { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
+        .channel-pill.meta, .channel-pill.facebook, .channel-pill.instagram { background: rgba(236, 72, 153, 0.15); color: #f472b6; border-color: rgba(236, 72, 153, 0.3); }
+        .channel-pill.direto { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border-color: rgba(148, 163, 184, 0.3); }
+        .channel-pill.whatsapp { background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
+
+        .path-arrow {
+            color: #64748b;
+            font-size: 0.8rem;
+        }
+
+        /* Linha do Tempo do Lead */
+        .timeline-wrapper {
+            position: relative;
+            padding-left: 2rem;
+            margin-top: 1.5rem;
+        }
+
+        .timeline-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            bottom: 8px;
+            left: 8px;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+
+        .timeline-node {
+            position: absolute;
+            left: -2rem;
+            top: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #1e293b;
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+        }
+
+        .timeline-node.conversion {
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.2);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+        }
+
+        .timeline-card {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.9rem 1.15rem;
+            font-size: 0.82rem;
+        }
+
+        .timeline-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+            font-size: 0.75rem;
+        }
+
+        .btn-sm-action {
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+            padding: 0.25rem 0.55rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-sm-action:hover {
+            background: var(--primary);
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -454,6 +697,9 @@
             </a>
             <a class="nav-item" onclick="switchTab('traffic', this)">
                 <span>🌐</span> Origem & Campanhas
+            </a>
+            <a class="nav-item" onclick="switchTab('funnels', this)">
+                <span>🛤️</span> Funis & Atribuição
             </a>
 
             <div class="menu-header" style="margin-top: 1rem;">Documentação & Setup</div>
@@ -636,10 +882,11 @@
                                 <th>Página de Origem</th>
                                 <th>Campanha / Mídia</th>
                                 <th>Integridade de Rastreamento</th>
+                                <th style="text-align: center;">Ações</th>
                             </tr>
                         </thead>
                         <tbody id="leads-table-body">
-                            <tr><td colspan="5" style="color: #64748b;">Carregando leads...</td></tr>
+                            <tr><td colspan="6" style="color: #64748b;">Carregando leads...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -678,6 +925,150 @@
                 </div>
             </div>
 
+            <!-- TAB 5: FUNIS & ATRIBUIÇÃO MULTI-TOQUE -->
+            <div id="tab-funnels" class="tab-pane">
+                <!-- Sub-abas de Navegação -->
+                <div class="subtab-nav">
+                    <button class="subtab-btn active" id="btn-subtab-funnel-steps" onclick="switchSubTab('funnel-steps', this)">
+                        <span>📉</span> Funil de Etapas (Drop-off)
+                    </button>
+                    <button class="subtab-btn" id="btn-subtab-media-paths" onclick="switchSubTab('media-paths', this)">
+                        <span>🌐</span> Caminhos de Mídia (Multi-Touch)
+                    </button>
+                    <button class="subtab-btn" id="btn-subtab-lead-timeline" onclick="switchSubTab('lead-timeline', this)">
+                        <span>🔍</span> Raio-X do Lead (Timeline CRM)
+                    </button>
+                </div>
+
+                <!-- SUB-ABA 1: FUNIL DE ETAPAS -->
+                <div id="subtab-funnel-steps" class="subtab-pane active">
+                    <div class="table-card">
+                        <div class="table-card-header">
+                            <div>
+                                <h3>Eficiência do Fluxo de Navegação & Abandono (Drop-off)</h3>
+                                <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                    Acompanhe a retenção entre a chegada do visitante e a conversão final para identificar pontos críticos de atrito.
+                                </p>
+                            </div>
+                        </div>
+                        <div style="padding: 1.5rem;" id="funnel-steps-list">
+                            <div style="color: #64748b;">Carregando etapas do funil...</div>
+                        </div>
+                        <div id="funnel-bottleneck-box" style="padding: 0 1.5rem 1.5rem;"></div>
+                    </div>
+                </div>
+
+                <!-- SUB-ABA 2: CAMINHOS DE MÍDIA -->
+                <div id="subtab-media-paths" class="subtab-pane">
+                    <div class="grid-2">
+                        <!-- Top Sequências -->
+                        <div class="table-card" style="margin-bottom: 0;">
+                            <div class="table-card-header">
+                                <div>
+                                    <h3>Top Sequências de Canais até a Conversão</h3>
+                                    <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                        Jornadas reais percorridas pelos visitantes antes da conversão.
+                                    </p>
+                                </div>
+                            </div>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Caminho Percorrido</th>
+                                        <th style="text-align: right;">Conversões</th>
+                                        <th style="text-align: right;">Dias até Conv.</th>
+                                        <th style="text-align: right;">Participação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attribution-paths-tbody">
+                                    <tr><td colspan="4" style="color: #64748b;">Carregando caminhos...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Comparativo First vs Last Touch -->
+                        <div class="table-card" style="margin-bottom: 0;">
+                            <div class="table-card-header">
+                                <div>
+                                    <h3>Atribuição: Primeiro Toque vs Último Toque</h3>
+                                    <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                        Quem atrai o lead (Topo) vs quem fecha a conversão (Fundo).
+                                    </p>
+                                </div>
+                            </div>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Canal</th>
+                                        <th style="text-align: right;">1º Toque (Atração)</th>
+                                        <th style="text-align: right;">Último Toque (Fechamento)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="channel-compare-tbody">
+                                    <tr><td colspan="3" style="color: #64748b;">Carregando comparativo...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-ABA 3: RAIO-X DO LEAD (TIMELINE CRM) -->
+                <div id="subtab-lead-timeline" class="subtab-pane">
+                    <div class="table-card">
+                        <div class="table-card-header">
+                            <div>
+                                <h3>Raio-X de Pontos de Contato & Linha do Tempo</h3>
+                                <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                    Audite toda a jornada cronológica de um visitante desde o anúncio inicial até a conversão.
+                                </p>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <input type="text" id="input-journey-visitor" placeholder="Cole o Visitor ID..." 
+                                    style="background: #1e293b; border: 1px solid var(--border); color: #fff; padding: 0.45rem 0.85rem; border-radius: 6px; font-size: 0.82rem; outline: none; width: 280px;">
+                                <button class="btn-refresh" onclick="searchVisitorJourney()">
+                                    <span>🔍</span> Buscar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Header com Resumo do Lead Selecionado -->
+                        <div id="journey-summary-box" style="padding: 1.25rem 1.5rem; background: rgba(15, 23, 42, 0.6); border-bottom: 1px solid var(--border); display: none;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 1.5rem; font-size: 0.82rem;">
+                                <div>
+                                    <span style="color: var(--text-muted);">Visitante:</span>
+                                    <b id="summary-visitor-id" style="color: #fff; margin-left: 0.3rem;">-</b>
+                                </div>
+                                <div>
+                                    <span style="color: var(--text-muted);">1º Contato:</span>
+                                    <span id="summary-first-touch" class="channel-pill" style="margin-left: 0.3rem;">-</span>
+                                </div>
+                                <div>
+                                    <span style="color: var(--text-muted);">Último Contato:</span>
+                                    <span id="summary-last-touch" class="channel-pill" style="margin-left: 0.3rem;">-</span>
+                                </div>
+                                <div>
+                                    <span style="color: var(--text-muted);">Status:</span>
+                                    <span id="summary-status" style="margin-left: 0.3rem; font-weight: 600;">-</span>
+                                </div>
+                                <div>
+                                    <span style="color: var(--text-muted);">Total de Ações:</span>
+                                    <b id="summary-events-count" style="color: #38bdf8; margin-left: 0.3rem;">0</b>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lista da Linha do Tempo -->
+                        <div style="padding: 1.5rem;">
+                            <div id="journey-timeline-content">
+                                <div style="color: #64748b; text-align: center; padding: 2rem 0;">
+                                    Selecione um lead na aba <b>Leads & Conversões</b> clicando em <b>"🔍 Raio-X"</b> ou informe um Visitor ID acima para carregar a fita do tempo.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </main>
 
@@ -709,7 +1100,8 @@
                 'overview': 'Visão Geral de Desempenho',
                 'pages': 'Páginas Monitoradas (Descoberta & Desempenho)',
                 'leads': 'Leads, Conversões & Auditoria de Mídia',
-                'traffic': 'Origem do Tráfego & Dispositivos'
+                'traffic': 'Origem do Tráfego & Dispositivos',
+                'funnels': 'Funis & Atribuição Multi-Toque'
             };
             document.getElementById('view-title').textContent = titles[tabId] || 'Analytics Hub';
             loadActiveData();
@@ -745,6 +1137,9 @@
             }
             if (currentTab === 'leads') {
                 await loadLeads(siteID, range);
+            }
+            if (currentTab === 'funnels') {
+                await loadFunnelsData(siteID, range);
             }
         }
 
@@ -959,7 +1354,7 @@
                 const leads = await res.json();
 
                 if (!leads || leads.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="color: #64748b;">Nenhuma conversão registrada no período.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="color: #64748b;">Nenhuma conversão registrada no período.</td></tr>';
                     return;
                 }
 
@@ -989,6 +1384,9 @@
                             </td>
                             <td>${utmInfo}</td>
                             <td>${badgeHtml}</td>
+                            <td style="text-align: center;">
+                                <button class="btn-sm-action" onclick="openLeadJourney('${escapeHTML(l.visitor_id || '')}')">🔍 Raio-X</button>
+                            </td>
                         </tr>
                     `;
                 });
@@ -996,7 +1394,7 @@
                 tbody.innerHTML = html;
 
             } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="5" style="color: #f87171;">Falha ao carregar conversões.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="color: #f87171;">Falha ao carregar conversões.</td></tr>';
             }
         }
 
@@ -1004,6 +1402,280 @@
             const siteID = document.getElementById('select-site').value;
             const range = document.getElementById('select-range').value;
             window.location.href = `/api/v1/analytics/leads/export?site_id=${siteID}&range=${range}`;
+        }
+
+        // --- Módulo de Funis & Atribuição Multi-Toque ---
+        let currentSubTab = 'funnel-steps';
+
+        function switchSubTab(subTabId, el) {
+            currentSubTab = subTabId;
+            document.querySelectorAll('.subtab-pane').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+
+            const target = document.getElementById('subtab-' + subTabId);
+            if (target) target.classList.add('active');
+            if (el) el.classList.add('active');
+
+            const siteID = document.getElementById('select-site').value;
+            const range = document.getElementById('select-range').value;
+            if (subTabId === 'funnel-steps') loadFunnelSteps(siteID, range);
+            if (subTabId === 'media-paths') loadAttributionPaths(siteID, range);
+        }
+
+        async function loadFunnelsData(siteID, range) {
+            await Promise.all([
+                loadFunnelSteps(siteID, range),
+                loadAttributionPaths(siteID, range)
+            ]);
+        }
+
+        async function loadFunnelSteps(siteID, range) {
+            const container = document.getElementById('funnel-steps-list');
+            const bottleneckBox = document.getElementById('funnel-bottleneck-box');
+            try {
+                const res = await fetch(`/api/v1/analytics/funnel?site_id=${siteID}&range=${range}`);
+                if (!res.ok) throw new Error('Erro ao carregar funil');
+                const data = await res.json();
+
+                if (!data.steps || data.steps.length === 0) {
+                    container.innerHTML = '<div style="color: #64748b;">Nenhum dado de funil registrado no período.</div>';
+                    bottleneckBox.innerHTML = '';
+                    return;
+                }
+
+                let html = '';
+                data.steps.forEach((step, idx) => {
+                    const widthPct = Math.max(step.rate_total, 4);
+                    
+                    html += `
+                        <div class="funnel-step-card">
+                            <div class="funnel-step-header">
+                                <div class="funnel-step-title">
+                                    <span class="funnel-step-num">${step.step_number}</span>
+                                    <span>${escapeHTML(step.name)}</span>
+                                </div>
+                                <div style="display: flex; align-items: baseline; gap: 0.6rem;">
+                                    <span style="font-size: 1.15rem; font-weight: 700; color: #fff;">${Number(step.users).toLocaleString('pt-BR')}</span>
+                                    <span style="font-size: 0.8rem; color: #38bdf8; font-weight: 600;">${step.rate_total.toFixed(1)}% do início</span>
+                                </div>
+                            </div>
+                            <div class="funnel-progress-bg">
+                                <div class="funnel-progress-bar" style="width: ${widthPct}%;"></div>
+                            </div>
+                        </div>
+                    `;
+
+                    if (idx < data.steps.length - 1) {
+                        const nextStep = data.steps[idx + 1];
+                        if (nextStep.drop_off > 0) {
+                            html += `
+                                <div class="funnel-dropoff-indicator">
+                                    <span>📉 Perda de ${nextStep.drop_off.toFixed(1)}%</span>
+                                    <span style="opacity: 0.7;">(${(step.users - nextStep.users).toLocaleString('pt-BR')} abandonaram)</span>
+                                </div>
+                            `;
+                        }
+                    }
+                });
+
+                container.innerHTML = html;
+
+                if (data.bottleneck) {
+                    bottleneckBox.innerHTML = `
+                        <div class="bottleneck-callout">
+                            <span style="font-size: 1.25rem;">⚠️</span>
+                            <div>
+                                <b>Diagnóstico de Conversão:</b> ${escapeHTML(data.bottleneck)}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    bottleneckBox.innerHTML = '';
+                }
+
+            } catch (e) {
+                container.innerHTML = '<div style="color: #f87171;">Falha ao carregar análise de funil.</div>';
+                bottleneckBox.innerHTML = '';
+            }
+        }
+
+        async function loadAttributionPaths(siteID, range) {
+            const pathsTbody = document.getElementById('attribution-paths-tbody');
+            const compareTbody = document.getElementById('channel-compare-tbody');
+            try {
+                const res = await fetch(`/api/v1/analytics/attribution/paths?site_id=${siteID}&range=${range}`);
+                if (!res.ok) throw new Error('Erro ao carregar atribuição');
+                const data = await res.json();
+
+                if (!data.top_paths || data.top_paths.length === 0) {
+                    pathsTbody.innerHTML = '<tr><td colspan="4" style="color: #64748b;">Nenhuma conversão com histórico de canais no período.</td></tr>';
+                } else {
+                    let pathsHtml = '';
+                    data.top_paths.forEach(p => {
+                        const channels = p.path.split(' ➔ ');
+                        let badges = channels.map(ch => {
+                            const cleanCh = ch.toLowerCase().trim();
+                            let cssClass = 'direto';
+                            if (cleanCh.includes('google')) cssClass = 'google';
+                            else if (cleanCh.includes('meta') || cleanCh.includes('facebook') || cleanCh.includes('instagram')) cssClass = 'meta';
+                            else if (cleanCh.includes('whats')) cssClass = 'whatsapp';
+                            return `<span class="channel-pill ${cssClass}">${escapeHTML(ch)}</span>`;
+                        }).join('<span class="path-arrow">➔</span>');
+
+                        pathsHtml += `
+                            <tr>
+                                <td><div class="path-chain">${badges}</div></td>
+                                <td style="text-align: right; font-weight: 600; color: #34d399;">${Number(p.conversions).toLocaleString('pt-BR')}</td>
+                                <td style="text-align: right; color: #cbd5e1;">${p.avg_days.toFixed(1)} d</td>
+                                <td style="text-align: right; font-weight: 600; color: #a5b4fc;">${p.percentage.toFixed(1)}%</td>
+                            </tr>
+                        `;
+                    });
+                    pathsTbody.innerHTML = pathsHtml;
+                }
+
+                if (!data.channel_compare || data.channel_compare.length === 0) {
+                    compareTbody.innerHTML = '<tr><td colspan="3" style="color: #64748b;">Nenhum dado comparativo disponível.</td></tr>';
+                } else {
+                    let compareHtml = '';
+                    data.channel_compare.forEach(c => {
+                        const cleanCh = c.channel.toLowerCase().trim();
+                        let cssClass = 'direto';
+                        if (cleanCh.includes('google')) cssClass = 'google';
+                        else if (cleanCh.includes('meta') || cleanCh.includes('facebook') || cleanCh.includes('instagram')) cssClass = 'meta';
+                        else if (cleanCh.includes('whats')) cssClass = 'whatsapp';
+
+                        compareHtml += `
+                            <tr>
+                                <td><span class="channel-pill ${cssClass}">${escapeHTML(c.channel)}</span></td>
+                                <td style="text-align: right;">
+                                    <b>${c.first_touch_share.toFixed(1)}%</b> 
+                                    <span style="color: #64748b; font-size: 0.75rem;">(${c.first_touch_count})</span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <b>${c.last_touch_share.toFixed(1)}%</b> 
+                                    <span style="color: #64748b; font-size: 0.75rem;">(${c.last_touch_count})</span>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    compareTbody.innerHTML = compareHtml;
+                }
+
+            } catch (e) {
+                pathsTbody.innerHTML = '<tr><td colspan="4" style="color: #f87171;">Falha ao carregar caminhos de mídia.</td></tr>';
+                compareTbody.innerHTML = '<tr><td colspan="3" style="color: #f87171;">Falha ao carregar comparativo.</td></tr>';
+            }
+        }
+
+        async function loadVisitorJourney(visitorId) {
+            const container = document.getElementById('journey-timeline-content');
+            const summaryBox = document.getElementById('journey-summary-box');
+            if (!visitorId) return;
+
+            container.innerHTML = '<div style="color: #64748b; text-align: center; padding: 2rem 0;">Buscando linha do tempo do visitante...</div>';
+            summaryBox.style.display = 'none';
+
+            try {
+                const siteID = document.getElementById('select-site').value;
+                const res = await fetch(`/api/v1/analytics/visitor/journey?visitor_id=${encodeURIComponent(visitorId)}&site_id=${siteID}`);
+                if (!res.ok) throw new Error('Erro ao carregar jornada');
+                const data = await res.json();
+
+                if (!data.events || data.events.length === 0) {
+                    container.innerHTML = `<div style="color: #f87171; text-align: center; padding: 2rem 0;">Nenhum evento localizado para o Visitor ID <code>${escapeHTML(visitorId)}</code>.</div>`;
+                    return;
+                }
+
+                document.getElementById('summary-visitor-id').textContent = data.visitor_id;
+                document.getElementById('summary-first-touch').textContent = data.first_touch || '(direto)';
+                document.getElementById('summary-last-touch').textContent = data.last_touch || '(direto)';
+                document.getElementById('summary-events-count').textContent = data.total_events;
+                
+                const statusEl = document.getElementById('summary-status');
+                if (data.is_converted) {
+                    statusEl.innerHTML = `<span style="color: #34d399;">✓ CONVERTIDO (${escapeHTML(data.conversion_name)})</span>`;
+                } else {
+                    statusEl.innerHTML = `<span style="color: #fbbf24;">● Em Navegação</span>`;
+                }
+                summaryBox.style.display = 'block';
+
+                let html = '<div class="timeline-wrapper">';
+                data.events.forEach((ev, idx) => {
+                    const dateStr = new Date(ev.event_time).toLocaleString('pt-BR');
+                    const name = ev.event_name.toLowerCase();
+                    const isConv = name === 'lead' || name === 'purchase' || name === 'whatsapp_click' || name === 'contact';
+                    
+                    let campaignInfo = '';
+                    if (ev.utm_source || ev.utm_campaign) {
+                        campaignInfo = `
+                            <div style="margin-top: 0.35rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                                <span class="channel-pill" style="font-size: 0.7rem;">Origem: ${escapeHTML(ev.utm_source || 'direto')}</span>
+                                ${ev.utm_campaign ? `<span class="channel-pill" style="font-size: 0.7rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">Campanha: ${escapeHTML(ev.utm_campaign)}</span>` : ''}
+                                ${ev.gclid ? `<span class="channel-pill google" style="font-size: 0.7rem;">Google Ads (GCLID)</span>` : ''}
+                                ${ev.fbclid ? `<span class="channel-pill meta" style="font-size: 0.7rem;">Meta Ads (FBCLID)</span>` : ''}
+                            </div>
+                        `;
+                    }
+
+                    html += `
+                        <div class="timeline-item">
+                            <div class="timeline-node ${isConv ? 'conversion' : ''}"></div>
+                            <div class="timeline-card">
+                                <div class="timeline-meta">
+                                    <span><b>Ponto #${idx + 1}</b> • ${dateStr}</span>
+                                    <span style="text-transform: capitalize; color: #64748b;">${escapeHTML(ev.device_type || 'desktop')}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+                                    <span style="font-weight: 600; color: ${isConv ? '#34d399' : '#fff'}; font-size: 0.9rem;">
+                                        ${isConv ? '🎯 ' : '⚡ '} ${escapeHTML(ev.event_name)}
+                                    </span>
+                                </div>
+                                <div style="color: #94a3b8; font-size: 0.78rem; word-break: break-all;">
+                                    <b>URL:</b> ${escapeHTML(ev.page_url || ev.landing_page || 'N/A')}
+                                </div>
+                                ${campaignInfo}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+
+                container.innerHTML = html;
+
+            } catch (e) {
+                container.innerHTML = '<div style="color: #f87171; text-align: center; padding: 2rem 0;">Falha ao carregar linha do tempo do visitante.</div>';
+            }
+        }
+
+        function searchVisitorJourney() {
+            const val = document.getElementById('input-journey-visitor').value.trim();
+            if (!val) {
+                alert('Informe um Visitor ID para pesquisar.');
+                return;
+            }
+            loadVisitorJourney(val);
+        }
+
+        function openLeadJourney(visitorId) {
+            if (!visitorId) {
+                alert('ID de visitante não disponível para este lead.');
+                return;
+            }
+            const navItems = document.querySelectorAll('.sidebar-menu .nav-item');
+            let funnelsNavItem = null;
+            navItems.forEach(item => {
+                if (item.textContent.includes('Funis & Atribuição')) {
+                    funnelsNavItem = item;
+                }
+            });
+            switchTab('funnels', funnelsNavItem);
+
+            const subBtn = document.getElementById('btn-subtab-lead-timeline');
+            switchSubTab('lead-timeline', subBtn);
+
+            document.getElementById('input-journey-visitor').value = visitorId;
+            loadVisitorJourney(visitorId);
         }
 
         // Inicialização Protegida
