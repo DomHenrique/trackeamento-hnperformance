@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.*
+*.env
+data/
+bin/
+tmp/
+openspec/
+.agent/
+*.log
+*.sql
+node_modules/
+.vscode/
+.idea/

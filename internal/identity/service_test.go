@@ -52,3 +52,41 @@ func TestHashSHA256(t *testing.T) {
 		t.Errorf("esperado hash vazio para string vazia")
 	}
 }
+
+func TestHashHMACSHA256(t *testing.T) {
+	email := "teste@hnperformancedigital.com.br"
+	pepper := "super_secret_pepper_2026"
+
+	h1 := HashHMACSHA256(email, pepper)
+	if len(h1) != 64 {
+		t.Errorf("esperado hmac de 64 caracteres, obtido %d", len(h1))
+	}
+
+	// Determinismo
+	h2 := HashHMACSHA256(email, pepper)
+	if h1 != h2 {
+		t.Errorf("HMAC deve ser determinístico: %s != %s", h1, h2)
+	}
+
+	// Diferente de SHA256 padrão
+	stdHash := HashSHA256(email)
+	if h1 == stdHash {
+		t.Errorf("HMAC com pepper deve ser diferente do SHA256 padrão")
+	}
+
+	// Pepper diferente gera hash diferente
+	hDiff := HashHMACSHA256(email, "outro_pepper")
+	if h1 == hDiff {
+		t.Errorf("peppers diferentes devem produzir hashes diferentes")
+	}
+
+	// Entrada vazia
+	if HashHMACSHA256("", pepper) != "" {
+		t.Errorf("esperado string vazia para entrada vazia")
+	}
+
+	// Pepper vazio usa fallback SHA256 padrão
+	if HashHMACSHA256(email, "") != stdHash {
+		t.Errorf("pepper vazio deve retornar SHA256 padrão")
+	}
+}
