@@ -60,7 +60,8 @@ func (h *HTTPClient) PostWithRetry(ctx context.Context, url string, headers map[
 			continue
 		}
 
-		respBody, readErr := io.ReadAll(resp.Body)
+		// Limita leitura a no máximo 2MB para proteção contra OOM/respostas abusivas
+		respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
 		_ = resp.Body.Close()
 		respCode = resp.StatusCode
 

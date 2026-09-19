@@ -130,7 +130,9 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	referrer := req.Referrer
 
 	// Validação de Domínio de Origem (Whitelist com suporte a subdomínios)
-	originDomain := ExtractOriginDomain(c, &req)
+	serverKeyHeader := strings.TrimSpace(c.Get("X-Server-Key"))
+	isServerAuth := (h.cfg.ServerKey != "" && serverKeyHeader == h.cfg.ServerKey)
+	originDomain := ExtractOriginDomain(c, &req, isServerAuth)
 	isDev := h.cfg.Env == "development"
 	if !IsDomainAllowed(originDomain, siteMeta.AllowedDomains, isDev) {
 		h.RecordDomainAlert(siteID, originDomain, ip, ua, pageURL)
@@ -245,8 +247,8 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 		}
 	}
 
-	// Em ambiente dev ou caso o banco ainda esteja populando chaves, aceita como teste
-	if h.cfg.Env == "development" || strings.HasPrefix(siteKey, "test_") {
+	// Em ambiente dev, aceita chaves de teste com prefixo test_
+	if h.cfg.Env == "development" && strings.HasPrefix(siteKey, "test_") {
 		meta := &SiteMetadata{
 			ID:             "00000000-0000-0000-0000-000000000001",
 			AllowedDomains: []string{"localhost", "127.0.0.1"},

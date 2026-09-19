@@ -14,6 +14,9 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Configuração inválida: %v", err)
+	}
 	log.Println("==> Inicializando Server-Side Dispatcher...")
 
 	// 1. Conexão Redis

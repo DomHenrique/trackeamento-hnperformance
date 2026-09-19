@@ -15,6 +15,9 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Configuração inválida: %v", err)
+	}
 	log.Println("==> Inicializando ClickHouse Batch Ingester...")
 
 	// 1. Conexão Redis
@@ -39,7 +42,7 @@ func main() {
 		defer pg.Close()
 	}
 
-	identService := identity.NewService(pg, rdb)
+	identService := identity.NewService(pg, rdb, cfg.HMACPepper)
 
 	// 4. Inicializa e roda o Worker
 	worker := ingester.NewWorker(cfg, rdb, ch, identService)

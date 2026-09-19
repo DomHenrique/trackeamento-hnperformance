@@ -36,6 +36,10 @@ type Config struct {
 	ClickHouseUser     string
 	ClickHousePassword string
 
+	// Security & Ingestion
+	ServerKey  string
+	HMACPepper string
+
 	// Ingester
 	IngesterBatchSize int
 	IngesterFlushSec  int
@@ -53,6 +57,9 @@ func Load() *Config {
 		HTTPPort:       getEnv("HTTP_PORT", "8080"),
 		AdminUser:     getEnv("ADMIN_USER", "admin"),
 		AdminPassword: getEnv("ADMIN_PASSWORD", "hn_admin_secret_pass_2026"),
+
+		ServerKey:  getEnv("SERVER_API_KEY", "hn_server_internal_secret_key"),
+		HMACPepper: getEnv("HMAC_PEPPER", "hn_pepper_secret_salt_2026"),
 
 		RedisAddr:           getEnv("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword:       getEnv("REDIS_PASSWORD", "redis_secret_pass"),
@@ -79,6 +86,25 @@ func Load() *Config {
 		DispatcherMaxRetries: getEnvAsInt("DISPATCHER_MAX_RETRIES", 5),
 		DispatcherTimeoutSec: getEnvAsInt("DISPATCHER_TIMEOUT_SEC", 10),
 	}
+}
+
+// Validate executa verificação defensiva de segurança fail-fast em ambiente de produção
+func (c *Config) Validate() error {
+	if c.Env == "production" {
+		if c.AdminPassword == "hn_admin_secret_pass_2026" {
+			return fmt.Errorf("ADMIN_PASSWORD não pode conter a senha padrão em produção")
+		}
+		if c.PostgresPassword == "postgres_secret_pass" {
+			return fmt.Errorf("POSTGRES_PASSWORD não pode conter a senha padrão em produção")
+		}
+		if c.RedisPassword == "redis_secret_pass" {
+			return fmt.Errorf("REDIS_PASSWORD não pode conter a senha padrão em produção")
+		}
+		if c.ClickHousePassword == "clickhouse_secret_pass" {
+			return fmt.Errorf("CLICKHOUSE_PASSWORD não pode conter a senha padrão em produção")
+		}
+	}
+	return nil
 }
 
 func (c *Config) PostgresDSN() string {

@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -20,14 +21,16 @@ import (
 var nonDigitRegex = regexp.MustCompile(`\D`)
 
 type Service struct {
-	pg    *storage.PostgresDB
-	redis *storage.RedisClient
+	pg     *storage.PostgresDB
+	redis  *storage.RedisClient
+	pepper string
 }
 
-func NewService(pg *storage.PostgresDB, rdb *storage.RedisClient) *Service {
+func NewService(pg *storage.PostgresDB, rdb *storage.RedisClient, pepper string) *Service {
 	return &Service{
-		pg:    pg,
-		redis: rdb,
+		pg:     pg,
+		redis:  rdb,
+		pepper: pepper,
 	}
 }
 
@@ -45,13 +48,26 @@ func NormalizePhone(phone string) string {
 	return digits
 }
 
-// HashSHA256 calcula o hash hexadecimal SHA-256 de uma string
+// HashSHA256 calcula o hash hexadecimal SHA-256 padrão de uma string (utilizado por plataformas externas como Meta CAPI)
 func HashSHA256(val string) string {
 	if val == "" {
 		return ""
 	}
 	h := sha256.Sum256([]byte(val))
 	return hex.EncodeToString(h[:])
+}
+
+// HashHMACSHA256 calcula o HMAC-SHA256 com pepper secreto da aplicação para privacidade interna no banco relacional
+func HashHMACSHA256(val, pepper string) string {
+	if val == "" {
+		return ""
+	}
+	if pepper == "" {
+		return HashSHA256(val)
+	}
+	mac := hmac.New(sha256.New, []byte(pepper))
+	mac.Write([]byte(val))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // ReconcileAndRoute processa a identidade do visitante no PostgreSQL e encaminha conversões para o Dispatcher
@@ -84,8 +100,8 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 		}
 	}
 
-	emailHash := HashSHA256(rawEmail)
-	phoneHash := HashSHA256(rawPhone)
+	emailHash := HashHMACSHA256(rawEmail, s.pepper)
+	phoneHash := HashHMACSHA256(rawPhone, s.pepper)
 
 	// 1. Verifica se visitante já existe
 	var existingVisitor struct {

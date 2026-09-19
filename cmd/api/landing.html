@@ -454,10 +454,13 @@
     <div class="container">
         <!-- Top Bar with Auth State -->
         <div class="top-bar">
-            <div class="top-brand" style="display: flex; align-items: center; gap: 1rem;">
+            <div class="top-brand" style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                 <span>⚡ HN Performance • Engine</span>
                 <a href="/dashboard" class="btn btn-success" style="text-decoration: none; font-size: 0.8rem; padding: 0.35rem 0.8rem;">
-                    📊 Abrir Dashboard & Relatórios
+                    📊 Abrir Dashboard
+                </a>
+                <a href="/docs" class="btn" style="text-decoration: none; font-size: 0.8rem; padding: 0.35rem 0.8rem; background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.4); color: #c7d2fe;">
+                    📚 Guia de Instalação (SDK)
                 </a>
             </div>
             <div class="auth-actions" id="auth-header-area">
@@ -474,142 +477,174 @@
             <p class="subtitle">Infraestrutura server-side de alto desempenho em Go para coleta de eventos, atribuição first-touch e despacho para Meta CAPI e Google Ads.</p>
         </header>
 
-        <!-- Services Status Grid -->
-        <div class="services-grid">
-            <div class="service-card">
-                <div class="service-header">
-                    <span class="service-title">⚡ API Coletora (Go Fiber)</span>
-                    <span class="status-dot"></span>
+        <!-- Painel de Login Exclusivo para Usuários Não Autenticados -->
+        <div id="login-view" style="display: none; max-width: 440px; margin: 2rem auto; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 2.25rem; backdrop-filter: blur(16px); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);">
+            <div style="text-align: center; margin-bottom: 1.75rem;">
+                <div style="display: inline-flex; width: 52px; height: 52px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 12px; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 0.85rem;">
+                    🔐
                 </div>
-                <p class="service-desc">Processamento sub-milissegundo, emissão de cookie 1st-party _vid e normalização de eventos.</p>
+                <h2 style="font-size: 1.35rem; font-weight: 700; color: #fff; margin-bottom: 0.35rem;">Acesso Restrito</h2>
+                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">Painel de controle e telemetria restrito a operadores da HN Performance.</p>
             </div>
-
-            <div class="service-card">
-                <div class="service-header">
-                    <span class="service-title">📬 Redis Streams</span>
-                    <span class="status-dot"></span>
+            <div style="display: flex; flex-direction: column; gap: 1.1rem;">
+                <div>
+                    <label style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 0.4rem;">Usuário</label>
+                    <input type="text" id="landing-login-user" placeholder="Seu usuário de acesso" style="width: 100%; padding: 0.65rem 0.85rem; border-radius: 8px; border: 1px solid var(--card-border); background: #050811; color: #fff; font-family: inherit; font-size: 0.9rem; outline: none;">
                 </div>
-                <p class="service-desc">Buffer de streaming resiliente para absorção de picos e descolamento assíncrono.</p>
-            </div>
-
-            <div class="service-card">
-                <div class="service-header">
-                    <span class="service-title">📊 ClickHouse OLAP</span>
-                    <span class="status-dot"></span>
+                <div>
+                    <label style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1; display: block; margin-bottom: 0.4rem;">Senha</label>
+                    <input type="password" id="landing-login-pass" placeholder="••••••••" style="width: 100%; padding: 0.65rem 0.85rem; border-radius: 8px; border: 1px solid var(--card-border); background: #050811; color: #fff; font-family: inherit; font-size: 0.9rem; outline: none;">
                 </div>
-                <p class="service-desc">Armazenamento colunar de alta performance para bilhões de eventos analíticos brutos.</p>
-            </div>
-
-            <div class="service-card">
-                <div class="service-header">
-                    <span class="service-title">🧬 Grafo de Identidade</span>
-                    <span class="status-dot"></span>
-                </div>
-                <p class="service-desc">PostgreSQL com unificação de perfil de visitantes, SHA-256 e first-touch UTMs/GCLID.</p>
+                <div id="landing-login-err" style="display: none; color: #f87171; font-size: 0.8rem; background: rgba(239, 68, 68, 0.12); padding: 0.6rem; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.3);"></div>
+                <button class="btn btn-success" onclick="submitLandingInlineLogin()" style="width: 100%; justify-content: center; padding: 0.75rem; font-size: 0.95rem; font-weight: 600; margin-top: 0.5rem;">
+                    Acessar Painel
+                </button>
             </div>
         </div>
 
-        <!-- Side-by-Side: Domínios Permitidos vs Auditoria de Segurança -->
-        <div class="security-grid">
-            <!-- Card Esquerdo: Gestão de Domínios Permitidos -->
-            <div class="code-box">
-                <div class="code-box-header">
-                    <span class="code-box-title">🌐 Domínios Autorizados (Whitelist)</span>
-                    <span id="domains-count-badge" class="badge badge-wildcard">0 Domínios</span>
+        <!-- Conteúdo do Painel Privado (Visível Apenas Pós-Login) -->
+        <div id="authenticated-content" style="display: none;">
+            <!-- Services Status Grid -->
+            <div class="services-grid">
+                <div class="service-card">
+                    <div class="service-header">
+                        <span class="service-title">⚡ API Coletora (Go Fiber)</span>
+                        <span class="status-dot"></span>
+                    </div>
+                    <p class="service-desc">Processamento sub-milissegundo, emissão de cookie 1st-party _vid e normalização de eventos.</p>
                 </div>
 
-                <!-- Formulário de adição (disponível quando autenticado) -->
-                <div id="add-domain-box" style="margin-bottom: 1rem;">
-                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                        <select id="select-site-filter" onchange="loadDomainsForSelectedSite()" style="flex: 1;">
-                            <option value="">Carregando sites...</option>
-                        </select>
+                <div class="service-card">
+                    <div class="service-header">
+                        <span class="service-title">📬 Redis Streams</span>
+                        <span class="status-dot"></span>
                     </div>
-                    <div class="form-row" id="form-domain-add-row" style="display: none;">
-                        <input type="text" id="input-new-domain" placeholder="Ex: meudominio.com.br ou lp.cliente.com">
-                        <button class="btn btn-success" onclick="handleAddDomain()">+ Adicionar</button>
-                    </div>
-                    <div id="login-prompt-domain" style="font-size: 0.8rem; color: #64748b; padding: 0.4rem 0;">
-                        Faça login como operador para adicionar ou gerenciar domínios.
-                    </div>
+                    <p class="service-desc">Buffer de streaming resiliente para absorção de picos e descolamento assíncrono.</p>
                 </div>
 
-                <!-- Lista de Domínios Cadastrados -->
-                <div class="list-container" id="domains-list-container">
-                    <p style="color: #64748b; font-size: 0.85rem;">Carregando domínios...</p>
+                <div class="service-card">
+                    <div class="service-header">
+                        <span class="service-title">📊 ClickHouse OLAP</span>
+                        <span class="status-dot"></span>
+                    </div>
+                    <p class="service-desc">Armazenamento colunar de alta performance para bilhões de eventos analíticos brutos.</p>
+                </div>
+
+                <div class="service-card">
+                    <div class="service-header">
+                        <span class="service-title">🧬 Grafo de Identidade</span>
+                        <span class="status-dot"></span>
+                    </div>
+                    <p class="service-desc">PostgreSQL com unificação de perfil de visitantes, HMAC-SHA256 e first-touch UTMs/GCLID.</p>
                 </div>
             </div>
 
-            <!-- Card Direito: Auditoria de Segurança • Domínios Bloqueados & Filtro de Robôs -->
-            <div class="code-box">
-                <div class="code-box-header">
-                    <span class="code-box-title">🛡️ Auditoria de Segurança • Domínios & Robôs</span>
-                    <span id="alerts-count-badge" class="badge badge-danger">Carregando...</span>
-                </div>
-
-                <!-- Barra de Métricas de Robôs Interceptados (Stealth Tagging) -->
-                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 0.6rem 0.8rem; margin-bottom: 0.8rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-                        <span style="font-size: 0.8rem; font-weight: 600; color: #93c5fd;">🤖 Filtro de Robôs (Stealth Tagging)</span>
-                        <span id="bot-source-badge" class="badge" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; font-size: 0.65rem;">Live</span>
+            <!-- Side-by-Side: Domínios Permitidos vs Auditoria de Segurança -->
+            <div class="security-grid">
+                <!-- Card Esquerdo: Gestão de Domínios Permitidos -->
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-box-title">🌐 Domínios Autorizados (Whitelist)</span>
+                        <span id="domains-count-badge" class="badge badge-wildcard">0 Domínios</span>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.4rem;">
-                        <div>
-                            <div style="font-size: 0.7rem; color: #94a3b8;">Total Robôs Interceptados</div>
-                            <div id="stat-total-bots" style="font-size: 1.15rem; font-weight: 700; color: #f8fafc;">0</div>
+
+                    <!-- Formulário de adição (disponível quando autenticado) -->
+                    <div id="add-domain-box" style="margin-bottom: 1rem;">
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <select id="select-site-filter" onchange="loadDomainsForSelectedSite()" style="flex: 1;">
+                                <option value="">Carregando sites...</option>
+                            </select>
                         </div>
-                        <div>
-                            <div style="font-size: 0.7rem; color: #34d399;">Conversões Protegidas (Ads)</div>
-                            <div id="stat-protected-conv" style="font-size: 1.15rem; font-weight: 700; color: #34d399;">0</div>
+                        <div class="form-row" id="form-domain-add-row" style="display: none;">
+                            <input type="text" id="input-new-domain" placeholder="Ex: meudominio.com.br ou lp.cliente.com">
+                            <button class="btn btn-success" onclick="handleAddDomain()">+ Adicionar</button>
+                        </div>
+                        <div id="login-prompt-domain" style="font-size: 0.8rem; color: #64748b; padding: 0.4rem 0;">
+                            Faça login como operador para adicionar ou gerenciar domínios.
                         </div>
                     </div>
-                    <div id="bot-reasons-container" style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem;">
-                        <span style="font-size: 0.72rem; color: #64748b;">Nenhum robô detectado ainda.</span>
+
+                    <!-- Lista de Domínios Cadastrados -->
+                    <div class="list-container" id="domains-list-container">
+                        <p style="color: #64748b; font-size: 0.85rem;">Carregando domínios...</p>
                     </div>
                 </div>
 
-                <div style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem;">
-                    Tentativas de Origens Fora da Whitelist:
-                </div>
-                <div class="list-container" id="alerts-container">
-                    <p style="color: #64748b; font-size: 0.85rem;">Verificando tentativas de requisições fora do escopo...</p>
-                </div>
-            </div>
-        </div>
+                <!-- Card Direito: Auditoria de Segurança • Domínios Bloqueados & Filtro de Robôs -->
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-box-title">🛡️ Auditoria de Segurança • Domínios & Robôs</span>
+                        <span id="alerts-count-badge" class="badge badge-danger">Carregando...</span>
+                    </div>
 
-        <!-- Snippet de Instalação -->
-        <div class="code-box" style="margin-bottom: 1.5rem;">
-            <div class="code-box-header">
-                <span class="code-box-title">Instalação do Rastreador no Site</span>
+                    <!-- Barra de Métricas de Robôs Interceptados (Stealth Tagging) -->
+                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 0.6rem 0.8rem; margin-bottom: 0.8rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                            <span style="font-size: 0.8rem; font-weight: 600; color: #93c5fd;">🤖 Filtro de Robôs (Stealth Tagging)</span>
+                            <span id="bot-source-badge" class="badge" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; font-size: 0.65rem;">Live</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.4rem;">
+                            <div>
+                                <div style="font-size: 0.7rem; color: #94a3b8;">Total Robôs Interceptados</div>
+                                <div id="stat-total-bots" style="font-size: 1.15rem; font-weight: 700; color: #f8fafc;">0</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.7rem; color: #34d399;">Conversões Protegidas (Ads)</div>
+                                <div id="stat-protected-conv" style="font-size: 1.15rem; font-weight: 700; color: #34d399;">0</div>
+                            </div>
+                        </div>
+                        <div id="bot-reasons-container" style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem;">
+                            <span style="font-size: 0.72rem; color: #64748b;">Nenhum robô detectado ainda.</span>
+                        </div>
+                    </div>
+
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem;">
+                        Tentativas de Origens Fora da Whitelist:
+                    </div>
+                    <div class="list-container" id="alerts-container">
+                        <p style="color: #64748b; font-size: 0.85rem;">Verificando tentativas de requisições fora do escopo...</p>
+                    </div>
+                </div>
             </div>
-            <pre><code>&lt;!-- Insira no &lt;head&gt; do seu site --&gt;
+
+            <!-- Snippet de Instalação -->
+            <div class="code-box" style="margin-bottom: 1.5rem;">
+                <div class="code-box-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="code-box-title">Instalação do Rastreador no Site</span>
+                    <a href="/docs" style="font-size: 0.8rem; color: #60a5fa; text-decoration: none; font-weight: 500;">Ver Guia com Exemplos de Eventos ↗</a>
+                </div>
+                <pre><code>&lt;!-- Insira no &lt;head&gt; do seu site --&gt;
 &lt;script 
   defer 
   src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
   data-site-key="SUA_CHAVE_DO_SITE"&gt;
 &lt;/script&gt;</code></pre>
-        </div>
-
-        <!-- Endpoints da API -->
-        <div class="code-box" style="margin-bottom: 1.5rem;">
-            <div class="code-box-header">
-                <span class="code-box-title">Endpoints Disponíveis</span>
             </div>
-            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                <div>
-                    <span class="endpoint-pill">GET</span> <code style="color: #cbd5e1;">/health</code> — Status de saúde do serviço
+
+            <!-- Endpoints da API -->
+            <div class="code-box" style="margin-bottom: 1.5rem;">
+                <div class="code-box-header">
+                    <span class="code-box-title">Endpoints Disponíveis</span>
                 </div>
-                <div>
-                    <span class="endpoint-pill">GET</span> <code style="color: #cbd5e1;">/sdk/tracker.js</code> — Script JS minificado de rastreamento (&lt; 4KB)
-                </div>
-                <div>
-                    <span class="endpoint-pill">POST</span> <code style="color: #cbd5e1;">/api/v1/collect</code> — Endpoint de ingestão de eventos
-                </div>
-                <div>
-                    <span class="endpoint-pill">GET</span> <code style="color: #cbd5e1;">/api/v1/alerts</code> — Registro de domínios não autorizados bloqueados
-                </div>
-                <div>
-                    <span class="endpoint-pill">GET/POST</span> <code style="color: #cbd5e1;">/api/v1/domains</code> — Gestão da lista de domínios permitidos
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div>
+                        <span class="endpoint-pill" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border-color: rgba(99, 102, 241, 0.4);">DOCS</span> <code style="color: #cbd5e1;"><a href="/docs" style="color: #93c5fd; text-decoration: underline;">/docs</a></code> — Guia visual de instalação passo a passo, snippets e testes
+                    </div>
+                    <div>
+                        <span class="endpoint-pill">GET</span> <code style="color: #cbd5e1;">/health</code> — Status de saúde do serviço
+                    </div>
+                    <div>
+                        <span class="endpoint-pill">GET</span> <code style="color: #cbd5e1;">/sdk/tracker.js</code> — Script JS minificado de rastreamento (&lt; 4KB)
+                    </div>
+                    <div>
+                        <span class="endpoint-pill">POST</span> <code style="color: #cbd5e1;">/api/v1/collect</code> — Endpoint de ingestão de eventos
+                    </div>
+                    <div>
+                        <span class="endpoint-pill">GET</span> <code style="color: #cbd5e1;">/api/v1/alerts</code> — Registro de domínios não autorizados bloqueados
+                    </div>
+                    <div>
+                        <span class="endpoint-pill">GET/POST</span> <code style="color: #cbd5e1;">/api/v1/domains</code> — Gestão da lista de domínios permitidos
+                    </div>
                 </div>
             </div>
         </div>
@@ -743,28 +778,31 @@
                     const data = await res.json();
                     if (data.authenticated) {
                         currentUser = data.user;
+                        document.getElementById('login-view').style.display = 'none';
+                        document.getElementById('authenticated-content').style.display = 'block';
                         renderAuthHeader();
                         document.getElementById('form-domain-add-row').style.display = 'flex';
                         document.getElementById('login-prompt-domain').style.display = 'none';
                         loadSitesAndDomains();
                         loadSecurityAlerts();
+                        loadBotStats();
                         return;
                     }
                 }
             } catch (e) {}
 
             currentUser = null;
+            document.getElementById('login-view').style.display = 'block';
+            document.getElementById('authenticated-content').style.display = 'none';
             renderAuthHeader();
             document.getElementById('form-domain-add-row').style.display = 'none';
             document.getElementById('login-prompt-domain').style.display = 'block';
-            loadSitesAndDomains();
-            loadSecurityAlerts();
         }
 
         function renderAuthHeader() {
             const area = document.getElementById('auth-header-area');
             if (!currentUser) {
-                area.innerHTML = '<button class="btn" onclick="openModal(\'modal-login\')">🔐 Acesso Operador</button>';
+                area.innerHTML = '<button class="btn" onclick="document.getElementById(\'landing-login-user\').focus()">🔐 Acesso Operador</button>';
                 return;
             }
 
@@ -778,6 +816,37 @@
             }
             html += `<button class="btn btn-danger" onclick="logout()" style="font-size: 0.75rem;">🚪 Sair</button>`;
             area.innerHTML = html;
+        }
+
+        async function submitLandingInlineLogin() {
+            const username = document.getElementById('landing-login-user').value.trim();
+            const password = document.getElementById('landing-login-pass').value;
+            const errDiv = document.getElementById('landing-login-err');
+            errDiv.style.display = 'none';
+
+            if (!username || !password) {
+                errDiv.textContent = 'Informe usuário e senha';
+                errDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    errDiv.textContent = data.error || 'Erro ao autenticar';
+                    errDiv.style.display = 'block';
+                    return;
+                }
+                checkAuth();
+            } catch (e) {
+                errDiv.textContent = 'Falha na conexão com o servidor';
+                errDiv.style.display = 'block';
+            }
         }
 
         async function submitLogin() {
@@ -1058,8 +1127,11 @@
 
         // Inicialização
         checkAuth();
-        loadBotStats();
-        setInterval(loadBotStats, 15000);
+        setInterval(() => {
+            if (currentUser) {
+                loadBotStats();
+            }
+        }, 15000);
     </script>
 </body>
 </html>

@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guia de Instalação do SDK & Eventos • HN Tracking Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-card: rgba(15, 23, 42, 0.75);
+            --border: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(99, 102, 241, 0.4);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --code-bg: #0b1120;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding-bottom: 4rem;
+        }
+
+        .container {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem;
+        }
+
+        /* Header */
+        .doc-header {
+            margin-bottom: 3rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .doc-header-left h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 40%, #94a3b8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .doc-header-left p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .badge-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 6px;
+            padding: 0.3rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .btn-nav {
+            background: #1e293b;
+            color: #fff;
+            text-decoration: none;
+            padding: 0.55rem 1.1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-nav:hover {
+            background: #334155;
+            border-color: var(--primary);
+        }
+
+        /* Seletor Dinâmico de Site */
+        .site-banner {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(59, 130, 246, 0.08));
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .site-banner-info h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #e0e7ff;
+            margin-bottom: 0.2rem;
+        }
+
+        .site-banner-info p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .site-input-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .site-input-group input {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            color: #38bdf8;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 0.45rem 0.85rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            min-width: 260px;
+            outline: none;
+        }
+
+        .site-input-group input:focus {
+            border-color: var(--primary);
+        }
+
+        /* Passos do Guia */
+        .step-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 2rem;
+            margin-bottom: 2.5rem;
+            backdrop-filter: blur(10px);
+            position: relative;
+        }
+
+        .step-card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .step-number {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, var(--primary), #3b82f6);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+        }
+
+        .step-card-header h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .step-desc {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Abas Internas de Plataformas */
+        .tab-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            padding: 0.45rem 0.9rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .tab-btn.active {
+            color: #fff;
+            background: rgba(99, 102, 241, 0.2);
+            border-color: rgba(99, 102, 241, 0.35);
+            font-weight: 600;
+        }
+
+        .sub-tab-content {
+            display: none;
+        }
+
+        .sub-tab-content.active {
+            display: block;
+        }
+
+        /* Blocos de Código */
+        .code-box {
+            background: var(--code-bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin: 1rem 0 1.5rem;
+            overflow: hidden;
+        }
+
+        .code-box-header {
+            background: rgba(15, 23, 42, 0.95);
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        .code-lang {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            color: #a5b4fc;
+        }
+
+        .btn-copy {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+            padding: 0.25rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-copy:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+
+        pre {
+            padding: 1.25rem;
+            overflow-x: auto;
+            font-size: 0.83rem;
+            line-height: 1.55;
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            color: #e2e8f0;
+        }
+
+        .token-tag { color: #f43f5e; }
+        .token-attr { color: #38bdf8; }
+        .token-str { color: #34d399; }
+        .token-func { color: #a78bfa; }
+        .token-comment { color: #64748b; font-style: italic; }
+
+        /* Lista de Eventos Automáticos */
+        .event-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.25rem;
+            margin: 1.5rem 0;
+        }
+
+        .event-card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.25rem;
+        }
+
+        .event-badge {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.2rem 0.55rem;
+            border-radius: 5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .badge-pv { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .badge-wa { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-lead { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+        .event-card p {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            line-height: 1.45;
+        }
+
+        /* Destaques de Alerta */
+        .alert-box {
+            background: rgba(245, 158, 11, 0.08);
+            border-left: 4px solid var(--warning);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1.5rem 0;
+            font-size: 0.85rem;
+            color: #fde68a;
+        }
+
+        .alert-box strong {
+            color: #fff;
+        }
+
+        /* Playground Interativo */
+        .tester-card {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            border-radius: 14px;
+            padding: 2rem;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .tester-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 0.35rem;
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            color: #fff;
+            padding: 0.55rem 0.85rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-test {
+            background: linear-gradient(135deg, var(--primary), #3b82f6);
+            color: #fff;
+            border: none;
+            padding: 0.65rem 1.4rem;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-test:hover {
+            opacity: 0.9;
+        }
+
+        .tester-result {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            background: #050811;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="doc-header">
+            <div class="doc-header-left">
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.4rem;">
+                    <span class="badge-tag">⚡ SDK v1.0 • Produção</span>
+                    <span style="font-size: 0.8rem; color: #10b981;">● First-Party 100% Server-Side</span>
+                </div>
+                <h1>Guia de Instalação & SDK de Eventos</h1>
+                <p>Passo a passo completo de integração nos sites dos clientes, exemplos de eventos e deduplicação.</p>
+            </div>
+            <div>
+                <a href="/dashboard" class="btn-nav">
+                    <span>📊</span> Acessar Dashboard 360
+                </a>
+            </div>
+        </header>
+
+        <!-- Banner de Configuração Dinâmica da Chave -->
+        <div class="site-banner">
+            <div class="site-banner-info">
+                <h3>Sua Chave de Site (Site Key)</h3>
+                <p>Altere o campo abaixo para atualizar automaticamente todos os códigos de exemplo desta página:</p>
+            </div>
+            <div class="site-input-group">
+                <input type="text" id="global-site-key" value="SUA_CHAVE_DO_SITE" oninput="updateSnippetKeys(this.value)">
+                <button class="btn-copy" onclick="copyText(document.getElementById('global-site-key').value)">Copiar Chave</button>
+            </div>
+        </div>
+
+        <!-- PASSO 1: INSTALAÇÃO DA TAG -->
+        <div class="step-card">
+            <div class="step-card-header">
+                <div class="step-number">1</div>
+                <div>
+                    <h2>Instalação Básica da Tag no Site</h2>
+                </div>
+            </div>
+            <p class="step-desc">
+                Adicione a tag do script preferencialmente dentro da tag <code>&lt;head&gt;</code> ou logo antes do fechamento de <code>&lt;/body&gt;</code> do site cliente. O script é ultraleve (&lt; 4KB) e assíncrono (<code>async</code>), sem nenhum impacto no tempo de carregamento da página.
+            </p>
+
+            <div class="tab-buttons">
+                <button class="tab-btn active" onclick="switchSubTab('install', 'html', this)">🌐 HTML / Landing Page</button>
+                <button class="tab-btn" onclick="switchSubTab('install', 'gtm', this)">📦 Google Tag Manager (GTM)</button>
+                <button class="tab-btn" onclick="switchSubTab('install', 'wp', this)">⚡ WordPress / Elementor</button>
+            </div>
+
+            <!-- SubTab HTML -->
+            <div id="subtab-install-html" class="sub-tab-content active">
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-lang">HTML</span>
+                        <button class="btn-copy" onclick="copySnippet('snippet-html')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="snippet-html">&lt;!-- HN Performance Server-Side Tracking SDK --&gt;
+&lt;script 
+  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
+  data-site-key="<span class="dynamic-key">SUA_CHAVE_DO_SITE</span>" 
+  async&gt;
+&lt;/script&gt;</code></pre>
+                </div>
+            </div>
+
+            <!-- SubTab GTM -->
+            <div id="subtab-install-gtm" class="sub-tab-content">
+                <div class="alert-box" style="margin-top: 0;">
+                    <strong>Como instalar no Google Tag Manager:</strong>
+                    <ol style="margin-left: 1.25rem; margin-top: 0.5rem; line-height: 1.6;">
+                        <li>No painel do GTM, vá em <b>Tags</b> → <b>Nova</b>.</li>
+                        <li>Em <b>Configuração da Tag</b>, selecione <b>HTML Personalizado</b>.</li>
+                        <li>Cole o código abaixo no campo HTML.</li>
+                        <li>Em <b>Acionamento</b>, selecione <b>Initialization - All Pages</b> (ou <b>All Pages</b>).</li>
+                        <li>Clique em <b>Salvar</b> e depois em <b>Publicar</b>.</li>
+                    </ol>
+                </div>
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-lang">HTML Personalizado no GTM</span>
+                        <button class="btn-copy" onclick="copySnippet('snippet-gtm')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="snippet-gtm">&lt;script 
+  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
+  data-site-key="<span class="dynamic-key">SUA_CHAVE_DO_SITE</span>" 
+  async&gt;
+&lt;/script&gt;</code></pre>
+                </div>
+            </div>
+
+            <!-- SubTab WordPress / Elementor -->
+            <div id="subtab-install-wp" class="sub-tab-content">
+                <div class="alert-box" style="margin-top: 0;">
+                    <strong>Opções de instalação no WordPress:</strong>
+                    <ul style="margin-left: 1.25rem; margin-top: 0.5rem; line-height: 1.6;">
+                        <li><b>Elementor Pro:</b> Vá em <i>Elementor</i> → <i>Custom Code</i> → <i>Adicionar Novo</i> → Localização: <code>&lt;head&gt;</code> → Cole o script.</li>
+                        <li><b>Via Plugin Gratuito:</b> Instale o plugin <i>"WPCode (Insert Headers and Footers)"</i> e cole no bloco <b>Header</b>.</li>
+                    </ul>
+                </div>
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-lang">Código para o Header</span>
+                        <button class="btn-copy" onclick="copySnippet('snippet-wp')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="snippet-wp">&lt;script 
+  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
+  data-site-key="<span class="dynamic-key">SUA_CHAVE_DO_SITE</span>" 
+  async&gt;
+&lt;/script&gt;</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASSO 2: EVENTOS AUTOMÁTICOS -->
+        <div class="step-card">
+            <div class="step-card-header">
+                <div class="step-number">2</div>
+                <div>
+                    <h2>Eventos Automáticos (Zero Código Adicional)</h2>
+                </div>
+            </div>
+            <p class="step-desc">
+                Assim que a tag é carregada, o SDK ativa 3 ouvintes globais para capturar os principais momentos da jornada do usuário sem que você precise escrever código JavaScript:
+            </p>
+
+            <div class="event-grid">
+                <div class="event-card">
+                    <span class="event-badge badge-pv">page_view</span>
+                    <h4 style="font-size: 0.9rem; margin-bottom: 0.35rem;">Visualização de Página</h4>
+                    <p>
+                        Disparado no carregamento da URL. Salva e preserva no <code>localStorage</code> todos os parâmetros de anúncio da URL (<code>utm_source</code>, <code>utm_medium</code>, <code>utm_campaign</code>, <code>gclid</code>, <code>fbclid</code>, etc.) em modelo First-Touch resiliente.
+                    </p>
+                </div>
+
+                <div class="event-card">
+                    <span class="event-badge badge-wa">whatsapp_click</span>
+                    <h4 style="font-size: 0.9rem; margin-bottom: 0.35rem;">Cliques de WhatsApp</h4>
+                    <p>
+                        Intercepta automaticamente qualquer clique em links <code>wa.me/*</code>, <code>api.whatsapp.com/*</code> e <code>whatsapp.com/*</code>, gravando a URL do WhatsApp e o texto do botão clicado.
+                    </p>
+                </div>
+
+                <div class="event-card">
+                    <span class="event-badge badge-lead">lead (Auto-Form)</span>
+                    <h4 style="font-size: 0.9rem; margin-bottom: 0.35rem;">Submissão de Formulários</h4>
+                    <p>
+                        Monitora envios de <code>&lt;form&gt;</code> na página, extrai e normaliza automaticamente campos de e-mail, telefone/celular e nome do lead, enviando via <code>navigator.sendBeacon</code> sem atrasar a navegação.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASSO 3: DISPAROS MANUAIS JS (7 EXEMPLOS) -->
+        <div class="step-card">
+            <div class="step-card-header">
+                <div class="step-number">3</div>
+                <div>
+                    <h2>Disparos Manuais via JavaScript (<code>window.hnTrack</code>)</h2>
+                </div>
+            </div>
+            <p class="step-desc">
+                Para funis com modais JS, popups, botões customizados ou checkout de e-commerce, use a função global <code>window.hnTrack(eventName, options)</code>:
+            </p>
+
+            <div class="tab-buttons">
+                <button class="tab-btn active" onclick="switchSubTab('events', 'lead', this)">🎯 Lead Personalizado</button>
+                <button class="tab-btn" onclick="switchSubTab('events', 'whatsapp', this)">💬 Clique WhatsApp</button>
+                <button class="tab-btn" onclick="switchSubTab('events', 'purchase', this)">💰 Compra (Purchase)</button>
+                <button class="tab-btn" onclick="switchSubTab('events', 'checkout', this)">🛒 Iniciar Checkout</button>
+                <button class="tab-btn" onclick="switchSubTab('events', 'cart', this)">🛍️ Add to Cart</button>
+                <button class="tab-btn" onclick="switchSubTab('events', 'content', this)">👁️ View Content</button>
+                <button class="tab-btn" onclick="switchSubTab('events', 'contact', this)">📞 Contato / Tel</button>
+            </div>
+
+            <!-- Exemplo 1: Lead -->
+            <div id="subtab-events-lead" class="sub-tab-content active">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                    Ideal para formulários via AJAX/Fetch, modais de captura, popups e formulários multi-etapas.
+                </p>
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-lang">JavaScript</span>
+                        <button class="btn-copy" onclick="copySnippet('code-lead')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="code-lead">window.hnTrack('lead', {
+  user_data: {
+    email: 'carlos.oliveira@empresa.com.br',
+    phone: '5511998887766',
+    name: 'Carlos Oliveira'
+  },
+  custom_data: {
+    form_name: 'Modal Proposta Rápida',
+    produto_interesse: 'Gerador Diesel 50kVA',
+    cidade: 'São Paulo'
+  }
+});</code></pre>
+                </div>
+            </div>
+
+            <!-- Exemplo 2: WhatsApp -->
+            <div id="subtab-events-whatsapp" class="sub-tab-content">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                    Para botões flutuantes ou criados via JavaScript dinâmico onde o ouvinte nativo não esteja presente.
+                </p>
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-lang">JavaScript</span>
+                        <button class="btn-copy" onclick="copySnippet('code-wa')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="code-wa">window.hnTrack('whatsapp_click', {
+  user_data: {
+    phone: '5521999998888' <span class="token-comment">// se disponível</span>
+  },
+  custom_data: {
+    button_name: 'Botão Flutuante Inferior Direito',
+    vendedor_responsavel: 'Equipe Comercial SP',
+    link_url: 'https://wa.me/5511999999999'
+  }
+});</code></pre>
+                </div>
+            </div>
+
+            <!-- Exemplo 3: Purchase -->
+            <div id="subtab-events-purchase" class="sub-tab-content">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                    Para páginas de "Obrigado pela Compra" / Confirmação de Pedido em e-commerces, plataformas Hotmart, Eduzz, Kiwify ou checkout próprio.
+                </p>
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-lang">JavaScript</span>
+                        <button class="btn-copy" onclick="copySnippet('code-purchase')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="code-purchase">window.hnTrack('purchase', {
+  user_data: {
+    email: 'cliente@gmail.com',
+    phone: '5511987654321',
+    name: 'Mariana Costa'
+  },
+  custom_data: {
+    value: 1290.00,
+    currency: 'BRL',
+    order_id: 'PED-998822',
+    contents: [
+      { id: 'GER-50KVA', name: 'Manutenção Preventiva', price: 1290.00, quantity: 1 }
+    ]
+  }
+});</code></pre>
+                </div>
+            </div>
+
+            <!-- Exemplo 4: Initiate Checkout -->
+            <div id="subtab-events-checkout" class="sub-tab-content">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                    Disparado quando o visitante clica no botão para ir para a tela de pagamento / checkout.
+                </p>
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-lang">JavaScript</span>
+                        <button class="btn-copy" onclick="copySnippet('code-checkout')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="code-checkout">window.hnTrack('initiate_checkout', {
+  custom_data: {
+    value: 497.00,
+    currency: 'BRL',
+    num_items: 1,
+    content_name: 'Plano Semestral Performance'
+  }
+});</code></pre>
+                </div>
+            </div>
+
+            <!-- Exemplo 5: Add to Cart -->
+            <div id="subtab-events-cart" class="sub-tab-content">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                    Para lojas virtuais ou catálogos no clique em "Adicionar ao Orçamento" ou "Adicionar ao Carrinho".
+                </p>
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-lang">JavaScript</span>
+                        <button class="btn-copy" onclick="copySnippet('code-cart')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="code-cart">window.hnTrack('add_to_cart', {
+  custom_data: {
+    content_name: 'Gerador Portátil Silenciado 7kVA',
+    content_id: 'GER-SIL-7',
+    value: 4500.00,
+    currency: 'BRL'
+  }
+});</code></pre>
+                </div>
+            </div>
+
+            <!-- Exemplo 6: View Content -->
+            <div id="subtab-events-content" class="sub-tab-content">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                    Para rastrear quando o visitante visualiza um produto específico, artigo de blog ou proposta comercial.
+                </p>
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-lang">JavaScript</span>
+                        <button class="btn-copy" onclick="copySnippet('code-content')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="code-content">window.hnTrack('view_content', {
+  custom_data: {
+    content_name: 'Geradores Industriais Cummins 150kVA',
+    content_category: 'Linha Industrial',
+    content_id: 'CUMMINS-150'
+  }
+});</code></pre>
+                </div>
+            </div>
+
+            <!-- Exemplo 7: Contact -->
+            <div id="subtab-events-contact" class="sub-tab-content">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                    Para cliques em links telefônicos (<code>tel:+5511...</code>), links de e-mail (<code>mailto:contato@...</code>) ou clique em agendamento de ligação.
+                </p>
+                <div class="code-box">
+                    <div class="code-box-header">
+                        <span class="code-lang">JavaScript</span>
+                        <button class="btn-copy" onclick="copySnippet('code-contact')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="code-contact">window.hnTrack('contact', {}, {
+  channel: 'telefone_fixo',
+  numero_discado: '0800 123 4567',
+  origem_clique: 'Cabecalho Principal'
+});</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASSO 4: DEDUPLICAÇÃO COM META PIXEL -->
+        <div class="step-card">
+            <div class="step-card-header">
+                <div class="step-number">4</div>
+                <div>
+                    <h2>Deduplicação 100% Perfeita com Meta Pixel & CAPI</h2>
+                </div>
+            </div>
+            <p class="step-desc">
+                Para garantir que o Meta Ads não duplique conversões quando o cliente tiver o Meta Pixel do navegador e o nosso Tracking Server-side rodando juntos, a função <code>window.hnTrack</code> retorna automaticamente o <code>event_id</code> (UUID v4) gerado no navegador:
+            </p>
+
+            <div class="code-box">
+                <div class="code-box-header">
+                    <span class="code-lang">Exemplo de Deduplicação (Browser Pixel + HN Engine)</span>
+                    <button class="btn-copy" onclick="copySnippet('code-dedup')">📋 Copiar Código</button>
+                </div>
+                <pre><code id="code-dedup"><span class="token-comment">// 1. Dispara no HN Tracker Engine e obtém o eventId único</span>
+var eventId = window.hnTrack('lead', {
+  user_data: { email: 'lead@exemplo.com.br', phone: '5511999998888' }
+});
+
+<span class="token-comment">// 2. Se o Meta Pixel tradicional estiver ativo na página, passe o mesmo eventID:</span>
+if (typeof fbq === 'function' && eventId) {
+  fbq('track', 'Lead', {}, { eventID: eventId });
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- PASSO 5: PLAYGROUND DE TESTES INTERATIVO -->
+        <div class="step-card tester-card">
+            <div class="step-card-header">
+                <div class="step-number" style="background: linear-gradient(135deg, #10b981, #059669);">🧪</div>
+                <div>
+                    <h2>Console de Teste Interativo (Playground)</h2>
+                    <p style="font-size: 0.8rem; color: var(--text-muted);">
+                        Envie um evento em tempo real a partir desta tela para testar a comunicação imediata com o coletor em produção:
+                    </p>
+                </div>
+            </div>
+
+            <div class="tester-form">
+                <div class="form-group">
+                    <label>Tipo de Evento</label>
+                    <select id="test-event-name" class="form-control">
+                        <option value="lead">lead</option>
+                        <option value="whatsapp_click">whatsapp_click</option>
+                        <option value="purchase">purchase</option>
+                        <option value="initiate_checkout">initiate_checkout</option>
+                        <option value="contact">contact</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>E-mail de Teste</label>
+                    <input type="email" id="test-email" class="form-control" value="teste.lead@hnperformance.com.br">
+                </div>
+
+                <div class="form-group">
+                    <label>Telefone de Teste</label>
+                    <input type="text" id="test-phone" class="form-control" value="5511998887766">
+                </div>
+            </div>
+
+            <button class="btn-test" onclick="sendTestEvent()">
+                <span>🚀</span> Disparar Evento de Teste
+            </button>
+
+            <div id="test-output" class="tester-result"></div>
+        </div>
+
+    </div>
+
+    <!-- Carrega o próprio SDK para alimentar o tester interativo -->
+    <script src="/sdk/tracker.js" data-site-key="22222222-2222-2222-2222-222222222222"></script>
+
+    <script>
+        function updateSnippetKeys(key) {
+            key = key.trim() || 'SUA_CHAVE_DO_SITE';
+            document.querySelectorAll('.dynamic-key').forEach(el => {
+                el.textContent = key;
+            });
+        }
+
+        function switchSubTab(group, tabName, btn) {
+            const parent = btn.closest('.step-card');
+            parent.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            parent.querySelectorAll('.sub-tab-content').forEach(c => c.classList.remove('active'));
+
+            btn.classList.add('active');
+            const target = parent.querySelector(`#subtab-${group}-${tabName}`);
+            if (target) target.classList.add('active');
+        }
+
+        function copySnippet(elementId) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const text = el.innerText;
+            copyText(text);
+        }
+
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Código copiado para a área de transferência!');
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                alert('Código copiado para a área de transferência!');
+            });
+        }
+
+        async function sendTestEvent() {
+            const eventName = document.getElementById('test-event-name').value;
+            const email = document.getElementById('test-email').value;
+            const phone = document.getElementById('test-phone').value;
+            const output = document.getElementById('test-output');
+
+            output.style.display = 'block';
+            output.innerHTML = '<span style="color: #fbbf24;">Disparando evento para o coletor da HN...</span>';
+
+            if (typeof window.hnTrack === 'function') {
+                const eventId = window.hnTrack(eventName, {
+                    user_data: { email: email, phone: phone, name: 'Lead Teste Playground' },
+                    custom_data: { source: 'playground_instalacao', valor: 99.00 }
+                });
+
+                output.innerHTML = `
+                    <span style="color: #34d399;">✓ Sucesso! Evento disparado via Beacon/Fetch:</span><br>
+                    • Evento: <b>${eventName}</b><br>
+                    • Event ID: <b>${eventId}</b><br>
+                    • Status: Processado pelo Coletor Go e transmitido ao Redis Stream.<br>
+                    <span style="color: #94a3b8; font-size: 0.75rem;">Você já pode conferir este evento na aba de Leads do Dashboard!</span>
+                `;
+            } else {
+                output.innerHTML = '<span style="color: #f87171;">Falha: window.hnTrack não carregado nesta página.</span>';
+            }
+        }
+    </script>
+</body>
+</html>

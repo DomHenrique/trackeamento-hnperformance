@@ -39,10 +39,12 @@ func NewRedis(cfg *config.Config) (*RedisClient, error) {
 	}, nil
 }
 
-// PushRawEvent insere o evento bruto em formato JSON no Redis Stream
+// PushRawEvent insere o evento bruto em formato JSON no Redis Stream (limitando tamanho para prevenir exaustão de memória)
 func (r *RedisClient) PushRawEvent(ctx context.Context, eventJSON []byte) error {
 	return r.Client.XAdd(ctx, &redis.XAddArgs{
 		Stream: r.cfg.RedisStreamRaw,
+		MaxLen: 200000,
+		Approx: true,
 		Values: map[string]interface{}{
 			"payload": eventJSON,
 		},
@@ -53,6 +55,8 @@ func (r *RedisClient) PushRawEvent(ctx context.Context, eventJSON []byte) error 
 func (r *RedisClient) PushDispatchEvent(ctx context.Context, dispatchJSON []byte) error {
 	return r.Client.XAdd(ctx, &redis.XAddArgs{
 		Stream: r.cfg.RedisStreamDispatch,
+		MaxLen: 200000,
+		Approx: true,
 		Values: map[string]interface{}{
 			"payload": dispatchJSON,
 		},

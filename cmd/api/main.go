@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"context"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/helmet"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -28,8 +30,14 @@ var landingHTML []byte
 //go:embed dashboard.html
 var dashboardHTML []byte
 
+//go:embed docs.html
+var docsHTML []byte
+
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Configuração inválida: %v", err)
+	}
 
 	// 1. Conexão com Redis (buffer de streaming e sessões)
 	rdb, err := storage.NewRedis(cfg)
@@ -65,6 +73,18 @@ func main() {
 		cancel()
 	}
 
+	// Middleware de autenticação fail-closed
+	var authMiddleware fiber.Handler
+	if authSvc != nil {
+		authMiddleware = authSvc.RequireAuth()
+	} else {
+		authMiddleware = func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"error": "serviço de autenticação temporariamente indisponível",
+			})
+		}
+	}
+
 	// 5. Inicializa o Handler do Coletor
 	handler := collector.NewHandler(cfg, rdb, pg, ch)
 
@@ -74,8 +94,14 @@ func main() {
 		DisableStartupMessage: false,
 	})
 
-	// Middlewares globais
+	// Middlewares globais defensivos
 	app.Use(recover.New())
+	app.Use(helmet.New(helmet.Config{
+		XSSProtection:      "1; mode=block",
+		ContentTypeNosniff: "nosniff",
+		XFrameOptions:      "DENY",
+		ReferrerPolicy:     "strict-origin-when-cross-origin",
+	}))
 	if cfg.Env == "development" {
 		app.Use(logger.New())
 	}
@@ -84,21 +110,30 @@ func main() {
 	ingestionCors := cors.New(cors.Config{
 		AllowOrigins: "*",
 		AllowMethods: "GET,POST,OPTIONS",
-		AllowHeaders: "Origin,Content-Type,Accept,X-Site-Key",
+		AllowHeaders: "Origin,Content-Type,Accept,X-Site-Key,X-Server-Key",
 	})
 	app.Use("/api/v1/collect", ingestionCors)
 	app.Use("/t", ingestionCors)
 	app.Use("/sdk", ingestionCors)
 
-	// CORS Segregado: Rotas administrativas restritas a origens confiáveis
+	// CORS Segregado: Rotas administrativas restritas a hostnames estritamente autorizados
 	adminCors := cors.New(cors.Config{
 		AllowOriginsFunc: func(origin string) bool {
 			if origin == "" {
 				return true // Mesma origem ou navegação direta
 			}
-			if strings.HasPrefix(origin, "https://trackeamento.hnperformancedigital.com.br") ||
-				(cfg.TrackingDomain != "" && strings.Contains(origin, cfg.TrackingDomain)) ||
-				(cfg.Env == "development" && (strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1"))) {
+			u, err := url.Parse(origin)
+			if err != nil {
+				return false
+			}
+			host := strings.ToLower(u.Hostname())
+			if host == "trackeamento.hnperformancedigital.com.br" {
+				return true
+			}
+			if cfg.TrackingDomain != "" && host == strings.ToLower(cfg.TrackingDomain) {
+				return true
+			}
+			if cfg.Env == "development" && (host == "localhost" || host == "127.0.0.1" || strings.HasSuffix(host, ".local")) {
 				return true
 			}
 			return false
@@ -120,10 +155,19 @@ func main() {
 		return c.Send(landingHTML)
 	})
 
-	// Dashboard dedicado de Analytics & Relatórios
+	// Dashboard dedicado de Analytics & Relatórios (Protegido por Autenticação)
 	app.Get("/dashboard", func(c *fiber.Ctx) error {
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return c.Send(dashboardHTML)
+	})
+
+	// Guia de Instalação e Documentação Técnica do SDK (Público para Desenvolvedores)
+	app.Get("/docs", func(c *fiber.Ctx) error {
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		return c.Send(docsHTML)
+	})
+	app.Get("/setup", func(c *fiber.Ctx) error {
+		return c.Redirect("/docs")
 	})
 
 	// Health check
@@ -134,15 +178,9 @@ func main() {
 		})
 	})
 
-	// Endpoints de Coleta
+	// Endpoints de Coleta Públicos
 	app.Post("/api/v1/collect", handler.HandleCollect)
 	app.Post("/t", handler.HandleCollect)
-
-	// Endpoint de Alertas de Segurança (Domínios não autorizados)
-	app.Get("/api/v1/alerts", handler.HandleListAlerts)
-
-	// Endpoint de Telemetria de Robôs e Navegações Suspeitas
-	app.Get("/api/v1/security/bot-stats", handler.HandleGetBotStats)
 
 	// Rate Limiter para Login (máximo 5 tentativas por minuto por IP)
 	loginLimiter := limiter.New(limiter.Config{
@@ -166,32 +204,22 @@ func main() {
 		app.Post("/api/v1/auth/users", authSvc.RequireAuth(), authSvc.HandleCreateUser)
 	}
 
-	// Endpoints de Gestão de Domínios
-	app.Get("/api/v1/sites", handler.HandleListSites)
-	app.Get("/api/v1/domains", handler.HandleListDomains)
+	// Endpoints de Alertas e Telemetria (Requer Autenticação)
+	app.Get("/api/v1/alerts", authMiddleware, handler.HandleListAlerts)
+	app.Get("/api/v1/security/bot-stats", authMiddleware, handler.HandleGetBotStats)
 
-	// Endpoints de Mutação protegidos com autenticação
-	if authSvc != nil {
-		app.Post("/api/v1/domains", authSvc.RequireAuth(), handler.HandleAddDomain)
-		app.Delete("/api/v1/domains/:id", authSvc.RequireAuth(), handler.HandleDeleteDomain)
-		app.Post("/api/v1/domains/approve", authSvc.RequireAuth(), handler.HandleApproveDomain)
+	// Endpoints de Gestão de Domínios e Sites (Requer Autenticação)
+	app.Get("/api/v1/sites", authMiddleware, handler.HandleListSites)
+	app.Get("/api/v1/domains", authMiddleware, handler.HandleListDomains)
+	app.Post("/api/v1/domains", authMiddleware, handler.HandleAddDomain)
+	app.Delete("/api/v1/domains/:id", authMiddleware, handler.HandleDeleteDomain)
+	app.Post("/api/v1/domains/approve", authMiddleware, handler.HandleApproveDomain)
 
-		// Endpoints Analíticos
-		app.Get("/api/v1/analytics/overview", authSvc.RequireAuth(), handler.HandleAnalyticsOverview)
-		app.Get("/api/v1/analytics/pages", authSvc.RequireAuth(), handler.HandleAnalyticsPages)
-		app.Get("/api/v1/analytics/leads", authSvc.RequireAuth(), handler.HandleAnalyticsLeads)
-		app.Get("/api/v1/analytics/leads/export", authSvc.RequireAuth(), handler.HandleExportLeadsCSV)
-	} else {
-		app.Post("/api/v1/domains", handler.HandleAddDomain)
-		app.Delete("/api/v1/domains/:id", handler.HandleDeleteDomain)
-		app.Post("/api/v1/domains/approve", handler.HandleApproveDomain)
-
-		// Endpoints Analíticos (fallback)
-		app.Get("/api/v1/analytics/overview", handler.HandleAnalyticsOverview)
-		app.Get("/api/v1/analytics/pages", handler.HandleAnalyticsPages)
-		app.Get("/api/v1/analytics/leads", handler.HandleAnalyticsLeads)
-		app.Get("/api/v1/analytics/leads/export", handler.HandleExportLeadsCSV)
-	}
+	// Endpoints Analíticos (Requer Autenticação)
+	app.Get("/api/v1/analytics/overview", authMiddleware, handler.HandleAnalyticsOverview)
+	app.Get("/api/v1/analytics/pages", authMiddleware, handler.HandleAnalyticsPages)
+	app.Get("/api/v1/analytics/leads", authMiddleware, handler.HandleAnalyticsLeads)
+	app.Get("/api/v1/analytics/leads/export", authMiddleware, handler.HandleExportLeadsCSV)
 
 	// Endpoint para servir o SDK JS do Tracker
 	app.Get("/sdk/tracker.js", func(c *fiber.Ctx) error {

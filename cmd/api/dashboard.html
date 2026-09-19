@@ -456,6 +456,11 @@
                 <span>🌐</span> Origem & Campanhas
             </a>
 
+            <div class="menu-header" style="margin-top: 1rem;">Documentação & Setup</div>
+            <a class="nav-item" href="/docs" target="_blank">
+                <span>📚</span> Guia de Instalação SDK
+            </a>
+
             <div class="menu-header" style="margin-top: 1rem;">Administração</div>
             <a class="nav-item" href="/">
                 <span>⚙️</span> Gestão de Domínios
@@ -1001,11 +1006,27 @@
             window.location.href = `/api/v1/analytics/leads/export?site_id=${siteID}&range=${range}`;
         }
 
-        // Inicialização
-        loadSites();
-        loadActiveData();
-        // Atualiza métricas a cada 30 segundos
-        setInterval(loadActiveData, 30000);
+        // Inicialização Protegida
+        async function initDashboard() {
+            try {
+                const res = await fetch('/api/v1/auth/me');
+                if (!res.ok) {
+                    window.location.href = '/';
+                    return;
+                }
+                const data = await res.json();
+                if (!data.authenticated) {
+                    window.location.href = '/';
+                    return;
+                }
+                loadSites();
+                loadActiveData();
+                setInterval(loadActiveData, 30000);
+            } catch (e) {
+                window.location.href = '/';
+            }
+        }
+        initDashboard();
     </script>
 </body>
 </html>
