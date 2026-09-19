@@ -25,6 +25,9 @@ import (
 //go:embed landing.html
 var landingHTML []byte
 
+//go:embed dashboard.html
+var dashboardHTML []byte
+
 func main() {
 	cfg := config.Load()
 
@@ -109,11 +112,18 @@ func main() {
 	app.Use("/api/v1/sites", adminCors)
 	app.Use("/api/v1/alerts", adminCors)
 	app.Use("/api/v1/security", adminCors)
+	app.Use("/api/v1/analytics", adminCors)
 
 	// Landing page de status e documentação na raiz
 	app.Get("/", func(c *fiber.Ctx) error {
 		c.Set("Content-Type", "text/html; charset=utf-8")
 		return c.Send(landingHTML)
+	})
+
+	// Dashboard dedicado de Analytics & Relatórios
+	app.Get("/dashboard", func(c *fiber.Ctx) error {
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		return c.Send(dashboardHTML)
 	})
 
 	// Health check
@@ -165,10 +175,22 @@ func main() {
 		app.Post("/api/v1/domains", authSvc.RequireAuth(), handler.HandleAddDomain)
 		app.Delete("/api/v1/domains/:id", authSvc.RequireAuth(), handler.HandleDeleteDomain)
 		app.Post("/api/v1/domains/approve", authSvc.RequireAuth(), handler.HandleApproveDomain)
+
+		// Endpoints Analíticos
+		app.Get("/api/v1/analytics/overview", authSvc.RequireAuth(), handler.HandleAnalyticsOverview)
+		app.Get("/api/v1/analytics/pages", authSvc.RequireAuth(), handler.HandleAnalyticsPages)
+		app.Get("/api/v1/analytics/leads", authSvc.RequireAuth(), handler.HandleAnalyticsLeads)
+		app.Get("/api/v1/analytics/leads/export", authSvc.RequireAuth(), handler.HandleExportLeadsCSV)
 	} else {
 		app.Post("/api/v1/domains", handler.HandleAddDomain)
 		app.Delete("/api/v1/domains/:id", handler.HandleDeleteDomain)
 		app.Post("/api/v1/domains/approve", handler.HandleApproveDomain)
+
+		// Endpoints Analíticos (fallback)
+		app.Get("/api/v1/analytics/overview", handler.HandleAnalyticsOverview)
+		app.Get("/api/v1/analytics/pages", handler.HandleAnalyticsPages)
+		app.Get("/api/v1/analytics/leads", handler.HandleAnalyticsLeads)
+		app.Get("/api/v1/analytics/leads/export", handler.HandleExportLeadsCSV)
 	}
 
 	// Endpoint para servir o SDK JS do Tracker

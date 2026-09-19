@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HN Performance • Analytics & Intelligence Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-surface: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.65);
+            --border: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(99, 102, 241, 0.4);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --sidebar-width: 260px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Barra Lateral (Sidebar) */
+        aside.sidebar {
+            width: var(--sidebar-width);
+            background: #0d1322;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+        }
+
+        .sidebar-brand {
+            padding: 1.5rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .sidebar-brand .logo-icon {
+            width: 34px;
+            height: 34px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .sidebar-brand h1 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #fff;
+        }
+
+        .sidebar-brand .badge-pro {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.4rem;
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .sidebar-menu {
+            flex: 1;
+            padding: 1.25rem 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .menu-header {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748b;
+            padding: 0.5rem 0.75rem 0.25rem;
+            font-weight: 600;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 0.85rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+
+        .nav-item:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .nav-item.active {
+            color: #fff;
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.3);
+            font-weight: 600;
+        }
+
+        .sidebar-footer {
+            padding: 1rem 1.25rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Conteúdo Principal */
+        main.main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Header Superior */
+        header.top-header {
+            height: 70px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+        }
+
+        .top-left h2 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+
+        .top-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .custom-select {
+            background: #1e293b;
+            border: 1px solid var(--border);
+            color: #fff;
+            padding: 0.45rem 0.9rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+            cursor: pointer;
+        }
+
+        .custom-select:hover, .custom-select:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-refresh {
+            background: #1e293b;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 0.45rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .btn-refresh:hover {
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        /* Container das Telas */
+        .content-body {
+            padding: 2rem;
+            flex: 1;
+        }
+
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
+            display: block;
+            animation: fadeIn 0.25s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            backdrop-filter: blur(8px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.4), transparent);
+        }
+
+        .kpi-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-value {
+            font-size: 1.85rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .pulse-dot {
+            width: 9px;
+            height: 9px;
+            background: var(--success);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* Seção do Gráfico */
+        .chart-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(8px);
+        }
+
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+        }
+
+        .chart-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        /* Tabelas Estilo Search Console */
+        .table-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            backdrop-filter: blur(8px);
+            margin-bottom: 2rem;
+        }
+
+        .table-card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .table-card-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .btn-export {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: opacity 0.2s;
+        }
+
+        .btn-export:hover {
+            opacity: 0.9;
+        }
+
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        table.data-table th {
+            background: rgba(15, 23, 42, 0.9);
+            padding: 0.85rem 1.25rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table.data-table td {
+            padding: 0.85rem 1.25rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: #cbd5e1;
+        }
+
+        table.data-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge-status {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .badge-ok {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .badge-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 900px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Barra Lateral -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="logo-icon">HN</div>
+            <div>
+                <h1>HN TRACKING</h1>
+                <span class="badge-pro">Analytics 360</span>
+            </div>
+        </div>
+
+        <nav class="sidebar-menu">
+            <div class="menu-header">Métricas & Relatórios</div>
+            <a class="nav-item active" onclick="switchTab('overview', this)">
+                <span>📊</span> Visão Geral
+            </a>
+            <a class="nav-item" onclick="switchTab('pages', this)">
+                <span>📄</span> Páginas Monitoradas
+            </a>
+            <a class="nav-item" onclick="switchTab('leads', this)">
+                <span>🎯</span> Leads & Conversões
+            </a>
+            <a class="nav-item" onclick="switchTab('traffic', this)">
+                <span>🌐</span> Origem & Campanhas
+            </a>
+
+            <div class="menu-header" style="margin-top: 1rem;">Administração</div>
+            <a class="nav-item" href="/">
+                <span>⚙️</span> Gestão de Domínios
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <span id="user-display">● admin</span>
+            <a href="/" style="color: var(--danger); text-decoration: none; font-size: 0.75rem;">Sair</a>
+        </div>
+    </aside>
+
+    <!-- Conteúdo Principal -->
+    <main class="main-content">
+        <!-- Top Header -->
+        <header class="top-header">
+            <div class="top-left">
+                <h2 id="view-title">Visão Geral de Desempenho</h2>
+            </div>
+            <div class="top-right">
+                <select id="select-site" class="custom-select" onchange="loadActiveData()">
+                    <option value="">Todos os Sites</option>
+                </select>
+
+                <select id="select-range" class="custom-select" onchange="loadActiveData()">
+                    <option value="today">Hoje</option>
+                    <option value="7d" selected>Últimos 7 dias</option>
+                    <option value="30d">Últimos 30 dias</option>
+                    <option value="month">Mês Atual</option>
+                </select>
+
+                <button class="btn-refresh" onclick="loadActiveData()">
+                    <span>🔄</span> Atualizar
+                </button>
+            </div>
+        </header>
+
+        <!-- Corpo das Abas -->
+        <div class="content-body">
+
+            <!-- TAB 1: VISÃO GERAL -->
+            <div id="tab-overview" class="tab-pane active">
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span>VISITANTES ÚNICOS</span>
+                            <span>👥</span>
+                        </div>
+                        <div class="kpi-value" id="kpi-visitors">0</div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span>TOTAL DE EVENTOS</span>
+                            <span>⚡</span>
+                        </div>
+                        <div class="kpi-value" id="kpi-events">0</div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span>LEADS & WHATSAPP</span>
+                            <span>🎯</span>
+                        </div>
+                        <div class="kpi-value" id="kpi-conversions" style="color: #34d399;">0</div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span>TEMPO REAL (30 MIN)</span>
+                            <span class="pulse-dot"></span>
+                        </div>
+                        <div class="kpi-value" id="kpi-active-now">0</div>
+                    </div>
+                </div>
+
+                <!-- Gráfico de Tendência -->
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <h3>Tendência de Acessos e Conversões</h3>
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">Diário</span>
+                    </div>
+                    <div style="height: 320px; position: relative;">
+                        <canvas id="trafficChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Top Páginas e Top Fontes -->
+                <div class="grid-2">
+                    <div class="table-card">
+                        <div class="table-card-header">
+                            <h3>Páginas com Mais Acessos</h3>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th style="text-align: right;">Visualizações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="overview-top-pages">
+                                <tr><td colspan="2" style="color: #64748b;">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="table-card">
+                        <div class="table-card-header">
+                            <h3>Principais Fontes / Campanhas</h3>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Origem / Mídia</th>
+                                    <th style="text-align: right;">Eventos</th>
+                                </tr>
+                            </thead>
+                            <tbody id="overview-top-sources">
+                                <tr><td colspan="2" style="color: #64748b;">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: PÁGINAS MONITORADAS (ESTILO SEARCH CONSOLE) -->
+            <div id="tab-pages" class="tab-pane">
+                <div class="table-card">
+                    <div class="table-card-header">
+                        <div>
+                            <h3>Páginas Monitoradas pelo Tracker</h3>
+                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                URLs detectadas automaticamente via script client-side com contagem de tráfego e conversões.
+                            </p>
+                        </div>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Caminho da Página (URL)</th>
+                                <th style="text-align: right;">PageViews</th>
+                                <th style="text-align: right;">Visitantes Únicos</th>
+                                <th style="text-align: right;">Conversões</th>
+                                <th style="text-align: right;">Último Acesso</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pages-table-body">
+                            <tr><td colspan="5" style="color: #64748b;">Carregando páginas...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 3: LEADS & CONVERSÕES (COM AUDITORIA) -->
+            <div id="tab-leads" class="tab-pane">
+                <div class="table-card">
+                    <div class="table-card-header">
+                        <div>
+                            <h3>Últimas Conversões & Auditoria de Mídia Paga</h3>
+                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                Rastreamento de Leads e Cliques de WhatsApp com verificação de UTMs e Click IDs de plataformas de anúncio.
+                            </p>
+                        </div>
+                        <button class="btn-export" onclick="exportLeadsCSV()">
+                            <span>📥</span> Exportar CSV / Excel
+                        </button>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Data / Hora</th>
+                                <th>Tipo</th>
+                                <th>Página de Origem</th>
+                                <th>Campanha / Mídia</th>
+                                <th>Integridade de Rastreamento</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leads-table-body">
+                            <tr><td colspan="5" style="color: #64748b;">Carregando leads...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 4: ORIGEM & DISPOSITIVOS -->
+            <div id="tab-traffic" class="tab-pane">
+                <div class="grid-2">
+                    <div class="table-card">
+                        <div class="table-card-header">
+                            <h3>Desdobramento de Tráfego por Origem</h3>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Origem (utm_source)</th>
+                                    <th>Mídia (utm_medium)</th>
+                                    <th>Campanha</th>
+                                    <th style="text-align: right;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="traffic-sources-table">
+                                <tr><td colspan="4" style="color: #64748b;">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="chart-container" style="margin-bottom: 0;">
+                        <div class="chart-header">
+                            <h3>Dispositivos Utilizados</h3>
+                        </div>
+                        <div style="height: 280px; position: relative;">
+                            <canvas id="deviceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        let currentTab = 'overview';
+        let trafficChartInstance = null;
+        let deviceChartInstance = null;
+
+        function escapeHTML(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function switchTab(tabId, el) {
+            currentTab = tabId;
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            
+            const targetPane = document.getElementById('tab-' + tabId);
+            if (targetPane) targetPane.classList.add('active');
+            if (el) el.classList.add('active');
+
+            const titles = {
+                'overview': 'Visão Geral de Desempenho',
+                'pages': 'Páginas Monitoradas (Descoberta & Desempenho)',
+                'leads': 'Leads, Conversões & Auditoria de Mídia',
+                'traffic': 'Origem do Tráfego & Dispositivos'
+            };
+            document.getElementById('view-title').textContent = titles[tabId] || 'Analytics Hub';
+            loadActiveData();
+        }
+
+        async function loadSites() {
+            try {
+                const res = await fetch('/api/v1/sites');
+                if (!res.ok) return;
+                const sites = await res.json();
+                const sel = document.getElementById('select-site');
+                sel.innerHTML = '<option value="">Todos os Sites</option>';
+                sites.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = `${s.name} (${s.domain})`;
+                    sel.appendChild(opt);
+                });
+            } catch (e) {
+                console.error("Erro ao carregar sites:", e);
+            }
+        }
+
+        async function loadActiveData() {
+            const siteID = document.getElementById('select-site').value;
+            const range = document.getElementById('select-range').value;
+
+            if (currentTab === 'overview' || currentTab === 'traffic') {
+                await loadOverview(siteID, range);
+            }
+            if (currentTab === 'pages') {
+                await loadPages(siteID, range);
+            }
+            if (currentTab === 'leads') {
+                await loadLeads(siteID, range);
+            }
+        }
+
+        async function loadOverview(siteID, range) {
+            try {
+                const res = await fetch(`/api/v1/analytics/overview?site_id=${siteID}&range=${range}`);
+                if (!res.ok) throw new Error('Falha ao carregar visão geral');
+                const data = await res.json();
+
+                // 1. Atualiza KPIs
+                document.getElementById('kpi-visitors').textContent = (data.unique_visitors || 0).toLocaleString('pt-BR');
+                document.getElementById('kpi-events').textContent = (data.total_events || 0).toLocaleString('pt-BR');
+                const totalConvs = (data.total_leads || 0) + (data.total_whatsapp_clicks || 0);
+                document.getElementById('kpi-conversions').textContent = `${totalConvs.toLocaleString('pt-BR')} conv.`;
+                document.getElementById('kpi-active-now').textContent = `${data.active_last_30_min || 0} online`;
+
+                // 2. Gráfico Temporal
+                renderTrafficChart(data.time_series || []);
+
+                // 3. Top Fontes
+                renderTopSources(data.top_sources || []);
+
+                // 4. Dispositivos
+                renderDeviceChart(data.device_breakdown || {});
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function renderTrafficChart(timeSeries) {
+            const ctx = document.getElementById('trafficChart').getContext('2d');
+            if (trafficChartInstance) {
+                trafficChartInstance.destroy();
+            }
+
+            const labels = timeSeries.map(t => t.date);
+            const pvs = timeSeries.map(t => t.pageviews);
+            const visitors = timeSeries.map(t => t.visitors);
+            const convs = timeSeries.map(t => t.conversions);
+
+            trafficChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels.length ? labels : ['Sem dados'],
+                    datasets: [
+                        {
+                            label: 'Visualizações de Página',
+                            data: pvs.length ? pvs : [0],
+                            borderColor: '#6366f1',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            fill: true,
+                            tension: 0.35,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'Visitantes Únicos',
+                            data: visitors.length ? visitors : [0],
+                            borderColor: '#38bdf8',
+                            borderDash: [4, 4],
+                            fill: false,
+                            tension: 0.35,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'Conversões',
+                            data: convs.length ? convs : [0],
+                            borderColor: '#10b981',
+                            backgroundColor: '#10b981',
+                            fill: false,
+                            tension: 0.35,
+                            borderWidth: 2.5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#94a3b8', font: { size: 11 } } }
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b' } },
+                        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b' }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderTopSources(sources) {
+            const tbodyOverview = document.getElementById('overview-top-sources');
+            const tbodyTraffic = document.getElementById('traffic-sources-table');
+
+            if (!sources || sources.length === 0) {
+                tbodyOverview.innerHTML = '<tr><td colspan="2" style="color: #64748b;">Nenhuma fonte identificada.</td></tr>';
+                tbodyTraffic.innerHTML = '<tr><td colspan="4" style="color: #64748b;">Nenhuma fonte identificada.</td></tr>';
+                return;
+            }
+
+            let htmlOverview = '';
+            let htmlTraffic = '';
+
+            sources.forEach((s, idx) => {
+                if (idx < 5) {
+                    htmlOverview += `
+                        <tr>
+                            <td><b>${escapeHTML(s.source)}</b> / <span style="color: #64748b;">${escapeHTML(s.medium)}</span></td>
+                            <td style="text-align: right; font-weight: 600;">${Number(s.count).toLocaleString('pt-BR')}</td>
+                        </tr>
+                    `;
+                }
+                htmlTraffic += `
+                    <tr>
+                        <td><b>${escapeHTML(s.source)}</b></td>
+                        <td><span style="color: #94a3b8;">${escapeHTML(s.medium)}</span></td>
+                        <td><span style="color: #a5b4fc;">${escapeHTML(s.campaign)}</span></td>
+                        <td style="text-align: right; font-weight: 600;">${Number(s.count).toLocaleString('pt-BR')}</td>
+                    </tr>
+                `;
+            });
+
+            tbodyOverview.innerHTML = htmlOverview;
+            tbodyTraffic.innerHTML = htmlTraffic;
+        }
+
+        function renderDeviceChart(devices) {
+            const ctx = document.getElementById('deviceChart').getContext('2d');
+            if (deviceChartInstance) {
+                deviceChartInstance.destroy();
+            }
+
+            const labels = Object.keys(devices);
+            const values = Object.values(devices);
+
+            deviceChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels.length ? labels : ['Desktop'],
+                    datasets: [{
+                        data: values.length ? values : [1],
+                        backgroundColor: ['#6366f1', '#38bdf8', '#10b981', '#f59e0b'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+
+        async function loadPages(siteID, range) {
+            const tbody = document.getElementById('pages-table-body');
+            const overviewTop = document.getElementById('overview-top-pages');
+            try {
+                const res = await fetch(`/api/v1/analytics/pages?site_id=${siteID}&range=${range}`);
+                if (!res.ok) throw new Error('Erro ao carregar páginas');
+                const pages = await res.json();
+
+                if (!pages || pages.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="color: #64748b;">Nenhuma página monitorada com tráfego neste período.</td></tr>';
+                    overviewTop.innerHTML = '<tr><td colspan="2" style="color: #64748b;">Nenhuma página registrada.</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                let htmlTop = '';
+                pages.forEach((p, idx) => {
+                    const lastDate = new Date(p.last_seen_at).toLocaleString('pt-BR');
+                    html += `
+                        <tr>
+                            <td>
+                                <a href="${escapeHTML(p.page_url)}" target="_blank" style="color: #38bdf8; text-decoration: none; font-weight: 500;">
+                                    ${escapeHTML(p.page_url)}
+                                </a>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">${Number(p.pageviews).toLocaleString('pt-BR')}</td>
+                            <td style="text-align: right;">${Number(p.visitors).toLocaleString('pt-BR')}</td>
+                            <td style="text-align: right; color: #34d399; font-weight: 600;">${Number(p.conversions).toLocaleString('pt-BR')}</td>
+                            <td style="text-align: right; color: #64748b; font-size: 0.78rem;">${lastDate}</td>
+                        </tr>
+                    `;
+
+                    if (idx < 5) {
+                        htmlTop += `
+                            <tr>
+                                <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    <span style="color: #38bdf8;">${escapeHTML(p.page_url)}</span>
+                                </td>
+                                <td style="text-align: right; font-weight: 600;">${Number(p.pageviews).toLocaleString('pt-BR')}</td>
+                            </tr>
+                        `;
+                    }
+                });
+
+                tbody.innerHTML = html;
+                overviewTop.innerHTML = htmlTop;
+
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="5" style="color: #f87171;">Falha ao carregar páginas monitoradas.</td></tr>';
+            }
+        }
+
+        async function loadLeads(siteID, range) {
+            const tbody = document.getElementById('leads-table-body');
+            try {
+                const res = await fetch(`/api/v1/analytics/leads?site_id=${siteID}&range=${range}&limit=100`);
+                if (!res.ok) throw new Error('Erro ao carregar leads');
+                const leads = await res.json();
+
+                if (!leads || leads.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="color: #64748b;">Nenhuma conversão registrada no período.</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                leads.forEach(l => {
+                    const date = new Date(l.event_time).toLocaleString('pt-BR');
+                    
+                    let badgeHtml = '';
+                    if (l.integrity_level === 'ok') {
+                        badgeHtml = '<span class="badge-status badge-ok">✓ Completo</span>';
+                    } else if (l.integrity_level === 'warning_high') {
+                        badgeHtml = '<span class="badge-status badge-danger">🚨 Sem UTM & ClickID</span>';
+                    } else {
+                        badgeHtml = `<span class="badge-status badge-warning">⚠️ ${escapeHTML(l.missing_alerts.join(', '))}</span>`;
+                    }
+
+                    const utmInfo = l.utm_campaign || l.utm_source 
+                        ? `${escapeHTML(l.utm_source || 'direto')} / ${escapeHTML(l.utm_campaign || 'sem-campanha')}`
+                        : '<span style="color: #64748b;">(Sem parâmetros de campanha)</span>';
+
+                    html += `
+                        <tr>
+                            <td style="font-size: 0.8rem; color: #94a3b8;">${date}</td>
+                            <td><span style="font-weight: 600; color: #34d399;">${escapeHTML(l.event_name)}</span></td>
+                            <td style="max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                <span style="font-size: 0.8rem;">${escapeHTML(l.page_url || l.landing_page || 'N/A')}</span>
+                            </td>
+                            <td>${utmInfo}</td>
+                            <td>${badgeHtml}</td>
+                        </tr>
+                    `;
+                });
+
+                tbody.innerHTML = html;
+
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="5" style="color: #f87171;">Falha ao carregar conversões.</td></tr>';
+            }
+        }
+
+        function exportLeadsCSV() {
+            const siteID = document.getElementById('select-site').value;
+            const range = document.getElementById('select-range').value;
+            window.location.href = `/api/v1/analytics/leads/export?site_id=${siteID}&range=${range}`;
+        }
+
+        // Inicialização
+        loadSites();
+        loadActiveData();
+        // Atualiza métricas a cada 30 segundos
+        setInterval(loadActiveData, 30000);
+    </script>
+</body>
+</html>
