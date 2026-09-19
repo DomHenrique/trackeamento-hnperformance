@@ -4,14 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+	"tracking-engine/internal/storage"
 )
 
 const (
@@ -27,18 +28,14 @@ type User struct {
 }
 
 type Service struct {
-	pool     *pgxpool.Pool
-	sessions sync.Map // token (string) -> SessionInfo
+	pool  *pgxpool.Pool
+	redis *storage.RedisClient
 }
 
-type SessionInfo struct {
-	User      User
-	ExpiresAt time.Time
-}
-
-func NewService(pool *pgxpool.Pool) *Service {
+func NewService(pool *pgxpool.Pool, rdb *storage.RedisClient) *Service {
 	return &Service{
-		pool: pool,
+		pool:  pool,
+		redis: rdb,
 	}
 }
 
@@ -121,12 +118,17 @@ func (s *Service) HandleLogin(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "usuario ou senha incorretos"})
 	}
 
-	// Cria sessão
+	// Cria sessão no Redis com TTL de 30 dias
 	token := generateSessionToken()
-	s.sessions.Store(token, SessionInfo{
-		User:      user,
-		ExpiresAt: time.Now().Add(SessionDuration),
-	})
+	if s.redis != nil && s.redis.Client != nil {
+		userBytes, errJSON := json.Marshal(user)
+		if errJSON == nil {
+			key := "auth:session:" + token
+			ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
+			_ = s.redis.Client.Set(ctx, key, string(userBytes), SessionDuration).Err()
+			cancel()
+		}
+	}
 
 	c.Cookie(&fiber.Cookie{
 		Name:     SessionCookieName,
@@ -145,14 +147,17 @@ func (s *Service) HandleLogin(c *fiber.Ctx) error {
 	})
 }
 
-// HandleLogout encerra a sessão ativa
+// HandleLogout encerra a sessão ativa no Redis
 func (s *Service) HandleLogout(c *fiber.Ctx) error {
 	token := c.Cookies(SessionCookieName)
 	if token == "" {
 		token = strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
 	}
-	if token != "" {
-		s.sessions.Delete(token)
+	if token != "" && s.redis != nil && s.redis.Client != nil {
+		key := "auth:session:" + token
+		ctx, cancel := context.WithTimeout(c.Context(), 2*time.Second)
+		_ = s.redis.Client.Del(ctx, key).Err()
+		cancel()
 	}
 
 	c.Cookie(&fiber.Cookie{
@@ -227,28 +232,31 @@ func (s *Service) HandleCreateUser(c *fiber.Ctx) error {
 	})
 }
 
-// GetUserFromCtx extrai o usuário a partir do cookie ou header Authorization
+// GetUserFromCtx extrai o usuário a partir do cookie ou header Authorization via Redis
 func (s *Service) GetUserFromCtx(c *fiber.Ctx) (User, bool) {
 	token := c.Cookies(SessionCookieName)
 	if token == "" {
 		token = strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
 	}
-	if token == "" {
+	if token == "" || s.redis == nil || s.redis.Client == nil {
 		return User{}, false
 	}
 
-	val, ok := s.sessions.Load(token)
-	if !ok {
+	key := "auth:session:" + token
+	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Second)
+	defer cancel()
+
+	val, err := s.redis.Client.Get(ctx, key).Result()
+	if err != nil || val == "" {
 		return User{}, false
 	}
 
-	sess := val.(SessionInfo)
-	if time.Now().After(sess.ExpiresAt) {
-		s.sessions.Delete(token)
+	var user User
+	if err := json.Unmarshal([]byte(val), &user); err != nil {
 		return User{}, false
 	}
 
-	return sess.User, true
+	return user, true
 }
 
 // RequireAuth middleware que bloqueia requisições não autenticadas

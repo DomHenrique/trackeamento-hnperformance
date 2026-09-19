@@ -6,11 +6,13 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
@@ -26,7 +28,7 @@ var landingHTML []byte
 func main() {
 	cfg := config.Load()
 
-	// 1. Conexão com Redis (buffer de streaming)
+	// 1. Conexão com Redis (buffer de streaming e sessões)
 	rdb, err := storage.NewRedis(cfg)
 	if err != nil {
 		log.Fatalf("Erro ao conectar no Redis: %v", err)
@@ -52,7 +54,7 @@ func main() {
 	// 4. Inicializa Serviço de Autenticação e Bootstrap do Admin
 	var authSvc *auth.Service
 	if pg != nil && pg.Pool != nil {
-		authSvc = auth.NewService(pg.Pool)
+		authSvc = auth.NewService(pg.Pool, rdb)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := authSvc.EnsureAdminUser(ctx, cfg.AdminUser, cfg.AdminPassword); err != nil {
 			log.Printf("[Auth] Erro ao provisionar admin: %v", err)
@@ -69,20 +71,44 @@ func main() {
 		DisableStartupMessage: false,
 	})
 
-	// Middlewares
+	// Middlewares globais
 	app.Use(recover.New())
-	app.Use(cors.New(cors.Config{
+	if cfg.Env == "development" {
+		app.Use(logger.New())
+	}
+
+	// CORS Segregado: Ingestão de eventos e SDK são públicos
+	ingestionCors := cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowMethods: "GET,POST,OPTIONS",
+		AllowHeaders: "Origin,Content-Type,Accept,X-Site-Key",
+	})
+	app.Use("/api/v1/collect", ingestionCors)
+	app.Use("/t", ingestionCors)
+	app.Use("/sdk", ingestionCors)
+
+	// CORS Segregado: Rotas administrativas restritas a origens confiáveis
+	adminCors := cors.New(cors.Config{
 		AllowOriginsFunc: func(origin string) bool {
-			return true
+			if origin == "" {
+				return true // Mesma origem ou navegação direta
+			}
+			if strings.HasPrefix(origin, "https://trackeamento.hnperformancedigital.com.br") ||
+				(cfg.TrackingDomain != "" && strings.Contains(origin, cfg.TrackingDomain)) ||
+				(cfg.Env == "development" && (strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1"))) {
+				return true
+			}
+			return false
 		},
 		AllowMethods:     "GET,POST,DELETE,OPTIONS",
 		AllowHeaders:     "Origin,Content-Type,Accept,X-Site-Key,Authorization",
 		AllowCredentials: true,
-	}))
-
-	if cfg.Env == "development" {
-		app.Use(logger.New())
-	}
+	})
+	app.Use("/api/v1/auth", adminCors)
+	app.Use("/api/v1/domains", adminCors)
+	app.Use("/api/v1/sites", adminCors)
+	app.Use("/api/v1/alerts", adminCors)
+	app.Use("/api/v1/security", adminCors)
 
 	// Landing page de status e documentação na raiz
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -108,20 +134,42 @@ func main() {
 	// Endpoint de Telemetria de Robôs e Navegações Suspeitas
 	app.Get("/api/v1/security/bot-stats", handler.HandleGetBotStats)
 
+	// Rate Limiter para Login (máximo 5 tentativas por minuto por IP)
+	loginLimiter := limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: 1 * time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP()
+		},
+		LimitReached: func(c *fiber.Ctx) error {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Muitas tentativas de login. Aguarde 1 minuto para tentar novamente.",
+			})
+		},
+	})
+
 	// Endpoints de Autenticação
 	if authSvc != nil {
-		app.Post("/api/v1/auth/login", authSvc.HandleLogin)
+		app.Post("/api/v1/auth/login", loginLimiter, authSvc.HandleLogin)
 		app.Post("/api/v1/auth/logout", authSvc.HandleLogout)
 		app.Get("/api/v1/auth/me", authSvc.HandleMe)
-		app.Post("/api/v1/auth/users", authSvc.HandleCreateUser)
+		app.Post("/api/v1/auth/users", authSvc.RequireAuth(), authSvc.HandleCreateUser)
 	}
 
 	// Endpoints de Gestão de Domínios
 	app.Get("/api/v1/sites", handler.HandleListSites)
 	app.Get("/api/v1/domains", handler.HandleListDomains)
-	app.Post("/api/v1/domains", handler.HandleAddDomain)
-	app.Delete("/api/v1/domains/:id", handler.HandleDeleteDomain)
-	app.Post("/api/v1/domains/approve", handler.HandleApproveDomain)
+
+	// Endpoints de Mutação protegidos com autenticação
+	if authSvc != nil {
+		app.Post("/api/v1/domains", authSvc.RequireAuth(), handler.HandleAddDomain)
+		app.Delete("/api/v1/domains/:id", authSvc.RequireAuth(), handler.HandleDeleteDomain)
+		app.Post("/api/v1/domains/approve", authSvc.RequireAuth(), handler.HandleApproveDomain)
+	} else {
+		app.Post("/api/v1/domains", handler.HandleAddDomain)
+		app.Delete("/api/v1/domains/:id", handler.HandleDeleteDomain)
+		app.Post("/api/v1/domains/approve", handler.HandleApproveDomain)
+	}
 
 	// Endpoint para servir o SDK JS do Tracker
 	app.Get("/sdk/tracker.js", func(c *fiber.Ctx) error {

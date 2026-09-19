@@ -705,6 +705,26 @@
         let currentUser = null;
         let pendingApprove = null;
 
+        function escapeHTML(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function escapeJS(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '\\"')
+                .replace(/</g, '\\x3c')
+                .replace(/>/g, '\\x3e');
+        }
+
         function openModal(id) {
             document.getElementById(id).style.display = 'flex';
         }
@@ -747,7 +767,7 @@
 
             let html = `
                 <div style="font-size: 0.85rem; color: #34d399; display: flex; align-items: center; gap: 0.5rem;">
-                    <span>● ${currentUser.username} (${currentUser.role})</span>
+                    <span>● ${escapeHTML(currentUser.username)} (${escapeHTML(currentUser.role)})</span>
                 </div>
             `;
             if (currentUser.role === 'admin') {
@@ -867,10 +887,10 @@
                     html += `
                         <div class="item-card">
                             <div>
-                                <span class="item-domain">${d.domain}</span>
+                                <span class="item-domain">${escapeHTML(d.domain)}</span>
                                 <span class="badge badge-wildcard" style="margin-left: 0.4rem;">*.subdomínios</span>
                             </div>
-                            ${currentUser ? `<button class="btn btn-danger" onclick="handleDeleteDomain('${d.id}')" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Remover</button>` : ''}
+                            ${currentUser ? `<button class="btn btn-danger" onclick="handleDeleteDomain('${escapeJS(d.id)}')" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Remover</button>` : ''}
                         </div>
                     `;
                 });
@@ -951,14 +971,14 @@
                     html += `
                         <div class="item-card" style="border-color: rgba(239, 68, 68, 0.25);">
                             <div>
-                                <span class="item-domain" style="color: #f87171;">${item.unauthorized_domain}</span>
-                                <span class="badge badge-danger" style="margin-left: 0.4rem;">${item.attempts_count}x barrado</span>
+                                <span class="item-domain" style="color: #f87171;">${escapeHTML(item.unauthorized_domain)}</span>
+                                <span class="badge badge-danger" style="margin-left: 0.4rem;">${Number(item.attempts_count)}x barrado</span>
                                 <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.2rem;">
-                                    Site: <b>${item.site_name || 'Geral'}</b> • IP: ${item.last_ip || 'N/A'} • ${date}
+                                    Site: <b>${escapeHTML(item.site_name || 'Geral')}</b> • IP: ${escapeHTML(item.last_ip || 'N/A')} • ${escapeHTML(date)}
                                 </div>
                             </div>
                             ${currentUser ? `
-                                <button class="btn btn-success" onclick="promptApproveDomain('${item.site_id}', '${item.unauthorized_domain}', '${item.site_name || ''}')" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;">
+                                <button class="btn btn-success" onclick="promptApproveDomain('${escapeJS(item.site_id)}', '${escapeJS(item.unauthorized_domain)}', '${escapeJS(item.site_name || '')}')" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;">
                                     ✓ Aprovar
                                 </button>
                             ` : ''}
@@ -1021,7 +1041,7 @@
                     let rHtml = '';
                     for (const [r, count] of Object.entries(data.reasons)) {
                         rHtml += `<span style="font-size: 0.7rem; padding: 0.15rem 0.45rem; border-radius: 4px; background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.25);">
-                            ${r}: <b>${count}</b>
+                            ${escapeHTML(r)}: <b>${Number(count)}</b>
                         </span>`;
                     }
                     reasonsContainer.innerHTML = rHtml;

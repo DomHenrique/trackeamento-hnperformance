@@ -213,16 +213,15 @@ type SiteItem struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Domain string `json:"domain"`
-	APIKey string `json:"api_key"`
 }
 
-// HandleListSites retorna a lista de sites ativos para o dropdown da UI
+// HandleListSites retorna a lista de sites ativos para o dropdown da UI (sem expor credenciais/api_key)
 func (h *Handler) HandleListSites(c *fiber.Ctx) error {
 	if h.pg == nil || h.pg.Pool == nil {
 		return c.Status(fiber.StatusOK).JSON([]SiteItem{})
 	}
 
-	rows, err := h.pg.Pool.Query(c.Context(), "SELECT id::text, name, domain, api_key FROM sites WHERE is_active = true ORDER BY name ASC")
+	rows, err := h.pg.Pool.Query(c.Context(), "SELECT id::text, name, domain FROM sites WHERE is_active = true ORDER BY name ASC")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -231,7 +230,7 @@ func (h *Handler) HandleListSites(c *fiber.Ctx) error {
 	sites := make([]SiteItem, 0)
 	for rows.Next() {
 		var s SiteItem
-		if err := rows.Scan(&s.ID, &s.Name, &s.Domain, &s.APIKey); err == nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Domain); err == nil {
 			sites = append(sites, s)
 		}
 	}
