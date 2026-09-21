@@ -23,6 +23,34 @@
         }
     }
 
+    // Detecção de Modo Debug (GTM Preview, URL params, sessionStorage, script attr ou global)
+    var isDebug = false;
+    try {
+        var searchStr = window.location.search || '';
+        var isGTMPreview = searchStr.indexOf('gtm_debug=') !== -1 || (document.referrer && document.referrer.indexOf('tagassistant.google.com') !== -1);
+        var hasUrlDebug = searchStr.indexOf('hn_debug=true') !== -1 || searchStr.indexOf('hn_debug=1') !== -1 || searchStr.indexOf('debug_mode=1') !== -1 || searchStr.indexOf('debug_mode=true') !== -1;
+        var hasSessionDebug = sessionStorage.getItem('_hn_debug') === '1';
+        var hasScriptDebug = currentScript && (currentScript.getAttribute('data-debug') === 'true' || currentScript.getAttribute('data-debug') === '1');
+        var hasGlobalDebug = window.__HN_DEBUG__ === true;
+
+        if (isGTMPreview || hasUrlDebug || hasSessionDebug || hasScriptDebug || hasGlobalDebug) {
+            isDebug = true;
+            sessionStorage.setItem('_hn_debug', '1');
+        }
+    } catch (e) {}
+
+    function debugLog() {
+        if (isDebug && window.console && console.log) {
+            var args = Array.prototype.slice.call(arguments);
+            args.unshift('%c[HN Tracker DEBUG]', 'background: #6366f1; color: #fff; font-weight: bold; padding: 2px 6px; border-radius: 4px;');
+            console.log.apply(console, args);
+        }
+    }
+
+    if (isDebug) {
+        debugLog('⚡ Modo Debug ativo! Eventos serão transmitidos ao vivo para o DebugView e isolados do ClickHouse.');
+    }
+
     // 2. Gerador criptográfico de Type-Prefixed IDs
     function generatePrefixedId(prefix, len) {
         len = len || 24;
@@ -152,6 +180,8 @@
         if (fbp && !userData.fbp) userData.fbp = fbp;
         if (fbc && !userData.fbc) userData.fbc = fbc;
 
+        var eventIsDebug = isDebug || (customData && (customData.debug === true || customData.debug_mode === true || customData.is_debug === true));
+
         var payload = {
             site_key: siteKey,
             event_name: eventName,
@@ -161,8 +191,11 @@
             referrer: document.referrer || '',
             user_data: userData,
             custom_data: customData,
-            client_signals: getClientSignals()
+            client_signals: getClientSignals(),
+            is_debug: !!eventIsDebug
         };
+
+        debugLog('🚀 Disparando evento "' + eventName + '" [' + eventId + ']' + (eventIsDebug ? ' (DEBUG)' : ''), payload);
 
         var jsonStr = JSON.stringify(payload);
 

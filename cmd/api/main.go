@@ -148,6 +148,7 @@ func main() {
 	app.Use("/api/v1/alerts", adminCors)
 	app.Use("/api/v1/security", adminCors)
 	app.Use("/api/v1/analytics", adminCors)
+	app.Use("/api/v1/debug", adminCors)
 
 	// Landing page de status e documentação na raiz
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -224,6 +225,11 @@ func main() {
 	app.Get("/api/v1/analytics/funnel", authMiddleware, handler.HandleAnalyticsFunnel)
 	app.Get("/api/v1/analytics/attribution/paths", authMiddleware, handler.HandleAnalyticsAttributionPaths)
 	app.Get("/api/v1/analytics/visitor/journey", authMiddleware, handler.HandleAnalyticsVisitorJourney)
+
+	// Endpoints de Depuração e DebugView em Tempo Real (Requer Autenticação)
+	app.Get("/api/v1/debug/stream", authMiddleware, handler.HandleDebugStream)
+	app.Post("/api/v1/debug/simulate", authMiddleware, handler.HandleDebugSimulate)
+	app.Post("/api/v1/debug/clear", authMiddleware, handler.HandleDebugClear)
 
 	// Endpoint para servir o SDK JS do Tracker
 	app.Get("/sdk/tracker.js", func(c *fiber.Ctx) error {

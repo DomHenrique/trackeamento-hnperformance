@@ -72,6 +72,38 @@ func (r *RedisClient) EnsureConsumerGroup(ctx context.Context, stream, group str
 	return nil
 }
 
+// PublishDebugEvent transmite o evento ao vivo via Redis Pub/Sub para clientes SSE conectados
+func (r *RedisClient) PublishDebugEvent(ctx context.Context, siteID string, eventJSON []byte) error {
+	channel := fmt.Sprintf("debug:stream:%s", siteID)
+	return r.Client.Publish(ctx, channel, eventJSON).Err()
+}
+
+// PushDebugBuffer guarda o evento no buffer circular volátil (últimos 100 itens com TTL de 1h)
+func (r *RedisClient) PushDebugBuffer(ctx context.Context, siteID string, eventJSON []byte) error {
+	key := fmt.Sprintf("debug:events:%s", siteID)
+	pipe := r.Client.Pipeline()
+	pipe.LPush(ctx, key, eventJSON)
+	pipe.LTrim(ctx, key, 0, 99)
+	pipe.Expire(ctx, key, time.Hour)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// GetRecentDebugEvents retorna os eventos recentes do buffer circular para inicializar o DebugView
+func (r *RedisClient) GetRecentDebugEvents(ctx context.Context, siteID string, limit int64) ([]string, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	key := fmt.Sprintf("debug:events:%s", siteID)
+	return r.Client.LRange(ctx, key, 0, limit-1).Result()
+}
+
+// SubscribeDebug cria uma subscrição Pub/Sub para o canal de debug do site
+func (r *RedisClient) SubscribeDebug(ctx context.Context, siteID string) *redis.PubSub {
+	channel := fmt.Sprintf("debug:stream:%s", siteID)
+	return r.Client.Subscribe(ctx, channel)
+}
+
 func (r *RedisClient) Close() error {
 	if r.Client != nil {
 		return r.Client.Close()

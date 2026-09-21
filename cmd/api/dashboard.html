@@ -670,6 +670,129 @@
             background: var(--primary);
             color: #fff;
         }
+
+        /* DebugView Layout e Animações */
+        .debug-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 1.5rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .debug-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .debug-live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+
+        .debug-live-indicator.disconnected {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: rgba(245, 158, 11, 0.25);
+        }
+
+        .debug-event-card {
+            background: rgba(15, 23, 42, 0.65);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.85rem 1rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .debug-event-card:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            background: rgba(30, 41, 59, 0.7);
+            transform: translateX(3px);
+        }
+
+        .debug-event-card.active {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.12);
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+        }
+
+        .debug-event-card.new-pulse {
+            animation: debugPulseIn 0.8s ease-out;
+        }
+
+        @keyframes debugPulseIn {
+            0% { transform: scale(0.96); background: rgba(99, 102, 241, 0.35); }
+            50% { background: rgba(99, 102, 241, 0.2); }
+            100% { transform: scale(1); background: rgba(15, 23, 42, 0.65); }
+        }
+
+        .badge-evt-type {
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .badge-evt-page_view { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+        .badge-evt-lead { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-evt-whatsapp_click { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+        .badge-evt-purchase { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-evt-custom { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+
+        .inspector-section {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .inspector-section-header {
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #94a3b8;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .inspector-kv-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.6rem;
+            font-size: 0.8rem;
+        }
+
+        .inspector-kv-item {
+            background: rgba(30, 41, 59, 0.4);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .inspector-kv-key {
+            color: #64748b;
+            font-size: 0.7rem;
+            margin-bottom: 0.15rem;
+        }
+
+        .inspector-kv-val {
+            color: #f8fafc;
+            font-weight: 500;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
@@ -700,6 +823,9 @@
             </a>
             <a class="nav-item" onclick="switchTab('funnels', this)">
                 <span>🛤️</span> Funis & Atribuição
+            </a>
+            <a class="nav-item" onclick="switchTab('debug', this)" id="nav-debug">
+                <span>⚡</span> DebugView (Ao Vivo)
             </a>
 
             <div class="menu-header" style="margin-top: 1rem;">Documentação & Setup</div>
@@ -1069,6 +1195,138 @@
                 </div>
             </div>
 
+            <!-- TAB 6: DEBUG VIEW (TEMPO REAL & VALIDAÇÃO DE TAGS) -->
+            <div id="tab-debug" class="tab-pane">
+                <!-- Barra de Status e Controles do DebugView -->
+                <div class="table-card" style="margin-bottom: 1.25rem;">
+                    <div class="table-card-header" style="flex-wrap: wrap; gap: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div class="debug-live-indicator" id="debug-sse-status">
+                                <span class="live-dot" id="debug-dot"></span>
+                                <span id="debug-status-text" style="font-size: 0.85rem; font-weight: 600; color: var(--success);">Conectando ao Stream SSE...</span>
+                            </div>
+                            <span class="badge-status" id="debug-event-counter" style="background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3);">
+                                0 eventos capturados
+                            </span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <select id="debug-filter-event" onchange="filterDebugEvents()" style="background: rgba(15,23,42,0.8); color: var(--text-main); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.75rem; font-size: 0.8rem;">
+                                <option value="">Todos os Eventos</option>
+                                <option value="page_view">page_view</option>
+                                <option value="lead">lead</option>
+                                <option value="whatsapp_click">whatsapp_click</option>
+                                <option value="purchase">purchase</option>
+                            </select>
+                            <button class="btn-sm-action" onclick="clearDebugTimeline()" style="background: rgba(239,68,68,0.15); color: #fca5a5; border-color: rgba(239,68,68,0.3);">
+                                🗑️ Limpar Timeline
+                            </button>
+                        </div>
+                    </div>
+                    <div style="padding: 0.75rem 1.5rem; background: rgba(15,23,42,0.5); font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                        <div>
+                            💡 <b>Como testar:</b> Abra qualquer página com <code>?hn_debug=true</code> no navegador ou ative o modo Preview do GTM. Eventos de teste são isolados e <b>não afetam as métricas do ClickHouse</b>.
+                        </div>
+                        <div>
+                            <span style="color: #cbd5e1;">Site monitorado:</span> <b id="debug-site-name" style="color: #38bdf8;">-</b>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grid Principal: Timeline na esquerda, Inspetor na direita -->
+                <div class="debug-grid">
+                    <!-- Painel Esquerdo: Timeline de Eventos -->
+                    <div class="table-card" style="margin-bottom: 0; display: flex; flex-direction: column; max-height: 640px;">
+                        <div class="table-card-header">
+                            <h3>⏱️ Linha do Tempo (Eventos de Debug)</h3>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);" id="debug-rate-label">Ao vivo</span>
+                        </div>
+                        <div id="debug-timeline-list" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem;">
+                            <div id="debug-empty-state" style="text-align: center; color: var(--text-muted); padding: 3rem 1rem;">
+                                <div style="font-size: 2.2rem; margin-bottom: 0.75rem;">📡</div>
+                                <div style="font-weight: 600; color: #cbd5e1; margin-bottom: 0.35rem;">Aguardando eventos de teste...</div>
+                                <div style="font-size: 0.78rem; line-height: 1.5;">
+                                    Dispare um evento no site com <code>?hn_debug=true</code> ou use o <b>Simulador</b> abaixo.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Painel Direito: Inspetor de Detalhes do Evento Selecionado -->
+                    <div class="table-card" style="margin-bottom: 0; display: flex; flex-direction: column; max-height: 640px;">
+                        <div class="table-card-header" style="justify-content: space-between;">
+                            <div>
+                                <h3 id="inspector-event-name">🔍 Detalhes do Evento</h3>
+                                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;" id="inspector-event-id">
+                                    Selecione um evento na timeline para inspecionar
+                                </p>
+                            </div>
+                            <button class="btn-sm-action" onclick="copyInspectorJSON()" id="btn-copy-json" style="display: none;">
+                                📋 Copiar JSON
+                            </button>
+                        </div>
+                        <div id="inspector-body" style="flex: 1; overflow-y: auto; padding: 1.25rem;">
+                            <div style="text-align: center; color: var(--text-muted); padding: 4rem 1rem;">
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">👆</div>
+                                <div>Nenhum evento selecionado no momento.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Painel Inferior: Simulador de Eventos de Teste -->
+                <div class="table-card" style="margin-top: 1.5rem; margin-bottom: 0;">
+                    <div class="table-card-header">
+                        <div>
+                            <h3>🚀 Simulador de Eventos de Teste (Disparo Rápido)</h3>
+                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                Emita eventos diretamente no pipeline de debug para validar o recebimento de parâmetros e regras de negócio sem abrir abas externas.
+                            </p>
+                        </div>
+                    </div>
+                    <div style="padding: 1.25rem 1.5rem;">
+                        <form id="form-debug-simulate" onsubmit="handleSimulateEvent(event)" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; align-items: flex-end;">
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 500;">Tipo de Evento</label>
+                                <select id="sim-event-name" style="width: 100%; background: #1e293b; color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.75rem; font-size: 0.85rem;" onchange="onSimEventChange()">
+                                    <option value="page_view">page_view (Visualização de Página)</option>
+                                    <option value="lead" selected>lead (Conversão / Formulário)</option>
+                                    <option value="whatsapp_click">whatsapp_click (Clique WhatsApp)</option>
+                                    <option value="purchase">purchase (Compra Concluída)</option>
+                                    <option value="custom">Evento Customizado</option>
+                                </select>
+                            </div>
+                            <div id="sim-custom-name-box" style="display: none;">
+                                <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 500;">Nome do Evento</label>
+                                <input type="text" id="sim-custom-name" placeholder="ex: download_ebook" style="width: 100%; background: #1e293b; color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.75rem; font-size: 0.85rem;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 500;">URL da Página (Simulada)</label>
+                                <input type="text" id="sim-url" value="https://exemplo.com.br/lp-teste?utm_source=gtm_debug&utm_campaign=teste_debug" style="width: 100%; background: #1e293b; color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.75rem; font-size: 0.85rem;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 500;">E-mail do Lead (user_data)</label>
+                                <input type="email" id="sim-email" placeholder="lead.teste@exemplo.com" value="lead.teste@exemplo.com" style="width: 100%; background: #1e293b; color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.75rem; font-size: 0.85rem;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 500;">Telefone do Lead (user_data)</label>
+                                <input type="text" id="sim-phone" placeholder="11988887777" value="11988887777" style="width: 100%; background: #1e293b; color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.75rem; font-size: 0.85rem;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.35rem; font-weight: 500;">Valor (R$) / Moeda</label>
+                                <div style="display: flex; gap: 0.4rem;">
+                                    <input type="number" id="sim-value" placeholder="150.00" value="150.00" step="0.01" style="flex: 1; background: #1e293b; color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.75rem; font-size: 0.85rem;">
+                                    <input type="text" id="sim-currency" value="BRL" style="width: 60px; background: #1e293b; color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.5rem; font-size: 0.85rem; text-align: center;">
+                                </div>
+                            </div>
+                            <div>
+                                <button type="submit" id="btn-submit-simulate" style="width: 100%; background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; border: none; padding: 0.65rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: opacity 0.2s;">
+                                    <span>▶</span> Disparar Teste
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -1101,7 +1359,8 @@
                 'pages': 'Páginas Monitoradas (Descoberta & Desempenho)',
                 'leads': 'Leads, Conversões & Auditoria de Mídia',
                 'traffic': 'Origem do Tráfego & Dispositivos',
-                'funnels': 'Funis & Atribuição Multi-Toque'
+                'funnels': 'Funis & Atribuição Multi-Toque',
+                'debug': '⚡ DebugView • Validação & Depuração de Eventos em Tempo Real'
             };
             document.getElementById('view-title').textContent = titles[tabId] || 'Analytics Hub';
             loadActiveData();
@@ -1140,6 +1399,9 @@
             }
             if (currentTab === 'funnels') {
                 await loadFunnelsData(siteID, range);
+            }
+            if (currentTab === 'debug') {
+                initDebugView();
             }
         }
 
@@ -1676,6 +1938,478 @@
 
             document.getElementById('input-journey-visitor').value = visitorId;
             loadVisitorJourney(visitorId);
+        }
+
+        // ==========================================
+        // ⚡ MÓDULO DEBUG VIEW (TEMPO REAL & VALIDAÇÃO)
+        // ==========================================
+        let debugEventsList = [];
+        let selectedDebugEventId = null;
+        let debugEventSource = null;
+        let currentDebugSiteId = null;
+
+        function initDebugView() {
+            let siteID = document.getElementById('select-site').value;
+            const siteSelect = document.getElementById('select-site');
+
+            // Se nenhum site selecionado, seleciona o primeiro site disponível na lista
+            if (!siteID && siteSelect.options.length > 1) {
+                siteID = siteSelect.options[1].value;
+                siteSelect.value = siteID;
+            }
+
+            if (!siteID) {
+                document.getElementById('debug-status-text').textContent = 'Selecione um site no topo';
+                document.getElementById('debug-status-text').style.color = 'var(--warning)';
+                document.getElementById('debug-site-name').textContent = 'Nenhum site selecionado';
+                return;
+            }
+
+            const selectedOption = siteSelect.options[siteSelect.selectedIndex];
+            document.getElementById('debug-site-name').textContent = selectedOption ? selectedOption.textContent : siteID;
+
+            if (debugEventSource && currentDebugSiteId === siteID) {
+                return; // Já conectado no site atual
+            }
+
+            connectDebugSSE(siteID);
+        }
+
+        function connectDebugSSE(siteID) {
+            if (debugEventSource) {
+                try { debugEventSource.close(); } catch(e) {}
+                debugEventSource = null;
+            }
+
+            currentDebugSiteId = siteID;
+            const statusText = document.getElementById('debug-status-text');
+            const statusWrap = document.getElementById('debug-sse-status');
+
+            statusText.textContent = 'Conectando ao Stream SSE...';
+            statusText.style.color = 'var(--warning)';
+            statusWrap.className = 'debug-live-indicator disconnected';
+
+            debugEventSource = new EventSource(`/api/v1/debug/stream?site_id=${encodeURIComponent(siteID)}`);
+
+            debugEventSource.onopen = function () {
+                statusText.textContent = '● Conectado (SSE Ao Vivo)';
+                statusText.style.color = 'var(--success)';
+                statusWrap.className = 'debug-live-indicator';
+            };
+
+            debugEventSource.onmessage = function (e) {
+                try {
+                    const ev = JSON.parse(e.data);
+                    handleIncomingDebugEvent(ev);
+                } catch (err) {
+                    console.error('[DebugView] Erro ao parsear evento SSE:', err);
+                }
+            };
+
+            debugEventSource.onerror = function () {
+                statusText.textContent = '○ Reconectando...';
+                statusText.style.color = 'var(--warning)';
+                statusWrap.className = 'debug-live-indicator disconnected';
+            };
+        }
+
+        function handleIncomingDebugEvent(ev) {
+            if (!ev || !ev.event_id) return;
+
+            // Evita duplicatas se vier do buffer inicial
+            const exists = debugEventsList.some(item => item.event_id === ev.event_id);
+            if (!exists) {
+                debugEventsList.unshift(ev);
+                if (debugEventsList.length > 100) {
+                    debugEventsList.pop();
+                }
+            }
+
+            renderDebugTimeline();
+
+            // Auto-seleciona o primeiro evento se nenhum estiver selecionado
+            if (!selectedDebugEventId || selectedDebugEventId === ev.event_id) {
+                selectDebugEvent(ev.event_id);
+            }
+        }
+
+        function filterDebugEvents() {
+            renderDebugTimeline();
+        }
+
+        function renderDebugTimeline() {
+            const container = document.getElementById('debug-timeline-list');
+            const filterType = document.getElementById('debug-filter-event').value;
+            const counter = document.getElementById('debug-event-counter');
+
+            const filtered = filterType ? debugEventsList.filter(e => e.event_name === filterType) : debugEventsList;
+            counter.textContent = `${debugEventsList.length} eventos capturados`;
+
+            if (!filtered || filtered.length === 0) {
+                container.innerHTML = `
+                    <div id="debug-empty-state" style="text-align: center; color: var(--text-muted); padding: 3rem 1rem;">
+                        <div style="font-size: 2.2rem; margin-bottom: 0.75rem;">📡</div>
+                        <div style="font-weight: 600; color: #cbd5e1; margin-bottom: 0.35rem;">Nenhum evento ${filterType ? 'do tipo "' + escapeHTML(filterType) + '"' : 'de teste'} capturado</div>
+                        <div style="font-size: 0.78rem; line-height: 1.5;">
+                            Dispare um evento no site com <code>?hn_debug=true</code> ou use o formulário do <b>Simulador</b> abaixo.
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            filtered.forEach(ev => {
+                const isSelected = ev.event_id === selectedDebugEventId;
+                const time = ev.event_time ? new Date(ev.event_time) : new Date();
+                const timeStr = time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '.' + String(time.getMilliseconds()).padStart(3, '0');
+                
+                let badgeClass = 'badge-evt-custom';
+                if (['page_view', 'lead', 'whatsapp_click', 'purchase'].includes(ev.event_name)) {
+                    badgeClass = 'badge-evt-' + ev.event_name;
+                }
+
+                let botBadge = '';
+                if (ev.is_bot) {
+                    botBadge = `<span class="badge-status" style="background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); font-size: 0.65rem; padding: 0.1rem 0.35rem;">🤖 Robô</span>`;
+                }
+
+                html += `
+                    <div class="debug-event-card ${isSelected ? 'active' : ''}" onclick="selectDebugEvent('${escapeHTML(ev.event_id)}')">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+                            <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                <span class="badge-evt-type ${badgeClass}">${escapeHTML(ev.event_name)}</span>
+                                ${botBadge}
+                            </div>
+                            <span style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace;">${timeStr}</span>
+                        </div>
+                        <div style="font-size: 0.76rem; color: #cbd5e1; margin-bottom: 0.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <b>ID:</b> <span style="font-family: monospace; color: #a5b4fc;">${escapeHTML(ev.event_id)}</span>
+                        </div>
+                        <div style="font-size: 0.74rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+                            <span>Origem: <b style="color: #94a3b8;">${escapeHTML(ev.attribution?.utm_source || 'direto')}</b></span>
+                            <span style="text-transform: capitalize;">${escapeHTML(ev.device_type || 'desktop')}</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function selectDebugEvent(eventId) {
+            selectedDebugEventId = eventId;
+            const ev = debugEventsList.find(e => e.event_id === eventId);
+            if (!ev) return;
+
+            // Atualiza visualização ativa na timeline
+            document.querySelectorAll('.debug-event-card').forEach(card => card.classList.remove('active'));
+            const cards = document.querySelectorAll('.debug-event-card');
+            cards.forEach(card => {
+                if (card.textContent.includes(eventId)) {
+                    card.classList.add('active');
+                }
+            });
+
+            renderInspector(ev);
+        }
+
+        function renderInspector(ev) {
+            const nameEl = document.getElementById('inspector-event-name');
+            const idEl = document.getElementById('inspector-event-id');
+            const body = document.getElementById('inspector-body');
+            const copyBtn = document.getElementById('btn-copy-json');
+
+            nameEl.innerHTML = `<span>⚡</span> Evento: <b style="color: #6366f1;">${escapeHTML(ev.event_name)}</b>`;
+            idEl.innerHTML = `Event ID: <code style="color: #38bdf8; background: rgba(15,23,42,0.8); padding: 0.15rem 0.4rem; border-radius: 4px;">${escapeHTML(ev.event_id)}</code> • Recebido em: ${new Date(ev.event_time || Date.now()).toLocaleString('pt-BR')}`;
+            copyBtn.style.display = 'block';
+
+            // 1. Diagnóstico e Alertas Inteligentes
+            let diagnosticsHTML = '';
+            const warnings = [];
+
+            if (ev.event_name === 'lead') {
+                const hasContact = (ev.user_data && (ev.user_data.email || ev.user_data.phone));
+                if (!hasContact) {
+                    warnings.push('⚠️ <b>Alerta de Qualidade:</b> Evento do tipo <code>lead</code> recebido sem <code>email</code> nem <code>phone</code> em <code>user_data</code>.');
+                }
+            }
+            if (ev.custom_data && ev.custom_data.value && !ev.custom_data.currency) {
+                warnings.push('⚠️ <b>Aviso de Moeda:</b> Parâmetro <code>value</code> enviado sem especificação de <code>currency</code> (recomendado: "BRL").');
+            }
+            if (ev.is_bot) {
+                warnings.push(`🤖 <b>Detecção de Robô Ativa:</b> Evento marcado como bot. Motivo: <code>${escapeHTML(ev.bot_reason || 'automação')}</code>.`);
+            }
+
+            if (warnings.length > 0) {
+                diagnosticsHTML = `
+                    <div class="inspector-section" style="border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08);">
+                        <div class="inspector-section-header" style="color: #fbbf24;">
+                            <span>⚠️</span> Diagnóstico & Alertas de Conformidade
+                        </div>
+                        <div style="font-size: 0.8rem; color: #fde68a; display: flex; flex-direction: column; gap: 0.4rem;">
+                            ${warnings.map(w => `<div>${w}</div>`).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                diagnosticsHTML = `
+                    <div class="inspector-section" style="border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); padding: 0.75rem 1rem;">
+                        <div style="font-size: 0.78rem; color: #6ee7b7; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>✅</span> <b>Tudo certo!</b> Evento recebido em conformidade com as diretrizes do servidor e deduplicação CAPI.
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 2. Dados do Usuário (user_data)
+            let userDataHTML = '<div style="color: #64748b; font-size: 0.78rem;">Nenhum dado pessoal enviado (user_data vazio).</div>';
+            if (ev.user_data && Object.keys(ev.user_data).length > 0) {
+                userDataHTML = '<div class="inspector-kv-grid">';
+                for (const [k, v] of Object.entries(ev.user_data)) {
+                    userDataHTML += `
+                        <div class="inspector-kv-item">
+                            <div class="inspector-kv-key">${escapeHTML(k)}</div>
+                            <div class="inspector-kv-val">${escapeHTML(typeof v === 'object' ? JSON.stringify(v) : v)}</div>
+                        </div>
+                    `;
+                }
+                userDataHTML += '</div>';
+            }
+
+            // 3. Atribuição & Campanhas
+            const attr = ev.attribution || {};
+            const attrKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid', 'referrer'];
+            let attrHTML = '<div class="inspector-kv-grid">';
+            attrKeys.forEach(k => {
+                const val = attr[k] || '-';
+                attrHTML += `
+                    <div class="inspector-kv-item">
+                        <div class="inspector-kv-key">${escapeHTML(k)}</div>
+                        <div class="inspector-kv-val" style="color: ${val !== '-' ? '#38bdf8' : '#64748b'};">${escapeHTML(val)}</div>
+                    </div>
+                `;
+            });
+            attrHTML += '</div>';
+
+            // 4. Parâmetros Customizados (custom_data)
+            let customDataHTML = '<div style="color: #64748b; font-size: 0.78rem;">Nenhum parâmetro customizado enviado.</div>';
+            if (ev.custom_data && Object.keys(ev.custom_data).length > 0) {
+                customDataHTML = '<div class="inspector-kv-grid">';
+                for (const [k, v] of Object.entries(ev.custom_data)) {
+                    customDataHTML += `
+                        <div class="inspector-kv-item">
+                            <div class="inspector-kv-key">${escapeHTML(k)}</div>
+                            <div class="inspector-kv-val">${escapeHTML(typeof v === 'object' ? JSON.stringify(v) : v)}</div>
+                        </div>
+                    `;
+                }
+                customDataHTML += '</div>';
+            }
+
+            // 5. Sinais do Cliente & Bot Detection
+            const sig = ev.client_signals || {};
+            const signalsHTML = `
+                <div class="inspector-kv-grid">
+                    <div class="inspector-kv-item">
+                        <div class="inspector-kv-key">is_bot (Detecção Servidor)</div>
+                        <div class="inspector-kv-val" style="color: ${ev.is_bot ? '#f87171' : '#34d399'};">
+                            ${ev.is_bot ? '🤖 Sim (' + escapeHTML(ev.bot_reason) + ')' : '✅ Não (Humano)'}
+                        </div>
+                    </div>
+                    <div class="inspector-kv-item">
+                        <div class="inspector-kv-key">Tempo até 1ª Interação</div>
+                        <div class="inspector-kv-val">${sig.time_to_interact_ms ? sig.time_to_interact_ms.toLocaleString('pt-BR') + ' ms' : '0 ms'}</div>
+                    </div>
+                    <div class="inspector-kv-item">
+                        <div class="inspector-kv-key">Tempo na Página</div>
+                        <div class="inspector-kv-val">${sig.time_on_page_ms ? sig.time_on_page_ms.toLocaleString('pt-BR') + ' ms' : '0 ms'}</div>
+                    </div>
+                    <div class="inspector-kv-item">
+                        <div class="inspector-kv-key">Resolução de Tela</div>
+                        <div class="inspector-kv-val">${sig.screen_w || 0} x ${sig.screen_h || 0}</div>
+                    </div>
+                    <div class="inspector-kv-item">
+                        <div class="inspector-kv-key">Webdriver / Headless</div>
+                        <div class="inspector-kv-val">${sig.webdriver || sig.headless ? '⚠️ Presente' : 'Não detectado'}</div>
+                    </div>
+                    <div class="inspector-kv-item">
+                        <div class="inspector-kv-key">IP / Dispositivo</div>
+                        <div class="inspector-kv-val">${escapeHTML(ev.ip_address || '-')} • ${escapeHTML(ev.device_type || 'desktop')}</div>
+                    </div>
+                </div>
+            `;
+
+            // Renderiza todas as seções
+            body.innerHTML = `
+                ${diagnosticsHTML}
+
+                <div class="inspector-section">
+                    <div class="inspector-section-header">
+                        <span>👤</span> Identidade & Sessão
+                    </div>
+                    <div class="inspector-kv-grid">
+                        <div class="inspector-kv-item">
+                            <div class="inspector-kv-key">visitor_id (_vid)</div>
+                            <div class="inspector-kv-val" style="color: #a5b4fc;">${escapeHTML(ev.visitor_id || '-')}</div>
+                        </div>
+                        <div class="inspector-kv-item">
+                            <div class="inspector-kv-key">session_id (_hn_sid)</div>
+                            <div class="inspector-kv-val" style="color: #a5b4fc;">${escapeHTML(ev.session_id || '-')}</div>
+                        </div>
+                        <div class="inspector-kv-item">
+                            <div class="inspector-kv-key">Site ID / Chave</div>
+                            <div class="inspector-kv-val">${escapeHTML(ev.site_id || '-')}</div>
+                        </div>
+                        <div class="inspector-kv-item">
+                            <div class="inspector-kv-key">is_debug (Flag)</div>
+                            <div class="inspector-kv-val" style="color: #38bdf8;">${ev.is_debug ? 'true (Isolado do ClickHouse)' : 'false'}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-section-header">
+                        <span>📋</span> Dados do Usuário (user_data)
+                    </div>
+                    ${userDataHTML}
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-section-header">
+                        <span>🎯</span> Atribuição & Campanhas (UTMs & Click IDs)
+                    </div>
+                    ${attrHTML}
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-section-header">
+                        <span>📦</span> Parâmetros Customizados (custom_data)
+                    </div>
+                    ${customDataHTML}
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-section-header">
+                        <span>🤖</span> Sinais do Cliente & Automação
+                    </div>
+                    ${signalsHTML}
+                </div>
+
+                <div class="inspector-section">
+                    <div class="inspector-section-header">
+                        <span>📄</span> Payload JSON Bruto
+                    </div>
+                    <pre style="background: #0b1120; padding: 1rem; border-radius: 6px; font-size: 0.75rem; color: #a5b4fc; font-family: 'JetBrains Mono', monospace; max-height: 250px; overflow-y: auto;"><code>${escapeHTML(JSON.stringify(ev, null, 2))}</code></pre>
+                </div>
+            `;
+        }
+
+        function onSimEventChange() {
+            const sel = document.getElementById('sim-event-name').value;
+            const customBox = document.getElementById('sim-custom-name-box');
+            if (sel === 'custom') {
+                customBox.style.display = 'block';
+            } else {
+                customBox.style.display = 'none';
+            }
+        }
+
+        async function handleSimulateEvent(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-submit-simulate');
+            const siteID = document.getElementById('select-site').value || currentDebugSiteId;
+
+            if (!siteID) {
+                alert('Selecione um site no topo antes de disparar o teste.');
+                return;
+            }
+
+            let eventName = document.getElementById('sim-event-name').value;
+            if (eventName === 'custom') {
+                eventName = document.getElementById('sim-custom-name').value.trim() || 'custom_test';
+            }
+
+            const pageURL = document.getElementById('sim-url').value.trim();
+            const email = document.getElementById('sim-email').value.trim();
+            const phone = document.getElementById('sim-phone').value.trim();
+            const val = parseFloat(document.getElementById('sim-value').value) || 0;
+            const currency = document.getElementById('sim-currency').value.trim() || 'BRL';
+
+            const payload = {
+                site_id: siteID,
+                event_name: eventName,
+                page_url: pageURL,
+                user_data: {},
+                custom_data: {}
+            };
+
+            if (email) payload.user_data.email = email;
+            if (phone) payload.user_data.phone = phone;
+            if (val > 0) {
+                payload.custom_data.value = val;
+                payload.custom_data.currency = currency;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Enviando...';
+
+            try {
+                const res = await fetch('/api/v1/debug/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert('Erro ao simular: ' + (err.error || res.statusText));
+                } else {
+                    btn.innerHTML = '<span>✅</span> Disparado!';
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span>▶</span> Disparar Teste';
+                    }, 1200);
+                }
+            } catch (err) {
+                alert('Falha na requisição de simulação: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<span>▶</span> Disparar Teste';
+            }
+        }
+
+        async function clearDebugTimeline() {
+            debugEventsList = [];
+            selectedDebugEventId = null;
+            renderDebugTimeline();
+
+            document.getElementById('inspector-event-name').innerHTML = '🔍 Detalhes do Evento';
+            document.getElementById('inspector-event-id').textContent = 'Selecione um evento na timeline para inspecionar';
+            document.getElementById('inspector-body').innerHTML = `
+                <div style="text-align: center; color: var(--text-muted); padding: 4rem 1rem;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">👆</div>
+                    <div>Nenhum evento selecionado no momento.</div>
+                </div>
+            `;
+            document.getElementById('btn-copy-json').style.display = 'none';
+
+            if (currentDebugSiteId) {
+                try {
+                    await fetch(`/api/v1/debug/clear?site_id=${encodeURIComponent(currentDebugSiteId)}`, { method: 'POST' });
+                } catch(e) {}
+            }
+        }
+
+        function copyInspectorJSON() {
+            const ev = debugEventsList.find(e => e.event_id === selectedDebugEventId);
+            if (!ev) return;
+            const text = JSON.stringify(ev, null, 2);
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.getElementById('btn-copy-json');
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✅ Copiado!';
+                setTimeout(() => { btn.innerHTML = orig; }, 1500);
+            });
         }
 
         // Inicialização Protegida

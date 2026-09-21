@@ -26,6 +26,7 @@ type EventRequest struct {
 	UserData      map[string]interface{} `json:"user_data,omitempty"`   // email, phone, name
 	CustomData    map[string]interface{} `json:"custom_data,omitempty"` // value, currency, etc.
 	ClientSignals *ClientSignals         `json:"client_signals,omitempty"`
+	IsDebug       bool                   `json:"is_debug,omitempty"`
 }
 
 type EventPayload struct {
@@ -45,5 +46,6 @@ type EventPayload struct {
 	ClientSignals *ClientSignals         `json:"client_signals,omitempty"`
 	IsBot         bool                   `json:"is_bot"`
 	BotReason     string                 `json:"bot_reason"`
+	IsDebug       bool                   `json:"is_debug"`
 	CreatedAt     time.Time              `json:"created_at"`
 }

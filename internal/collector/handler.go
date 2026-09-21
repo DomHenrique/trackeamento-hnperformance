@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/redis/go-redis/v9"
+	"github.com/valyala/fasthttp"
 	"tracking-engine/internal/attribution"
 	"tracking-engine/internal/config"
 	"tracking-engine/internal/prefixedid"
@@ -169,6 +172,8 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		}
 	}
 
+	isDebug := req.IsDebug || c.Query("debug") == "true" || c.Query("debug") == "1" || c.Query("hn_debug") == "true" || c.Query("hn_debug") == "1" || c.Get("X-Debug") == "true"
+
 	payload := EventPayload{
 		EventID:       eventID,
 		SiteID:        siteID,
@@ -186,6 +191,7 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		ClientSignals: req.ClientSignals,
 		IsBot:         isBot,
 		BotReason:     botReason,
+		IsDebug:       isDebug,
 		CreatedAt:     time.Now().UTC(),
 	}
 
@@ -196,14 +202,28 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		payload.UserData["is_first_visit"] = true
 	}
 
-	// 9. Enfileira o evento bruto no Redis de forma assíncrona
+	// 9. Roteamento: se for evento de depuração (debug), transmite para o canal do DebugView e buffer volátil,
+	// DESCARTANDO da fila analítica do ClickHouse (zero poluição de dados e relatórios de clientes).
 	data, err := json.Marshal(payload)
 	if err == nil {
-		go func(pData []byte) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-			_ = h.redis.PushRawEvent(ctx, pData)
-		}(data)
+		if isDebug {
+			go func(pData []byte, sID string) {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				if h.redis != nil {
+					_ = h.redis.PublishDebugEvent(ctx, sID, pData)
+					_ = h.redis.PushDebugBuffer(ctx, sID, pData)
+				}
+			}(data, siteID)
+		} else {
+			go func(pData []byte) {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				if h.redis != nil {
+					_ = h.redis.PushRawEvent(ctx, pData)
+				}
+			}(data)
+		}
 	}
 
 	// Responde 204 No Content imediatamente
@@ -274,4 +294,183 @@ func detectDeviceType(ua string) string {
 func isConversionEvent(eventName string) bool {
 	name := strings.ToLower(strings.TrimSpace(eventName))
 	return name == "lead" || name == "purchase" || name == "whatsapp_click" || name == "form_submit" || name == "contact"
+}
+
+// HandleDebugStream gerencia a conexão Server-Sent Events (SSE) para entrega em tempo real no DebugView
+func (h *Handler) HandleDebugStream(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	if siteID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "site_id é obrigatório",
+		})
+	}
+
+	c.Set("Content-Type", "text/event-stream")
+	c.Set("Cache-Control", "no-cache")
+	c.Set("Connection", "keep-alive")
+	c.Set("Transfer-Encoding", "chunked")
+
+	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
+		// 1. Envia eventos recentes do buffer volátil do Redis (histórico recente)
+		if h.redis != nil {
+			ctxHistory, cancelHistory := context.WithTimeout(context.Background(), 2*time.Second)
+			recent, err := h.redis.GetRecentDebugEvents(ctxHistory, siteID, 30)
+			cancelHistory()
+			if err == nil {
+				// Envia os mais antigos primeiro para a timeline exibir cronologicamente
+				for i := len(recent) - 1; i >= 0; i-- {
+					fmt.Fprintf(w, "event: message\ndata: %s\n\n", recent[i])
+				}
+				_ = w.Flush()
+			}
+		}
+
+		// 2. Subscrição Pub/Sub para eventos em tempo real
+		var pubsub *redis.PubSub
+		if h.redis != nil {
+			pubsub = h.redis.SubscribeDebug(context.Background(), siteID)
+			defer pubsub.Close()
+		}
+
+		ch := make(chan *redis.Message, 100)
+		if pubsub != nil {
+			go func() {
+				for msg := range pubsub.Channel() {
+					ch <- msg
+				}
+			}()
+		}
+
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				fmt.Fprintf(w, "event: message\ndata: %s\n\n", msg.Payload)
+				if err := w.Flush(); err != nil {
+					return // Conexão encerrada pelo cliente
+				}
+			case <-ticker.C:
+				fmt.Fprintf(w, ": ping\n\n")
+				if err := w.Flush(); err != nil {
+					return // Conexão encerrada pelo cliente
+				}
+			}
+		}
+	}))
+
+	return nil
+}
+
+// DebugSimulateRequest estrutura os dados para envio de evento simulado
+type DebugSimulateRequest struct {
+	SiteID     string                 `json:"site_id"`
+	EventName  string                 `json:"event_name"`
+	PageURL    string                 `json:"page_url"`
+	UserData   map[string]interface{} `json:"user_data"`
+	CustomData map[string]interface{} `json:"custom_data"`
+}
+
+// HandleDebugSimulate gera e injeta um evento de teste sintético no canal de streaming do site
+func (h *Handler) HandleDebugSimulate(c *fiber.Ctx) error {
+	var req DebugSimulateRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "payload inválido",
+		})
+	}
+
+	req.SiteID = strings.TrimSpace(req.SiteID)
+	if req.SiteID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "site_id é obrigatório",
+		})
+	}
+
+	eventName := strings.TrimSpace(req.EventName)
+	if eventName == "" {
+		eventName = "test_event"
+	}
+
+	eventID := prefixedid.GenerateEventID()
+	visitorID := prefixedid.GenerateVisitorID()
+	sessionID := prefixedid.GenerateSessionID()
+	pageURL := strings.TrimSpace(req.PageURL)
+	if pageURL == "" {
+		pageURL = "https://simulator.local/debug"
+	}
+
+	attrParams := attribution.ParseURL(pageURL, "")
+
+	payload := EventPayload{
+		EventID:       eventID,
+		SiteID:        req.SiteID,
+		SiteKey:       "simulation_key",
+		VisitorID:     visitorID,
+		SessionID:     sessionID,
+		EventName:     eventName,
+		EventTime:     time.Now().UTC(),
+		IPAddress:     c.IP(),
+		UserAgent:     "HN-Debug-Simulator/1.0 (Web UI)",
+		DeviceType:    "desktop",
+		Attribution:   attrParams,
+		UserData:      req.UserData,
+		CustomData:    req.CustomData,
+		ClientSignals: &ClientSignals{
+			ScreenW:          1920,
+			ScreenH:          1080,
+			TimeToInteractMs: 1200,
+			TimeOnPageMs:     5000,
+		},
+		IsBot:     false,
+		BotReason: "",
+		IsDebug:   true,
+		CreatedAt: time.Now().UTC(),
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "erro ao serializar evento simulado",
+		})
+	}
+
+	if h.redis != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = h.redis.PublishDebugEvent(ctx, req.SiteID, data)
+		_ = h.redis.PushDebugBuffer(ctx, req.SiteID, data)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":   "success",
+		"event_id": eventID,
+		"payload":  payload,
+	})
+}
+
+// HandleDebugClear limpa o buffer de eventos de depuração do site
+func (h *Handler) HandleDebugClear(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	if siteID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "site_id é obrigatório",
+		})
+	}
+
+	if h.redis != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		key := fmt.Sprintf("debug:events:%s", siteID)
+		_ = h.redis.Client.Del(ctx, key).Err()
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":  "cleared",
+		"site_id": siteID,
+	})
 }
