@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"tracking-engine/internal/attribution"
 	"tracking-engine/internal/config"
+	"tracking-engine/internal/prefixedid"
 	"tracking-engine/internal/storage"
 )
 
@@ -46,12 +46,12 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		req = EventRequest{}
 	}
 
-	siteKey := strings.TrimSpace(req.SiteKey)
+	siteKey := prefixedid.SanitizeKey(req.SiteKey)
 	if siteKey == "" {
-		siteKey = strings.TrimSpace(c.Query("site_key"))
+		siteKey = prefixedid.SanitizeKey(c.Query("site_key"))
 	}
 	if siteKey == "" {
-		siteKey = strings.TrimSpace(c.Get("X-Site-Key"))
+		siteKey = prefixedid.SanitizeKey(c.Get("X-Site-Key"))
 	}
 
 	if siteKey == "" {
@@ -79,7 +79,7 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 
 	isNewVisitor := false
 	if visitorID == "" {
-		visitorID = "v_" + strings.ReplaceAll(uuid.New().String(), "-", "")
+		visitorID = prefixedid.GenerateVisitorID()
 		isNewVisitor = true
 	}
 
@@ -110,13 +110,13 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	// 4. Session ID
 	sessionID := req.SessionID
 	if sessionID == "" {
-		sessionID = "s_" + strings.ReplaceAll(uuid.New().String(), "-", "")
+		sessionID = prefixedid.GenerateSessionID()
 	}
 
 	// 5. Event ID para deduplicação (especialmente com Meta Pixel)
 	eventID := req.EventID
 	if eventID == "" {
-		eventID = uuid.New().String()
+		eventID = prefixedid.GenerateEventID()
 	}
 
 	// 6. URL e Referrer

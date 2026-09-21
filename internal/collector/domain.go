@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"tracking-engine/internal/prefixedid"
 )
 
 type SiteMetadata struct {
@@ -152,7 +153,7 @@ func (h *Handler) HandleListAlerts(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON([]DomainAlertItem{})
 	}
 
-	siteKey := strings.TrimSpace(c.Query("site_key"))
+	siteKey := prefixedid.SanitizeKey(c.Query("site_key"))
 	var query string
 	var args []interface{}
 
@@ -238,6 +239,63 @@ func (h *Handler) HandleListSites(c *fiber.Ctx) error {
 		}
 	}
 	return c.Status(fiber.StatusOK).JSON(sites)
+}
+
+// HandleCreateSite registra um novo site gerando automaticamente uma chave padronizada hn_site_
+func (h *Handler) HandleCreateSite(c *fiber.Ctx) error {
+	var req struct {
+		Name     string `json:"name"`
+		Domain   string `json:"domain"`
+		ClientID string `json:"client_id,omitempty"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "dados invalidos"})
+	}
+
+	name := strings.TrimSpace(req.Name)
+	domain := cleanHost(req.Domain)
+	if name == "" || domain == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name e domain sao obrigatorios"})
+	}
+
+	if h.pg == nil || h.pg.Pool == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "banco de dados indisponivel"})
+	}
+
+	clientID := strings.TrimSpace(req.ClientID)
+	if clientID == "" {
+		_ = h.pg.Pool.QueryRow(c.Context(), "SELECT id::text FROM clients ORDER BY created_at ASC LIMIT 1").Scan(&clientID)
+	}
+	if clientID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "client_id obrigatorio"})
+	}
+
+	newSiteKey := prefixedid.GenerateSiteKey()
+	var newSiteID string
+
+	err := h.pg.Pool.QueryRow(c.Context(), `
+		INSERT INTO sites (client_id, domain, name, api_key, is_active)
+		VALUES ($1, $2, $3, $4, true)
+		RETURNING id::text
+	`, clientID, domain, name, newSiteKey).Scan(&newSiteID)
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("erro ao cadastrar site: %v", err)})
+	}
+
+	// Adiciona o proprio dominio como permitido por padrao
+	_, _ = h.pg.Pool.Exec(c.Context(), `
+		INSERT INTO site_allowed_domains (site_id, domain, is_active)
+		VALUES ($1, $2, true)
+		ON CONFLICT (site_id, domain) DO NOTHING
+	`, newSiteID, domain)
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"id":       newSiteID,
+		"name":     name,
+		"domain":   domain,
+		"site_key": newSiteKey,
+	})
 }
 
 type AllowedDomainItem struct {

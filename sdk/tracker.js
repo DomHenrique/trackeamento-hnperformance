@@ -11,23 +11,42 @@
         return scripts[scripts.length - 1];
     })();
 
-    var siteKey = (currentScript && currentScript.getAttribute('data-site-key')) || window.__HN_SITE_KEY__ || '';
+    var rawSiteKey = (currentScript && currentScript.getAttribute('data-site-key')) || window.__HN_SITE_KEY__ || '';
+    var siteKey = (rawSiteKey || '').trim().replace(/^["'`]|["'`]$/g, '');
     var apiEndpoint = (currentScript && currentScript.getAttribute('data-endpoint')) || 
                       (currentScript && currentScript.src ? currentScript.src.replace(/\/sdk\/tracker\.js.*$/, '/api/v1/collect') : '/api/v1/collect');
 
-    // 2. Gerador de UUID v4 para deduplicação
-    function uuidv4() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-            var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
+    // Validação defensiva do formato da chave para alertar desenvolvedores
+    if (siteKey) {
+        if (!siteKey.startsWith('hn_site_') && !siteKey.startsWith('hn_live_key_')) {
+            console.warn('[HN Tracker] AVISO: A chave informada em data-site-key ("' + siteKey + '") não utiliza o padrão "hn_site_...". Verifique se você não colou um identificador de visitante (hn_vis_) ou outro parâmetro por engano.');
+        }
     }
 
-    // 3. Gestão de Sessão
+    // 2. Gerador criptográfico de Type-Prefixed IDs
+    function generatePrefixedId(prefix, len) {
+        len = len || 24;
+        var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        var result = '';
+        if (window.crypto && window.crypto.getRandomValues) {
+            var bytes = new Uint8Array(len);
+            window.crypto.getRandomValues(bytes);
+            for (var i = 0; i < len; i++) {
+                result += chars[bytes[i] % chars.length];
+            }
+        } else {
+            for (var j = 0; j < len; j++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+        }
+        return prefix + result;
+    }
+
+    // 3. Gestão de Sessão (hn_ses_...)
     var SESSION_KEY = '_hn_sid';
     var sessionId = sessionStorage.getItem(SESSION_KEY);
     if (!sessionId) {
-        sessionId = 's_' + uuidv4().replace(/-/g, '');
+        sessionId = generatePrefixedId('hn_ses_', 24);
         sessionStorage.setItem(SESSION_KEY, sessionId);
     }
 
@@ -123,7 +142,7 @@
             return;
         }
 
-        var eventId = uuidv4(); // Gerado no cliente para deduplicação com Meta Pixel / Google
+        var eventId = generatePrefixedId('hn_evt_', 24); // Gerado no cliente para deduplicação com Meta Pixel / Google CAPI
         userData = userData || {};
         customData = customData || {};
 

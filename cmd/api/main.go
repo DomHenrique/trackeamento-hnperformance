@@ -210,6 +210,7 @@ func main() {
 
 	// Endpoints de Gestão de Domínios e Sites (Requer Autenticação)
 	app.Get("/api/v1/sites", authMiddleware, handler.HandleListSites)
+	app.Post("/api/v1/sites", authMiddleware, handler.HandleCreateSite)
 	app.Get("/api/v1/domains", authMiddleware, handler.HandleListDomains)
 	app.Post("/api/v1/domains", authMiddleware, handler.HandleAddDomain)
 	app.Delete("/api/v1/domains/:id", authMiddleware, handler.HandleDeleteDomain)

@@ -440,11 +440,11 @@
         <!-- Banner de Configuração Dinâmica da Chave -->
         <div class="site-banner">
             <div class="site-banner-info">
-                <h3>Sua Chave de Site (Site Key)</h3>
-                <p>Altere o campo abaixo para atualizar automaticamente todos os códigos de exemplo desta página:</p>
+                <h3>Sua Chave de Site (Type-Prefixed ID: <code>hn_site_...</code>)</h3>
+                <p>Altere o campo abaixo para atualizar automaticamente todos os códigos de exemplo desta página com sua chave padronizada:</p>
             </div>
             <div class="site-input-group">
-                <input type="text" id="global-site-key" value="SUA_CHAVE_DO_SITE" oninput="updateSnippetKeys(this.value)">
+                <input type="text" id="global-site-key" value="hn_site_9k8m2x7v1b3n4p6q8r0s" oninput="updateSnippetKeys(this.value)">
                 <button class="btn-copy" onclick="copyText(document.getElementById('global-site-key').value)">Copiar Chave</button>
             </div>
         </div>
@@ -477,7 +477,7 @@
                     <pre><code id="snippet-html">&lt;!-- HN Performance Server-Side Tracking SDK --&gt;
 &lt;script 
   src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
-  data-site-key="<span class="dynamic-key">SUA_CHAVE_DO_SITE</span>" 
+  data-site-key="<span class="dynamic-key">hn_site_9k8m2x7v1b3n4p6q8r0s</span>" 
   async&gt;
 &lt;/script&gt;</code></pre>
                 </div>
@@ -502,7 +502,7 @@
                     </div>
                     <pre><code id="snippet-gtm">&lt;script 
   src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
-  data-site-key="<span class="dynamic-key">SUA_CHAVE_DO_SITE</span>" 
+  data-site-key="<span class="dynamic-key">hn_site_9k8m2x7v1b3n4p6q8r0s</span>" 
   async&gt;
 &lt;/script&gt;</code></pre>
                 </div>
@@ -524,7 +524,7 @@
                     </div>
                     <pre><code id="snippet-wp">&lt;script 
   src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
-  data-site-key="<span class="dynamic-key">SUA_CHAVE_DO_SITE</span>" 
+  data-site-key="<span class="dynamic-key">hn_site_9k8m2x7v1b3n4p6q8r0s</span>" 
   async&gt;
 &lt;/script&gt;</code></pre>
                 </div>
@@ -823,11 +823,11 @@ if (typeof fbq === 'function' && eventId) {
     </div>
 
     <!-- Carrega o próprio SDK para alimentar o tester interativo -->
-    <script src="/sdk/tracker.js" data-site-key="22222222-2222-2222-2222-222222222222"></script>
+    <script src="/sdk/tracker.js" data-site-key="hn_live_key_998877665544332211"></script>
 
     <script>
         function updateSnippetKeys(key) {
-            key = key.trim() || 'SUA_CHAVE_DO_SITE';
+            key = key.trim() || 'hn_site_9k8m2x7v1b3n4p6q8r0s';
             document.querySelectorAll('.dynamic-key').forEach(el => {
                 el.textContent = key;
             });
