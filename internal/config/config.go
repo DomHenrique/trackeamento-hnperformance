@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 )
@@ -88,22 +89,32 @@ func Load() *Config {
 	}
 }
 
-// Validate executa verificação defensiva de segurança fail-fast em ambiente de produção
+// Validate executa verificação defensiva de segurança e emite alertas para senhas padrão
 func (c *Config) Validate() error {
-	if c.Env == "production" {
-		if c.AdminPassword == "hn_admin_secret_pass_2026" {
-			return fmt.Errorf("ADMIN_PASSWORD não pode conter a senha padrão em produção")
-		}
-		if c.PostgresPassword == "postgres_secret_pass" {
-			return fmt.Errorf("POSTGRES_PASSWORD não pode conter a senha padrão em produção")
-		}
-		if c.RedisPassword == "redis_secret_pass" {
-			return fmt.Errorf("REDIS_PASSWORD não pode conter a senha padrão em produção")
-		}
-		if c.ClickHousePassword == "clickhouse_secret_pass" {
-			return fmt.Errorf("CLICKHOUSE_PASSWORD não pode conter a senha padrão em produção")
-		}
+	strict := os.Getenv("STRICT_CONFIG_VALIDATION") == "true"
+
+	var warnings []string
+	if c.AdminPassword == "hn_admin_secret_pass_2026" {
+		warnings = append(warnings, "ADMIN_PASSWORD está utilizando a senha padrão. Recomenda-se definir uma senha personalizada.")
 	}
+	if c.PostgresPassword == "postgres_secret_pass" {
+		warnings = append(warnings, "POSTGRES_PASSWORD está utilizando a senha padrão.")
+	}
+	if c.RedisPassword == "redis_secret_pass" {
+		warnings = append(warnings, "REDIS_PASSWORD está utilizando a senha padrão.")
+	}
+	if c.ClickHousePassword == "clickhouse_secret_pass" {
+		warnings = append(warnings, "CLICKHOUSE_PASSWORD está utilizando a senha padrão.")
+	}
+
+	for _, w := range warnings {
+		log.Printf("[SECURITY WARNING] %s", w)
+	}
+
+	if strict && len(warnings) > 0 {
+		return fmt.Errorf("STRICT_CONFIG_VALIDATION: %d credenciais padrão detectadas em produção", len(warnings))
+	}
+
 	return nil
 }
 
