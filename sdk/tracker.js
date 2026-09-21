@@ -5,16 +5,64 @@
 (function (window, document) {
     'use strict';
 
-    // 1. Identificação do Script e Configurações
+    // 1. Identificação Robusta do Script e Configurações (com suporte nativo ao GTM)
+    function resolveSiteKey() {
+        if (window.__HN_SITE_KEY__) return String(window.__HN_SITE_KEY__).trim();
+        if (document.currentScript && document.currentScript.getAttribute('data-site-key')) {
+            return document.currentScript.getAttribute('data-site-key').trim();
+        }
+        // GTM e injeções assíncronas podem armazenar atributos em scripts já existentes no DOM
+        var taggedScripts = document.querySelectorAll('script[data-site-key]');
+        if (taggedScripts && taggedScripts.length > 0) {
+            return taggedScripts[taggedScripts.length - 1].getAttribute('data-site-key').trim();
+        }
+        var allScripts = document.getElementsByTagName('script');
+        for (var i = allScripts.length - 1; i >= 0; i--) {
+            var k = allScripts[i].getAttribute('data-site-key');
+            if (k) return k.trim();
+        }
+        return '';
+    }
+
     var currentScript = document.currentScript || (function () {
         var scripts = document.getElementsByTagName('script');
+        for (var i = scripts.length - 1; i >= 0; i--) {
+            if (scripts[i].getAttribute('data-site-key') || 
+                (scripts[i].src && scripts[i].src.indexOf('/sdk/tracker.js') !== -1) ||
+                scripts[i].getAttribute('data-gtmsrc')) {
+                return scripts[i];
+            }
+        }
         return scripts[scripts.length - 1];
     })();
 
-    var rawSiteKey = (currentScript && currentScript.getAttribute('data-site-key')) || window.__HN_SITE_KEY__ || '';
-    var siteKey = (rawSiteKey || '').trim().replace(/^["'`]|["'`]$/g, '');
-    var apiEndpoint = (currentScript && currentScript.getAttribute('data-endpoint')) || 
-                      (currentScript && currentScript.src ? currentScript.src.replace(/\/sdk\/tracker\.js.*$/, '/api/v1/collect') : '/api/v1/collect');
+    var siteKey = resolveSiteKey().replace(/^["'`]|["'`]$/g, '');
+
+    function resolveApiEndpoint() {
+        if (window.__HN_ENDPOINT__) return String(window.__HN_ENDPOINT__).trim();
+        if (currentScript && currentScript.getAttribute('data-endpoint')) {
+            return currentScript.getAttribute('data-endpoint').trim();
+        }
+        var epScript = document.querySelector('script[data-endpoint]');
+        if (epScript && epScript.getAttribute('data-endpoint')) {
+            return epScript.getAttribute('data-endpoint').trim();
+        }
+        // Extrai o host de onde o tracker.js foi carregado (inclui suporte a data-gtmsrc do GTM)
+        var srcScript = document.querySelector('script[src*="/sdk/tracker.js"], script[data-gtmsrc*="/sdk/tracker.js"]');
+        if (srcScript) {
+            var rawSrc = srcScript.src || srcScript.getAttribute('data-gtmsrc') || '';
+            if (rawSrc && rawSrc.indexOf('/sdk/tracker.js') !== -1) {
+                return rawSrc.replace(/\/sdk\/tracker\.js.*$/, '/api/v1/collect');
+            }
+        }
+        if (currentScript && currentScript.src && currentScript.src.indexOf('/sdk/tracker.js') !== -1) {
+            return currentScript.src.replace(/\/sdk\/tracker\.js.*$/, '/api/v1/collect');
+        }
+        // Fallback absoluto para produção do motor HN
+        return 'https://trackeamento.hnperformancedigital.com.br/api/v1/collect';
+    }
+
+    var apiEndpoint = resolveApiEndpoint();
 
     // Validação defensiva do formato da chave para alertar desenvolvedores
     if (siteKey) {
@@ -26,11 +74,15 @@
     // Detecção de Modo Debug (GTM Preview, URL params, sessionStorage, script attr ou global)
     var isDebug = false;
     try {
+        var fullUrl = window.location.href || '';
         var searchStr = window.location.search || '';
-        var isGTMPreview = searchStr.indexOf('gtm_debug=') !== -1 || (document.referrer && document.referrer.indexOf('tagassistant.google.com') !== -1);
-        var hasUrlDebug = searchStr.indexOf('hn_debug=true') !== -1 || searchStr.indexOf('hn_debug=1') !== -1 || searchStr.indexOf('debug_mode=1') !== -1 || searchStr.indexOf('debug_mode=true') !== -1;
+        var isGTMPreview = fullUrl.indexOf('gtm_debug=') !== -1 || 
+                           searchStr.indexOf('gtm_debug=') !== -1 || 
+                           (document.referrer && document.referrer.indexOf('tagassistant.google.com') !== -1);
+        var hasUrlDebug = fullUrl.indexOf('hn_debug=true') !== -1 || fullUrl.indexOf('hn_debug=1') !== -1 || fullUrl.indexOf('debug_mode=1') !== -1 || fullUrl.indexOf('debug_mode=true') !== -1;
         var hasSessionDebug = sessionStorage.getItem('_hn_debug') === '1';
-        var hasScriptDebug = currentScript && (currentScript.getAttribute('data-debug') === 'true' || currentScript.getAttribute('data-debug') === '1');
+        var hasScriptDebug = (currentScript && (currentScript.getAttribute('data-debug') === 'true' || currentScript.getAttribute('data-debug') === '1')) ||
+                             !!document.querySelector('script[data-debug="true"]');
         var hasGlobalDebug = window.__HN_DEBUG__ === true;
 
         if (isGTMPreview || hasUrlDebug || hasSessionDebug || hasScriptDebug || hasGlobalDebug) {
