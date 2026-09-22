@@ -213,6 +213,12 @@ func (h *Handler) InvalidateSiteCache(siteID string) {
 	})
 }
 
+// InvalidateKey invalida uma chave de API específica do cache em memória
+func (h *Handler) InvalidateKey(key string) {
+	h.siteKeys.Delete(key)
+}
+
+
 type SiteItem struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`

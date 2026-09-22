@@ -241,7 +241,20 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 	if h.pg != nil && h.pg.Pool != nil {
 		var siteID string
 		var isActive bool
-		err := h.pg.Pool.QueryRow(ctx, "SELECT id::text, is_active FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive)
+
+		// 2.1 Primeiro tenta na tabela site_api_keys (suporte a múltiplas chaves e revogação)
+		err := h.pg.Pool.QueryRow(ctx, `
+			SELECT k.site_id::text, (k.status = 'active' AND s.is_active = true)
+			FROM site_api_keys k
+			JOIN sites s ON s.id = k.site_id
+			WHERE k.key = $1
+		`, siteKey).Scan(&siteID, &isActive)
+
+		// 2.2 Fallback retroativo para sites.api_key caso ainda não esteja em site_api_keys
+		if err != nil {
+			err = h.pg.Pool.QueryRow(ctx, "SELECT id::text, is_active FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive)
+		}
+
 		if err == nil && isActive {
 			domains := []string{}
 			rows, errRows := h.pg.Pool.Query(ctx, "SELECT domain FROM site_allowed_domains WHERE site_id = $1 AND is_active = true", siteID)
@@ -260,6 +273,18 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 				AllowedDomains: domains,
 			}
 			h.siteKeys.Store(siteKey, meta)
+
+			// Atualiza telemetria da chave assincronamente sem bloquear a requisição
+			go func(sk string) {
+				upCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				_, _ = h.pg.Pool.Exec(upCtx, `
+					UPDATE site_api_keys 
+					SET last_used_at = now(), total_events_count = total_events_count + 1 
+					WHERE key = $1
+				`, sk)
+			}(siteKey)
+
 			return meta, true
 		}
 		if err != nil {

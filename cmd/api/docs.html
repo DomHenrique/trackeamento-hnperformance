@@ -890,6 +890,42 @@ if (typeof fbq === 'function' && eventId) {
                 output.innerHTML = '<span style="color: #f87171;">Falha: window.hnTrack não carregado nesta página.</span>';
             }
         }
+
+        // Auto-carrega a chave real do site caso o usuário esteja autenticado
+        (async function initDocsRealKey() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const reqSiteId = urlParams.get('site_id');
+                const res = await fetch('/api/v1/sites');
+                if (!res.ok) return;
+                const sites = await res.json();
+                if (sites && sites.length > 0) {
+                    let targetSite = sites[0];
+                    if (reqSiteId) {
+                        const found = sites.find(s => s.id === reqSiteId);
+                        if (found) targetSite = found;
+                    }
+                    const keysRes = await fetch(`/api/v1/sites/${targetSite.id}/keys`);
+                    if (keysRes.ok) {
+                        const keys = await keysRes.json();
+                        const activeKey = keys.find(k => k.status === 'active');
+                        if (activeKey) {
+                            const input = document.getElementById('global-site-key');
+                            if (input) {
+                                input.value = activeKey.key;
+                                updateSnippetKeys(activeKey.key);
+                            }
+                        }
+                    } else if (targetSite.api_key) {
+                        const input = document.getElementById('global-site-key');
+                        if (input) {
+                            input.value = targetSite.api_key;
+                            updateSnippetKeys(targetSite.api_key);
+                        }
+                    }
+                }
+            } catch (_) {}
+        })();
     </script>
 </body>
 </html>

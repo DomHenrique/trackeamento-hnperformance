@@ -21,6 +21,7 @@ import (
 	"tracking-engine/internal/auth"
 	"tracking-engine/internal/collector"
 	"tracking-engine/internal/config"
+	"tracking-engine/internal/integhandler"
 	"tracking-engine/internal/storage"
 )
 
@@ -85,8 +86,12 @@ func main() {
 		}
 	}
 
-	// 5. Inicializa o Handler do Coletor
+	// 5. Inicializa o Handler do Coletor e de Integrações
 	handler := collector.NewHandler(cfg, rdb, pg, ch)
+	integHandler := integhandler.NewIntegrationsHandler(cfg, pg, rdb)
+	integHandler.SetOnKeyRevoked(func(key string) {
+		handler.InvalidateKey(key)
+	})
 
 	// 6. Inicializa o app Fiber de ultra-performance
 	app := fiber.New(fiber.Config{
@@ -138,7 +143,7 @@ func main() {
 			}
 			return false
 		},
-		AllowMethods:     "GET,POST,DELETE,OPTIONS",
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders:     "Origin,Content-Type,Accept,X-Site-Key,Authorization",
 		AllowCredentials: true,
 	})
@@ -230,6 +235,16 @@ func main() {
 	app.Get("/api/v1/debug/stream", authMiddleware, handler.HandleDebugStream)
 	app.Post("/api/v1/debug/simulate", authMiddleware, handler.HandleDebugSimulate)
 	app.Post("/api/v1/debug/clear", authMiddleware, handler.HandleDebugClear)
+
+	// Endpoints de Integrações e Envios Server-Side / CAPI (Requer Autenticação)
+	app.Get("/api/v1/sites/:site_id/integrations", authMiddleware, integHandler.HandleGetIntegrations)
+	app.Put("/api/v1/sites/:site_id/integrations/:platform", authMiddleware, integHandler.HandleSaveIntegration)
+	app.Post("/api/v1/sites/:site_id/integrations/:platform/test", authMiddleware, integHandler.HandleTestIntegration)
+
+	// Endpoints de Gestão de Chaves de API por Site (Requer Autenticação)
+	app.Get("/api/v1/sites/:site_id/keys", authMiddleware, integHandler.HandleListSiteKeys)
+	app.Post("/api/v1/sites/:site_id/keys", authMiddleware, integHandler.HandleCreateSiteKey)
+	app.Post("/api/v1/sites/:site_id/keys/:key_id/revoke", authMiddleware, integHandler.HandleRevokeSiteKey)
 
 	// Endpoint para servir o SDK JS do Tracker
 	app.Get("/sdk/tracker.js", func(c *fiber.Ctx) error {

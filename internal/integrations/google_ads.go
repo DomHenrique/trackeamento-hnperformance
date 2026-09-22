@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"tracking-engine/internal/collector"
 	"tracking-engine/internal/identity"
@@ -75,3 +76,41 @@ func (g *GoogleAds) SendConversion(ctx context.Context, endpointURL string, apiK
 	_, _, err = g.http.PostWithRetry(ctx, endpointURL, headers, body, 3)
 	return err
 }
+
+// TestPing realiza um envio sintético para o endpoint do Google Ads / Enhanced Conversions
+func (g *GoogleAds) TestPing(ctx context.Context, endpointURL, apiKey, conversionAction string) ([]byte, int, error) {
+	if endpointURL == "" {
+		return nil, 0, fmt.Errorf("endpoint_url é obrigatório para o Google Ads")
+	}
+
+	if conversionAction == "" {
+		conversionAction = "test_conversion"
+	}
+
+	conv := GoogleAdsConversion{
+		ConversionAction: conversionAction,
+		ConversionTime:   time.Now().Format("2006-01-02 15:04:05-07:00"),
+		GCLID:            "test_gclid_1234567890",
+		HashedEmail:      identity.HashSHA256(identity.NormalizeEmail("teste@trackeamentohn.com.br")),
+		HashedPhone:      identity.HashSHA256(identity.NormalizePhone("+5511999999999")),
+		Currency:         "BRL",
+		Value:            1.00,
+		CustomData: map[string]interface{}{
+			"test_mode": true,
+			"source":    "TrackeamentoHN Wizard",
+		},
+	}
+
+	body, err := json.Marshal(conv)
+	if err != nil {
+		return nil, 0, fmt.Errorf("erro ao serializar Google Ads payload de teste: %w", err)
+	}
+
+	headers := map[string]string{}
+	if apiKey != "" {
+		headers["Authorization"] = "Bearer " + apiKey
+	}
+
+	return g.http.PostRaw(ctx, endpointURL, headers, body)
+}
+

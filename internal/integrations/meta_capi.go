@@ -104,6 +104,43 @@ func (m *MetaCAPI) SendEvent(ctx context.Context, pixelID, accessToken, testCode
 	return err
 }
 
+// TestPing realiza um envio sintético para a Meta CAPI com retorno detalhado da resposta da Meta
+func (m *MetaCAPI) TestPing(ctx context.Context, pixelID, accessToken, testCode string) ([]byte, int, error) {
+	if pixelID == "" || accessToken == "" {
+		return nil, 0, fmt.Errorf("pixel_id e access_token são obrigatórios")
+	}
+
+	testEvent := MetaEvent{
+		EventName:      "PageView",
+		EventTime:      time.Now().Unix(),
+		EventID:        fmt.Sprintf("test_meta_%d", time.Now().UnixNano()),
+		EventSourceURL: "https://trackeamento.hnperformancedigital.com.br/test",
+		ActionSource:   "website",
+		UserData: MetaUserData{
+			ClientIPAddress: "127.0.0.1",
+			ClientUserAgent: "Mozilla/5.0 (TrackeamentoHN-TestAgent/1.0)",
+		},
+		CustomData: map[string]interface{}{
+			"test_mode": true,
+			"source":    "TrackeamentoHN Wizard",
+		},
+	}
+
+	payload := MetaPayload{
+		Data:          []MetaEvent{testEvent},
+		TestEventCode: testCode,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, 0, fmt.Errorf("erro serializando Meta payload de teste: %w", err)
+	}
+
+	url := fmt.Sprintf("https://graph.facebook.com/v19.0/%s/events?access_token=%s", pixelID, accessToken)
+	return m.http.PostRaw(ctx, url, nil, body)
+}
+
+
 func mapMetaEventName(name string) string {
 	switch strings.ToLower(name) {
 	case "lead":

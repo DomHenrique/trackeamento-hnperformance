@@ -793,7 +793,357 @@
             font-weight: 500;
             word-break: break-all;
         }
+
+        /* --- Estilos do Modal Wizard de Integrações & Envios Server-Side --- */
+        .btn-integ-wizard {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            padding: 0.45rem 0.9rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+        }
+
+        .btn-integ-wizard:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+            background: linear-gradient(135deg, #059669, #047857);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 15, 29, 0.82);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-container {
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 30px rgba(99, 102, 241, 0.15);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 960px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: scale(0.96) translateY(10px);
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .modal-overlay.active .modal-container {
+            transform: scale(1) translateY(0);
+        }
+
+        .modal-header {
+            padding: 1.25rem 1.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(15, 23, 42, 0.95);
+        }
+
+        .modal-header h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .modal-close-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .modal-close-btn:hover {
+            color: #fff;
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        .modal-body {
+            padding: 1.75rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* Grid de Seleção das Plataformas */
+        .platform-selector-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1rem;
+        }
+
+        .platform-card {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 1.15rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: flex-start;
+            gap: 0.9rem;
+            position: relative;
+        }
+
+        .platform-card:hover {
+            background: rgba(30, 41, 59, 0.85);
+            border-color: rgba(99, 102, 241, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .platform-card.active {
+            background: rgba(99, 102, 241, 0.12);
+            border-color: #6366f1;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+        }
+
+        .platform-icon-wrap {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            flex-shrink: 0;
+        }
+
+        .platform-icon-meta { background: rgba(24, 119, 242, 0.15); border: 1px solid rgba(24, 119, 242, 0.3); color: #38bdf8; }
+        .platform-icon-google { background: rgba(234, 67, 53, 0.15); border: 1px solid rgba(234, 67, 53, 0.3); color: #f87171; }
+        .platform-icon-ga4 { background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24; }
+
+        .platform-info h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.25rem;
+        }
+
+        .platform-info p {
+            font-size: 0.76rem;
+            color: #94a3b8;
+            line-height: 1.35;
+        }
+
+        .platform-status-badge {
+            margin-top: 0.5rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .status-badge-active { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .status-badge-inactive { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); }
+
+        /* Accordion Guia Passo a Passo */
+        .guide-accordion {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .guide-accordion-header {
+            padding: 0.9rem 1.25rem;
+            background: rgba(99, 102, 241, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #a5b4fc;
+        }
+
+        .guide-accordion-header:hover {
+            background: rgba(99, 102, 241, 0.14);
+        }
+
+        .guide-accordion-body {
+            padding: 1.25rem;
+            display: none;
+            font-size: 0.82rem;
+            color: #cbd5e1;
+            line-height: 1.6;
+            border-top: 1px solid rgba(99, 102, 241, 0.15);
+        }
+
+        .guide-accordion.open .guide-accordion-body {
+            display: block;
+        }
+
+        .guide-step-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.65rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .guide-step-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-num {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #6366f1;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.72rem;
+            font-weight: 700;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* Formulário de Configuração */
+        .integ-form-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+
+        .integ-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.15rem;
+        }
+
+        .form-group-integ {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .form-group-integ label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #cbd5e1;
+        }
+
+        .form-input-integ {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            padding: 0.65rem 0.85rem;
+            color: #fff;
+            font-size: 0.85rem;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .form-input-integ:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+
+        .token-input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .token-toggle-btn {
+            position: absolute;
+            right: 8px;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 0.95rem;
+            padding: 4px;
+        }
+
+        .token-toggle-btn:hover {
+            color: #fff;
+        }
+
+        /* Caixa de Resultado do Teste */
+        .ping-result-box {
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace, sans-serif;
+            font-size: 0.78rem;
+            display: none;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .ping-result-box.success {
+            display: block;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+        }
+
+        .ping-result-box.error {
+            display: block;
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+        }
+
+        .modal-footer {
+            padding: 1.25rem 1.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(15, 23, 42, 0.95);
+        }
     </style>
+
 </head>
 <body>
 
@@ -829,13 +1179,19 @@
             </a>
 
             <div class="menu-header" style="margin-top: 1rem;">Documentação & Setup</div>
+            <a class="nav-item" onclick="openIntegrationsWizard()">
+                <span>🚀</span> Envios & CAPI (Wizard)
+            </a>
             <a class="nav-item" href="/docs" target="_blank">
                 <span>📚</span> Guia de Instalação SDK
             </a>
 
-            <div class="menu-header" style="margin-top: 1rem;">Administração</div>
+            <div class="menu-header" style="margin-top: 1rem;">Administração & Setup</div>
+            <a class="nav-item" onclick="switchTab('settings', this)" id="nav-settings">
+                <span>⚙️</span> Configurações do Site
+            </a>
             <a class="nav-item" href="/">
-                <span>⚙️</span> Gestão de Domínios
+                <span>🌐</span> Gestão de Domínios
             </a>
         </nav>
 
@@ -863,6 +1219,10 @@
                     <option value="30d">Últimos 30 dias</option>
                     <option value="month">Mês Atual</option>
                 </select>
+
+                <button class="btn-integ-wizard" onclick="openIntegrationsWizard()">
+                    <span>⚡</span> Configurar Envios & CAPI
+                </button>
 
                 <button class="btn-refresh" onclick="loadActiveData()">
                     <span>🔄</span> Atualizar
@@ -1327,8 +1687,230 @@
                     </div>
                 </div>
             </div>
+
+            <!-- TAB 7: CONFIGURAÇÕES DO SITE (Central de Chaves & Setup) -->
+            <div id="tab-settings" class="tab-pane">
+                <!-- Seção 1: Snippet com Chave Real (Zero Edição) -->
+                <div class="table-card" style="margin-bottom: 1.5rem;">
+                    <div class="table-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+                        <div>
+                            <h3>🚀 Código de Instalação (Chave Real Ativa)</h3>
+                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                Este snippet já está preenchido com a chave ativa do site selecionado. Copie e cole diretamente no <code>&lt;head&gt;</code> do site ou via Tag HTML Personalizada no GTM.
+                            </p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-muted);">Chave selecionada no código:</label>
+                            <select id="select-active-snippet-key" class="custom-select" style="min-width: 220px;" onchange="onSnippetKeyChange()">
+                                <option value="">Carregando chaves...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="padding: 1.25rem 1.5rem;">
+                        <div style="background: #020617; border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 10px; padding: 1.15rem; position: relative; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #cbd5e1; overflow-x: auto;">
+                            <pre id="snippet-code-box" style="margin: 0; line-height: 1.6;"></pre>
+                            <button class="btn-sm-action" id="btn-copy-install-snippet" onclick="copyInstallSnippet()" style="position: absolute; top: 12px; right: 12px; background: rgba(99, 102, 241, 0.25); border-color: rgba(99, 102, 241, 0.5); color: #fff;">
+                                📋 Copiar Código Completo
+                            </button>
+                        </div>
+
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem;">
+                            <button class="btn-refresh" onclick="switchTab('debug', document.getElementById('nav-debug'))" style="background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); color: #a5b4fc;">
+                                <span>⚡</span> Abrir DebugView Ao Vivo
+                            </button>
+                            <button class="btn-integ-wizard" onclick="openIntegrationsWizard()">
+                                <span>🚀</span> Configurar Envios CAPI (Meta, Google, GA4)
+                            </button>
+                            <a href="/docs" target="_blank" class="btn-refresh" style="text-decoration: none; color: #cbd5e1; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1);">
+                                <span>📚</span> Ver Exemplos Avançados no Docs ↗
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seção 2: Tabela de Histórico & Auditoria de Chaves -->
+                <div class="table-card">
+                    <div class="table-card-header">
+                        <div>
+                            <h3>🔑 Histórico e Auditoria de Chaves de Acesso</h3>
+                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                Gerencie múltiplas chaves rotacionáveis para GTM, LPs e servidores com registro de autoria e uso.
+                            </p>
+                        </div>
+                        <button class="btn-integ-wizard" onclick="openModalNewKey()">
+                            <span>➕</span> Gerar Nova Chave
+                        </button>
+                    </div>
+
+                    <div style="overflow-x: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Nome / Rótulo</th>
+                                    <th>Chave de API</th>
+                                    <th>Status de Uso</th>
+                                    <th>Criado Por</th>
+                                    <th>Último Tráfego</th>
+                                    <th>Total Eventos</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="keys-table-body">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                        Carregando histórico de chaves do site...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </main>
+
+    <!-- Modal: Criação de Nova Chave de Acesso -->
+    <div id="modal-create-key" class="modal-overlay">
+        <div class="modal-container" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><span>🔑</span> Nova Chave de Acesso</h3>
+                <button class="modal-close-btn" onclick="closeModalNewKey()">✕</button>
+            </div>
+            <div class="modal-body" style="gap: 1rem;">
+                <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+                    Crie uma chave com rótulo identificador para separar o tráfego do GTM, de uma Landing Page específica ou de um backend.
+                </p>
+                <div class="form-group-integ">
+                    <label>Nome / Rótulo da Chave *</label>
+                    <input type="text" id="input-new-key-name" class="form-input-integ" placeholder="ex: Tag GTM Principal, LP WordPress">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-refresh" onclick="closeModalNewKey()" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #cbd5e1;">
+                    Cancelar
+                </button>
+                <button class="btn-integ-wizard" id="btn-submit-new-key" onclick="submitCreateKey()">
+                    <span>💾</span> Gerar Chave
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Modal Wizard: Apoio para Envios Server-Side (CAPI & Plataformas) -->
+    <div id="modal-integrations-wizard" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3><span>⚡</span> Central de Envios Server-Side (CAPI & Plataformas)</h3>
+                <button class="modal-close-btn" onclick="closeIntegrationsWizard()">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Seletor de Site Ativo no Wizard -->
+                <div style="background: rgba(30, 41, 59, 0.6); padding: 0.85rem 1.25rem; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between;">
+                    <div style="font-size: 0.85rem; color: #cbd5e1;">
+                        Site Selecionado: <strong id="wizard-site-name" style="color: #fff;">Carregando...</strong>
+                    </div>
+                    <span style="font-size: 0.75rem; color: var(--text-muted);">As alterações e testes serão salvos exclusivamente para este site.</span>
+                </div>
+
+                <!-- 1. Cards de Seleção da Plataforma -->
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 0.65rem;">
+                        1. Selecione a Plataforma de Envio
+                    </label>
+                    <div class="platform-selector-grid">
+                        <!-- Card Meta -->
+                        <div class="platform-card active" id="card-plat-meta" onclick="selectPlatform('meta_capi')">
+                            <div class="platform-icon-wrap platform-icon-meta">f</div>
+                            <div class="platform-info">
+                                <h4>Meta CAPI</h4>
+                                <p>Facebook & Instagram Conversions API oficial via servidor.</p>
+                                <div id="badge-status-meta" class="platform-status-badge status-badge-inactive">
+                                    <span class="status-dot"></span> Não configurado
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Google Ads -->
+                        <div class="platform-card" id="card-plat-gads" onclick="selectPlatform('google_ads')">
+                            <div class="platform-icon-wrap platform-icon-google">G</div>
+                            <div class="platform-info">
+                                <h4>Google Ads</h4>
+                                <p>Conversões Otimizadas (Enhanced Conversions) com hash SHA256.</p>
+                                <div id="badge-status-gads" class="platform-status-badge status-badge-inactive">
+                                    <span class="status-dot"></span> Não configurado
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card GA4 -->
+                        <div class="platform-card" id="card-plat-ga4" onclick="selectPlatform('ga4')">
+                            <div class="platform-icon-wrap platform-icon-ga4">📊</div>
+                            <div class="platform-info">
+                                <h4>Google Analytics 4</h4>
+                                <p>Measurement Protocol direto para eventos em tempo real.</p>
+                                <div id="badge-status-ga4" class="platform-status-badge status-badge-inactive">
+                                    <span class="status-dot"></span> Não configurado
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Guia de Apoio Didático (Accordion) -->
+                <div class="guide-accordion open" id="wizard-guide-accordion">
+                    <div class="guide-accordion-header" onclick="toggleGuideAccordion()">
+                        <span id="guide-header-title">📘 Guia Passo a Passo: Como configurar a Meta Conversions API</span>
+                        <span id="guide-accordion-icon">▲</span>
+                    </div>
+                    <div class="guide-accordion-body" id="guide-body-content">
+                        <!-- Inserido dinamicamente via JS de acordo com a plataforma -->
+                    </div>
+                </div>
+
+                <!-- 3. Formulário de Credenciais -->
+                <div class="integ-form-card">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.15rem;">
+                        <h4 style="font-size: 0.95rem; font-weight: 700; color: #fff;" id="form-platform-title">
+                            ⚙️ Credenciais da Meta CAPI
+                        </h4>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #e2e8f0; cursor: pointer;">
+                            <input type="checkbox" id="integ-is-active" style="cursor: pointer; width: 16px; height: 16px;">
+                            <span>Ativar Envio Server-Side</span>
+                        </label>
+                    </div>
+
+                    <!-- Campos Dinâmicos da Plataforma -->
+                    <div class="integ-form-grid" id="integ-form-fields">
+                        <!-- Renderizado via JS -->
+                    </div>
+                </div>
+
+                <!-- 4. Caixa de Diagnóstico do Teste (Feedback em tempo real) -->
+                <div id="ping-result" class="ping-result-box">
+                    <div id="ping-result-header" style="font-weight: 700; margin-bottom: 0.4rem;"></div>
+                    <pre id="ping-result-body" style="margin: 0; white-space: pre-wrap; word-break: break-all; max-height: 180px; overflow-y: auto;"></pre>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-refresh" onclick="closeIntegrationsWizard()" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #cbd5e1;">
+                    Cancelar
+                </button>
+                <div style="display: flex; gap: 0.75rem;">
+                    <button class="btn-refresh" id="btn-ping-test" onclick="runIntegrationTest()" style="background: rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc;">
+                        <span>⚡</span> Disparar Teste de Envio
+                    </button>
+                    <button class="btn-integ-wizard" id="btn-save-integ" onclick="saveIntegrationSettings()">
+                        <span>💾</span> Salvar Configurações
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         let currentTab = 'overview';
@@ -1360,7 +1942,8 @@
                 'leads': 'Leads, Conversões & Auditoria de Mídia',
                 'traffic': 'Origem do Tráfego & Dispositivos',
                 'funnels': 'Funis & Atribuição Multi-Toque',
-                'debug': '⚡ DebugView • Validação & Depuração de Eventos em Tempo Real'
+                'debug': '⚡ DebugView • Validação & Depuração de Eventos em Tempo Real',
+                'settings': '⚙️ Configurações do Site • Chaves de API & Snippet de Instalação'
             };
             document.getElementById('view-title').textContent = titles[tabId] || 'Analytics Hub';
             loadActiveData();
@@ -1402,6 +1985,9 @@
             }
             if (currentTab === 'debug') {
                 initDebugView();
+            }
+            if (currentTab === 'settings') {
+                await loadSiteSettingsTab();
             }
         }
 
@@ -2411,6 +2997,620 @@
                 setTimeout(() => { btn.innerHTML = orig; }, 1500);
             });
         }
+
+        // ==========================================
+        // MÓDULO: WIZARD DE INTEGRAÇÕES & CAPI
+        // ==========================================
+        let currentWizardPlatform = 'meta_capi';
+        let wizardIntegrationsData = {};
+
+        const PLATFORM_GUIDES = {
+            'meta_capi': {
+                title: '📘 Guia Passo a Passo: Configuração da Meta Conversions API (CAPI)',
+                steps: [
+                    'Abra o <b>Gerenciador de Eventos da Meta</b> e selecione o Pixel correspondente ao site.',
+                    'Acesse a aba <b>Configurações</b> e copie o número do <b>Identificador do Pixel (Pixel ID)</b>.',
+                    'Role a página até a seção <b>"API de Conversões"</b> e clique no link <b>"Gerar Token de Acesso"</b> (sob "Configurar manualmente"). Guarde este token.',
+                    '<b>(Opcional para Homologação):</b> Na aba <b>"Testar Eventos"</b> do Gerenciador, copie o código do evento de teste (ex: <code>TEST12345</code>) para validar o disparo instantâneo.'
+                ],
+                link: 'https://business.facebook.com/events_manager2'
+            },
+            'google_ads': {
+                title: '📘 Guia Passo a Passo: Configuração do Google Ads Enhanced Conversions',
+                steps: [
+                    'Acesse sua conta do <b>Google Ads</b> no menu <b>Metas > Conversões > Resumo</b>.',
+                    'Crie ou edite a Ação de Conversão desejada (ex: Envio de Formulário de Lead / Contato WhatsApp).',
+                    'Ative as <b>Conversões Otimizadas (Enhanced Conversions)</b> nas configurações da ação.',
+                    'Copie a URL de Webhook/Endpoint ou informe seu <b>Conversion Action</b> e <b>Token de API</b> (o Trackeamento HN aplicará hash SHA256 em e-mails e telefones automaticamente).'
+                ],
+                link: 'https://ads.google.com/aw/conversions'
+            },
+            'ga4': {
+                title: '📘 Guia Passo a Passo: Google Analytics 4 (Measurement Protocol)',
+                steps: [
+                    'No painel do Google Analytics 4, clique em <b>Administrador (ícone de engrenagem)</b> no canto inferior esquerdo.',
+                    'Em <b>Coleta e modificação de dados</b>, clique em <b>Fluxos de Dados</b> e selecione seu fluxo Web.',
+                    'Copie o <b>ID da Métrica</b> (começa com <code>G-</code>).',
+                    'Abaixo no mesmo fluxo, clique em <b>Segredos da API do Measurement Protocol</b> > <b>Criar</b> e copie o valor da chave gerada.'
+                ],
+                link: 'https://analytics.google.com/analytics/web/'
+            }
+        };
+
+        async function openIntegrationsWizard() {
+            const siteSelect = document.getElementById('select-site');
+            let siteId = siteSelect.value;
+            let siteName = siteSelect.options[siteSelect.selectedIndex]?.text || 'HN Performance Principal';
+
+            // Se "Todos os Sites" estiver selecionado, seleciona o primeiro site real da lista
+            if (!siteId && siteSelect.options.length > 1) {
+                siteId = siteSelect.options[1].value;
+                siteName = siteSelect.options[1].text;
+            }
+
+            if (!siteId) {
+                alert('Cadastre ou selecione um site para gerenciar as integrações de envio.');
+                return;
+            }
+
+            document.getElementById('wizard-site-name').textContent = siteName;
+            document.getElementById('modal-integrations-wizard').classList.add('active');
+
+            // Carrega credenciais atuais do backend
+            await loadSiteIntegrations(siteId);
+            selectPlatform(currentWizardPlatform);
+        }
+
+        function closeIntegrationsWizard() {
+            document.getElementById('modal-integrations-wizard').classList.remove('active');
+            const resultBox = document.getElementById('ping-result');
+            resultBox.className = 'ping-result-box';
+            resultBox.style.display = 'none';
+        }
+
+        function toggleGuideAccordion() {
+            const acc = document.getElementById('wizard-guide-accordion');
+            const icon = document.getElementById('guide-accordion-icon');
+            acc.classList.toggle('open');
+            icon.textContent = acc.classList.contains('open') ? '▲' : '▼';
+        }
+
+        async function loadSiteIntegrations(siteId) {
+            wizardIntegrationsData = {};
+            try {
+                const res = await fetch(`/api/v1/sites/${siteId}/integrations`);
+                if (res.ok) {
+                    const list = await res.json();
+                    list.forEach(item => {
+                        wizardIntegrationsData[item.platform] = item;
+                    });
+                }
+            } catch (e) {
+                console.error('Falha carregando integrações:', e);
+            }
+            updatePlatformBadges();
+        }
+
+        function updatePlatformBadges() {
+            // Atualiza badge de status da Meta
+            const meta = wizardIntegrationsData['meta_capi'];
+            const bMeta = document.getElementById('badge-status-meta');
+            if (bMeta) {
+                if (meta && meta.is_active) {
+                    bMeta.className = 'platform-status-badge status-badge-active';
+                    bMeta.innerHTML = '● Ativo Server-Side';
+                } else if (meta && meta.has_token) {
+                    bMeta.className = 'platform-status-badge status-badge-inactive';
+                    bMeta.innerHTML = '○ Pausado';
+                } else {
+                    bMeta.className = 'platform-status-badge status-badge-inactive';
+                    bMeta.innerHTML = '○ Não configurado';
+                }
+            }
+
+            // Atualiza badge do Google Ads
+            const gads = wizardIntegrationsData['google_ads'];
+            const bGads = document.getElementById('badge-status-gads');
+            if (bGads) {
+                if (gads && gads.is_active) {
+                    bGads.className = 'platform-status-badge status-badge-active';
+                    bGads.innerHTML = '● Ativo Server-Side';
+                } else if (gads && (gads.credentials?.endpoint_url || gads.has_token)) {
+                    bGads.className = 'platform-status-badge status-badge-inactive';
+                    bGads.innerHTML = '○ Pausado';
+                } else {
+                    bGads.className = 'platform-status-badge status-badge-inactive';
+                    bGads.innerHTML = '○ Não configurado';
+                }
+            }
+
+            // Atualiza badge do GA4
+            const ga4 = wizardIntegrationsData['ga4'];
+            const bGa4 = document.getElementById('badge-status-ga4');
+            if (bGa4) {
+                if (ga4 && ga4.is_active) {
+                    bGa4.className = 'platform-status-badge status-badge-active';
+                    bGa4.innerHTML = '● Ativo Server-Side';
+                } else if (ga4 && ga4.has_token) {
+                    bGa4.className = 'platform-status-badge status-badge-inactive';
+                    bGa4.innerHTML = '○ Pausado';
+                } else {
+                    bGa4.className = 'platform-status-badge status-badge-inactive';
+                    bGa4.innerHTML = '○ Não configurado';
+                }
+            }
+        }
+
+        function selectPlatform(platform) {
+            currentWizardPlatform = platform;
+
+            // Ajusta cards visuais ativos
+            document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
+            if (platform === 'meta_capi') document.getElementById('card-plat-meta')?.classList.add('active');
+            if (platform === 'google_ads') document.getElementById('card-plat-gads')?.classList.add('active');
+            if (platform === 'ga4') document.getElementById('card-plat-ga4')?.classList.add('active');
+
+            // Atualiza Guia de Apoio
+            const guide = PLATFORM_GUIDES[platform];
+            if (guide) {
+                document.getElementById('guide-header-title').textContent = guide.title;
+                let stepsHtml = '';
+                guide.steps.forEach((step, idx) => {
+                    stepsHtml += `
+                        <div class="guide-step-item">
+                            <span class="step-num">${idx + 1}</span>
+                            <div>${step}</div>
+                        </div>
+                    `;
+                });
+                stepsHtml += `
+                    <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed rgba(99, 102, 241, 0.2);">
+                        <a href="${guide.link}" target="_blank" style="color: #818cf8; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;">
+                            <span>🔗 Abrir Painel Oficial da Plataforma</span> ↗
+                        </a>
+                    </div>
+                `;
+                document.getElementById('guide-body-content').innerHTML = stepsHtml;
+            }
+
+            // Oculta resultado anterior de teste
+            const resultBox = document.getElementById('ping-result');
+            resultBox.className = 'ping-result-box';
+            resultBox.style.display = 'none';
+
+            // Carrega dados da plataforma no formulário
+            const integ = wizardIntegrationsData[platform] || { is_active: false, credentials: {} };
+            document.getElementById('integ-is-active').checked = !!integ.is_active;
+
+            const fieldsContainer = document.getElementById('integ-form-fields');
+            const creds = integ.credentials || {};
+
+            if (platform === 'meta_capi') {
+                document.getElementById('form-platform-title').innerHTML = '⚙️ Credenciais da Meta Conversions API (CAPI)';
+                fieldsContainer.innerHTML = `
+                    <div class="form-group-integ">
+                        <label>Identificador do Pixel (Pixel ID) *</label>
+                        <input type="text" id="field-pixel-id" class="form-input-integ" placeholder="ex: 1092837465928374" value="${escapeHTML(creds.pixel_id || '')}">
+                    </div>
+                    <div class="form-group-integ">
+                        <label>Token de Acesso (Access Token) *</label>
+                        <div class="token-input-wrap">
+                            <input type="password" id="field-access-token" class="form-input-integ" placeholder="EAAGm..." value="${escapeHTML(creds.access_token || '')}">
+                            <button type="button" class="token-toggle-btn" onclick="toggleTokenVisibility('field-access-token', this)">👁️</button>
+                        </div>
+                    </div>
+                    <div class="form-group-integ" style="grid-column: 1 / -1;">
+                        <label>Código de Teste da CAPI (Opcional - Aba "Testar Eventos")</label>
+                        <input type="text" id="field-test-code" class="form-input-integ" placeholder="ex: TEST84921 (deixe em branco para tráfego normal)" value="${escapeHTML(creds.test_event_code || '')}">
+                    </div>
+                `;
+            } else if (platform === 'google_ads') {
+                document.getElementById('form-platform-title').innerHTML = '⚙️ Configurações do Google Ads (Conversões Server-Side)';
+                fieldsContainer.innerHTML = `
+                    <div class="form-group-integ">
+                        <label>Endpoint URL / Webhook de Conversão *</label>
+                        <input type="text" id="field-endpoint-url" class="form-input-integ" placeholder="https://googleads.googleapis.com/... ou webhook" value="${escapeHTML(creds.endpoint_url || '')}">
+                    </div>
+                    <div class="form-group-integ">
+                        <label>Nome da Ação de Conversão (Conversion Action)</label>
+                        <input type="text" id="field-conversion-action" class="form-input-integ" placeholder="ex: lead_submission" value="${escapeHTML(creds.conversion_action || '')}">
+                    </div>
+                    <div class="form-group-integ" style="grid-column: 1 / -1;">
+                        <label>Token de API / Chave de Autorização (Opcional)</label>
+                        <div class="token-input-wrap">
+                            <input type="password" id="field-api-token" class="form-input-integ" placeholder="Bearer Token do Google Ads..." value="${escapeHTML(creds.api_token || '')}">
+                            <button type="button" class="token-toggle-btn" onclick="toggleTokenVisibility('field-api-token', this)">👁️</button>
+                        </div>
+                    </div>
+                `;
+            } else if (platform === 'ga4') {
+                document.getElementById('form-platform-title').innerHTML = '⚙️ Credenciais do Google Analytics 4 (Measurement Protocol)';
+                fieldsContainer.innerHTML = `
+                    <div class="form-group-integ">
+                        <label>ID da Métrica (Measurement ID) *</label>
+                        <input type="text" id="field-measurement-id" class="form-input-integ" placeholder="ex: G-XXXXXXXXXX" value="${escapeHTML(creds.measurement_id || '')}">
+                    </div>
+                    <div class="form-group-integ">
+                        <label>Segredo da API (API Secret) *</label>
+                        <div class="token-input-wrap">
+                            <input type="password" id="field-api-secret" class="form-input-integ" placeholder="Gerado no fluxo Web do GA4..." value="${escapeHTML(creds.api_secret || '')}">
+                            <button type="button" class="token-toggle-btn" onclick="toggleTokenVisibility('field-api-secret', this)">👁️</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function toggleTokenVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '🔒';
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁️';
+            }
+        }
+
+        function getActiveSiteIdForWizard() {
+            const siteSelect = document.getElementById('select-site');
+            let siteId = siteSelect.value;
+            if (!siteId && siteSelect.options.length > 1) {
+                siteId = siteSelect.options[1].value;
+            }
+            return siteId;
+        }
+
+        function collectFormCredentials() {
+            const creds = {};
+            if (currentWizardPlatform === 'meta_capi') {
+                creds.pixel_id = document.getElementById('field-pixel-id')?.value.trim() || '';
+                creds.access_token = document.getElementById('field-access-token')?.value.trim() || '';
+                creds.test_event_code = document.getElementById('field-test-code')?.value.trim() || '';
+            } else if (currentWizardPlatform === 'google_ads') {
+                creds.endpoint_url = document.getElementById('field-endpoint-url')?.value.trim() || '';
+                creds.conversion_action = document.getElementById('field-conversion-action')?.value.trim() || '';
+                creds.api_token = document.getElementById('field-api-token')?.value.trim() || '';
+            } else if (currentWizardPlatform === 'ga4') {
+                creds.measurement_id = document.getElementById('field-measurement-id')?.value.trim() || '';
+                creds.api_secret = document.getElementById('field-api-secret')?.value.trim() || '';
+            }
+            return creds;
+        }
+
+        async function saveIntegrationSettings() {
+            const siteId = getActiveSiteIdForWizard();
+            if (!siteId) return alert('Selecione um site ativo.');
+
+            const isActive = document.getElementById('integ-is-active').checked;
+            const creds = collectFormCredentials();
+
+            const saveBtn = document.getElementById('btn-save-integ');
+            const origText = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span>⏳</span> Salvando...';
+
+            try {
+                const res = await fetch(`/api/v1/sites/${siteId}/integrations/${currentWizardPlatform}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        is_active: isActive,
+                        credentials: creds
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    alert('Erro ao salvar integração: ' + (data.error || 'Falha desconhecida'));
+                } else {
+                    saveBtn.innerHTML = '<span>✅</span> Salvo com Sucesso!';
+                    await loadSiteIntegrations(siteId);
+                    setTimeout(() => { saveBtn.innerHTML = origText; }, 2000);
+                }
+            } catch (e) {
+                alert('Erro na comunicação com a API: ' + e.message);
+            } finally {
+                saveBtn.disabled = false;
+            }
+        }
+
+        async function runIntegrationTest() {
+            const siteId = getActiveSiteIdForWizard();
+            if (!siteId) return alert('Selecione um site ativo.');
+
+            const creds = collectFormCredentials();
+            const pingBtn = document.getElementById('btn-ping-test');
+            const resultBox = document.getElementById('ping-result');
+            const resultHeader = document.getElementById('ping-result-header');
+            const resultBody = document.getElementById('ping-result-body');
+
+            pingBtn.disabled = true;
+            pingBtn.innerHTML = '<span>⏳</span> Enviando evento teste...';
+            resultBox.style.display = 'none';
+
+            try {
+                const res = await fetch(`/api/v1/sites/${siteId}/integrations/${currentWizardPlatform}/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ credentials: creds })
+                });
+
+                const data = await res.json();
+                resultBox.style.display = 'block';
+
+                if (res.ok && data.success) {
+                    resultBox.className = 'ping-result-box success';
+                    resultHeader.innerHTML = `🟢 Sucesso! Resposta HTTP ${data.status_code} (${data.latency_ms}ms)`;
+                    try {
+                        const parsed = JSON.parse(data.response_body);
+                        resultBody.textContent = JSON.stringify(parsed, null, 2);
+                    } catch (e) {
+                        resultBody.textContent = data.response_body || 'Evento entregue com sucesso!';
+                    }
+                } else {
+                    resultBox.className = 'ping-result-box error';
+                    resultHeader.innerHTML = `🔴 Falha no Envio: HTTP ${data.status_code || res.status} (${data.latency_ms || 0}ms)`;
+                    resultBody.textContent = data.error || data.response_body || JSON.stringify(data, null, 2);
+                }
+            } catch (e) {
+                resultBox.style.display = 'block';
+                resultBox.className = 'ping-result-box error';
+                resultHeader.innerHTML = '🔴 Erro de Conexão Local';
+                resultBody.textContent = e.message;
+            } finally {
+                pingBtn.disabled = false;
+                pingBtn.innerHTML = '<span>⚡</span> Disparar Teste de Envio';
+            }
+        }
+
+        // ==========================================
+        // MÓDULO: CONFIGURAÇÕES DO SITE & CHAVES DE API
+        // ==========================================
+        let siteKeysList = [];
+
+        function getActiveSettingsSiteId() {
+            const siteSelect = document.getElementById('select-site');
+            let siteId = siteSelect.value;
+            if (!siteId && siteSelect.options.length > 1) {
+                siteId = siteSelect.options[1].value;
+            }
+            return siteId;
+        }
+
+        async function loadSiteSettingsTab() {
+            const siteId = getActiveSettingsSiteId();
+            const keysTbody = document.getElementById('keys-table-body');
+            const selectKeyEl = document.getElementById('select-active-snippet-key');
+            const snippetBox = document.getElementById('snippet-code-box');
+
+            if (!siteId) {
+                keysTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">Selecione ou cadastre um site para gerenciar as chaves de acesso.</td></tr>`;
+                selectKeyEl.innerHTML = `<option value="">Nenhum site selecionado</option>`;
+                snippetBox.textContent = `// Selecione um site no topo para visualizar o snippet de produção`;
+                return;
+            }
+
+            try {
+                keysTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">Carregando histórico de chaves...</td></tr>`;
+                const res = await fetch(`/api/v1/sites/${siteId}/keys`);
+                if (!res.ok) {
+                    throw new Error('Falha ao obter chaves do site');
+                }
+                siteKeysList = await res.json();
+                renderKeysTable(siteKeysList);
+                populateSnippetKeySelect(siteKeysList);
+            } catch (err) {
+                console.error("Erro ao carregar configurações do site:", err);
+                keysTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #f87171; padding: 2rem;">Erro ao carregar chaves: ${escapeHTML(err.message)}</td></tr>`;
+            }
+        }
+
+        function populateSnippetKeySelect(keys) {
+            const selectKeyEl = document.getElementById('select-active-snippet-key');
+            selectKeyEl.innerHTML = '';
+
+            const activeKeys = (keys || []).filter(k => k.status === 'active');
+            if (activeKeys.length === 0) {
+                selectKeyEl.innerHTML = '<option value="">(Nenhuma chave ativa encontrada)</option>';
+                renderInstallSnippet('');
+                return;
+            }
+
+            activeKeys.forEach(k => {
+                const opt = document.createElement('option');
+                opt.value = k.key;
+                opt.textContent = `${k.name} (${k.key.substring(0, 14)}...)`;
+                selectKeyEl.appendChild(opt);
+            });
+
+            // Renderiza com a primeira chave ativa
+            renderInstallSnippet(activeKeys[0].key);
+        }
+
+        function onSnippetKeyChange() {
+            const selectKeyEl = document.getElementById('select-active-snippet-key');
+            renderInstallSnippet(selectKeyEl.value);
+        }
+
+        function renderInstallSnippet(key) {
+            const snippetBox = document.getElementById('snippet-code-box');
+            if (!key) {
+                snippetBox.textContent = `<!-- Nenhuma chave ativa encontrada para este site. Gere uma nova chave abaixo. -->`;
+                return;
+            }
+
+            const origin = window.location.origin;
+            const snippet = `<!-- HN Performance Server-Side Tracking SDK -->\n<script \n  src="${origin}/sdk/tracker.js" \n  data-site-key="${key}" \n  async>\n</script>`;
+            snippetBox.textContent = snippet;
+        }
+
+        function copyInstallSnippet() {
+            const snippetBox = document.getElementById('snippet-code-box');
+            const code = snippetBox.textContent;
+            if (!code || code.includes('Nenhuma chave ativa')) {
+                alert('Nenhuma chave ativa selecionada para copiar.');
+                return;
+            }
+
+            navigator.clipboard.writeText(code).then(() => {
+                const btn = document.getElementById('btn-copy-install-snippet');
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✅ Copiado!';
+                setTimeout(() => { btn.innerHTML = orig; }, 2000);
+            }).catch(err => {
+                alert('Erro ao copiar código: ' + err);
+            });
+        }
+
+        function renderKeysTable(keys) {
+            const tbody = document.getElementById('keys-table-body');
+            tbody.innerHTML = '';
+
+            if (!keys || keys.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">Nenhuma chave registrada para este site. Clique em "➕ Gerar Nova Chave" para criar a primeira.</td></tr>`;
+                return;
+            }
+
+            keys.forEach(k => {
+                const tr = document.createElement('tr');
+                
+                // Status badge
+                let statusBadge = '';
+                if (k.usage_status === 'in_use') {
+                    statusBadge = `<span class="badge-status badge-ok">🟢 Em uso</span>`;
+                } else if (k.usage_status === 'awaiting_traffic') {
+                    statusBadge = `<span class="badge-status badge-warning">🟡 Sem tráfego</span>`;
+                } else {
+                    statusBadge = `<span class="badge-status badge-danger">🔴 Revogada</span>`;
+                }
+
+                // Dates & Telemetry
+                const createdAtFormatted = k.created_at ? new Date(k.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+                const lastUsedFormatted = k.last_used_at ? new Date(k.last_used_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '<span style="color: var(--text-muted);">Nenhum ainda</span>';
+                const eventsCount = (k.total_events_count || 0).toLocaleString('pt-BR');
+
+                // Actions
+                let actionsHtml = '';
+                if (k.status === 'active') {
+                    actionsHtml = `
+                        <div style="display: flex; gap: 0.4rem; align-items: center;">
+                            <button class="btn-sm-action" onclick="copyIndividualKey('${k.key}', this)" title="Copiar chave de API" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15);">
+                                📋 Copiar
+                            </button>
+                            <button class="btn-sm-action" onclick="revokeKey('${k.id}', '${escapeHTML(k.name)}')" title="Revogar chave de acesso" style="background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #fca5a5;">
+                                🚫 Revogar
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    const revokedAt = k.revoked_at ? new Date(k.revoked_at).toLocaleDateString('pt-BR') : '';
+                    actionsHtml = `<span style="font-size: 0.72rem; color: #f87171;">Revogada em ${revokedAt}${k.revoked_by ? ' por ' + escapeHTML(k.revoked_by) : ''}</span>`;
+                }
+
+                tr.innerHTML = `
+                    <td style="font-weight: 600; color: #f8fafc;">${escapeHTML(k.name)}</td>
+                    <td>
+                        <code style="font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; background: rgba(0,0,0,0.3); padding: 0.2rem 0.45rem; border-radius: 4px; color: #cbd5e1;">
+                            ${escapeHTML(k.key)}
+                        </code>
+                    </td>
+                    <td>${statusBadge}</td>
+                    <td style="font-size: 0.78rem; color: var(--text-muted);">
+                        ${escapeHTML(k.created_by || 'admin')}<br>
+                        <span style="font-size: 0.7rem; color: #64748b;">${createdAtFormatted}</span>
+                    </td>
+                    <td style="font-size: 0.78rem;">${lastUsedFormatted}</td>
+                    <td style="font-weight: 600; color: #94a3b8;">${eventsCount}</td>
+                    <td>${actionsHtml}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function copyIndividualKey(key, btn) {
+            navigator.clipboard.writeText(key).then(() => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✅ Copiada!';
+                setTimeout(() => { btn.innerHTML = orig; }, 1500);
+            });
+        }
+
+        function openModalNewKey() {
+            const input = document.getElementById('input-new-key-name');
+            input.value = '';
+            document.getElementById('modal-create-key').classList.add('active');
+            setTimeout(() => input.focus(), 100);
+        }
+
+        function closeModalNewKey() {
+            document.getElementById('modal-create-key').classList.remove('active');
+        }
+
+        async function submitCreateKey() {
+            const siteId = getActiveSettingsSiteId();
+            const input = document.getElementById('input-new-key-name');
+            const name = input.value.trim();
+            const submitBtn = document.getElementById('btn-submit-new-key');
+
+            if (!name) {
+                alert('Informe um nome ou rótulo para identificar esta chave (ex: Tag GTM Principal).');
+                input.focus();
+                return;
+            }
+
+            if (!siteId) {
+                alert('Selecione um site antes de criar uma chave.');
+                return;
+            }
+
+            try {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span>⏳</span> Gerando...';
+
+                const res = await fetch(`/api/v1/sites/${siteId}/keys`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Falha ao gerar nova chave');
+                }
+
+                closeModalNewKey();
+                await loadSiteSettingsTab();
+            } catch (err) {
+                alert('Erro ao criar chave: ' + err.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span>💾</span> Gerar Chave';
+            }
+        }
+
+        async function revokeKey(keyId, keyName) {
+            const siteId = getActiveSettingsSiteId();
+            if (!confirm(`Tem certeza que deseja REVOGAR a chave "${keyName}"?\n\nQualquer script ou servidor utilizando esta chave deixará de enviar eventos imediatamente (HTTP 401).`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/v1/sites/${siteId}/keys/${keyId}/revoke`, {
+                    method: 'POST'
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Falha ao revogar chave');
+                }
+
+                await loadSiteSettingsTab();
+            } catch (err) {
+                alert('Erro ao revogar chave: ' + err.message);
+            }
+        }
+
 
         // Inicialização Protegida
         async function initDashboard() {

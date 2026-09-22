@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"tracking-engine/internal/collector"
 )
@@ -73,6 +74,37 @@ func (g *GA4MP) SendEvent(ctx context.Context, measurementID, apiSecret string, 
 	_, _, err = g.http.PostWithRetry(ctx, url, nil, body, 3)
 	return err
 }
+
+// TestPing realiza um envio de validação para o endpoint de debug do GA4 (/debug/mp/collect) retornando a validação em JSON
+func (g *GA4MP) TestPing(ctx context.Context, measurementID, apiSecret string) ([]byte, int, error) {
+	if measurementID == "" || apiSecret == "" {
+		return nil, 0, fmt.Errorf("measurement_id e api_secret são obrigatórios")
+	}
+
+	testPayload := GA4Payload{
+		ClientID: fmt.Sprintf("test_client_%d", time.Now().Unix()),
+		Events: []GA4Event{
+			{
+				Name: "page_view",
+				Params: map[string]interface{}{
+					"page_location": "https://trackeamento.hnperformancedigital.com.br/test",
+					"page_title":    "Teste de Conexão - Trackeamento HN",
+					"test_mode":     true,
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(testPayload)
+	if err != nil {
+		return nil, 0, fmt.Errorf("erro ao serializar GA4 payload: %w", err)
+	}
+
+	// O endpoint /debug/mp/collect do GA4 valida as credenciais e estrutura do evento sem poluir as métricas de produção
+	url := fmt.Sprintf("https://www.google-analytics.com/debug/mp/collect?measurement_id=%s&api_secret=%s", measurementID, apiSecret)
+	return g.http.PostRaw(ctx, url, nil, body)
+}
+
 
 func mapGA4EventName(name string) string {
 	switch strings.ToLower(name) {

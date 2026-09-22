@@ -90,3 +90,30 @@ func (h *HTTPClient) PostWithRetry(ctx context.Context, url string, headers map[
 
 	return nil, respCode, fmt.Errorf("falha apos %d tentativas: %w", maxRetries, lastErr)
 }
+
+// PostRaw realiza uma requisição POST única (sem retry), retornando o corpo e status code exatos (ideal para testes de integração)
+func (h *HTTPClient) PostRaw(ctx context.Context, url string, headers map[string]string, body []byte) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("erro criando request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	if readErr != nil {
+		return nil, resp.StatusCode, readErr
+	}
+
+	return respBody, resp.StatusCode, nil
+}
+
