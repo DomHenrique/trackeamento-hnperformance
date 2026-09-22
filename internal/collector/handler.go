@@ -48,6 +48,9 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		// Fallback para requisições vazias ou mal formatadas
 		req = EventRequest{}
 	}
+	if req.SiteKey == "" && len(c.Body()) > 0 {
+		_ = json.Unmarshal(c.Body(), &req)
+	}
 
 	siteKey := prefixedid.SanitizeKey(req.SiteKey)
 	if siteKey == "" {
