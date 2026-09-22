@@ -94,6 +94,14 @@ func TestHandleTestIntegration_MissingCreds(t *testing.T) {
 	if respAds.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("Google Ads sem endpoint deveria retornar 400, obteve %d", respAds.StatusCode)
 	}
+
+	// 4. LinkedIn CAPI sem access_token
+	reqLI := httptest.NewRequest("POST", "/api/v1/sites/"+validUUID+"/integrations/linkedin_capi/test", bytes.NewBufferString(`{"credentials": {"conversion_rule_id": "12345"}}`))
+	reqLI.Header.Set("Content-Type", "application/json")
+	respLI, _ := app.Test(reqLI)
+	if respLI.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("LinkedIn sem access_token deveria retornar 400, obteve %d", respLI.StatusCode)
+	}
 }
 
 func TestHandleSiteKeys_Validation(t *testing.T) {

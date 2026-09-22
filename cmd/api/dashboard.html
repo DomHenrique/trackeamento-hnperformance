@@ -910,7 +910,7 @@
         /* Grid de Seleção das Plataformas */
         .platform-selector-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
             gap: 1rem;
         }
 
@@ -953,6 +953,7 @@
         .platform-icon-meta { background: rgba(24, 119, 242, 0.15); border: 1px solid rgba(24, 119, 242, 0.3); color: #38bdf8; }
         .platform-icon-google { background: rgba(234, 67, 53, 0.15); border: 1px solid rgba(234, 67, 53, 0.3); color: #f87171; }
         .platform-icon-ga4 { background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24; }
+        .platform-icon-linkedin { background: rgba(10, 102, 194, 0.18); border: 1px solid rgba(10, 102, 194, 0.4); color: #0077b5; font-weight: 800; }
 
         .platform-info h4 {
             font-size: 0.95rem;
@@ -1852,6 +1853,18 @@
                                 <h4>Google Analytics 4</h4>
                                 <p>Measurement Protocol direto para eventos em tempo real.</p>
                                 <div id="badge-status-ga4" class="platform-status-badge status-badge-inactive">
+                                    <span class="status-dot"></span> Não configurado
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card LinkedIn -->
+                        <div class="platform-card" id="card-plat-linkedin" onclick="selectPlatform('linkedin_capi')">
+                            <div class="platform-icon-wrap platform-icon-linkedin">in</div>
+                            <div class="platform-info">
+                                <h4>LinkedIn CAPI</h4>
+                                <p>Direct API oficial via servidor para regras de conversão B2B.</p>
+                                <div id="badge-status-linkedin" class="platform-status-badge status-badge-inactive">
                                     <span class="status-dot"></span> Não configurado
                                 </div>
                             </div>
@@ -3034,6 +3047,18 @@
                     'Abaixo no mesmo fluxo, clique em <b>Segredos da API do Measurement Protocol</b> > <b>Criar</b> e copie o valor da chave gerada.'
                 ],
                 link: 'https://analytics.google.com/analytics/web/'
+            },
+            'linkedin_capi': {
+                title: '📘 Guia Passo a Passo: LinkedIn Conversions API (Direct API)',
+                steps: [
+                    '<b>Acesse o Campaign Manager:</b> Acesse sua conta de anúncios do LinkedIn e, no menu lateral esquerdo, clique em <b>Mensurar (Measure) > Gerenciador de Sinais (Signals Manager)</b>.',
+                    '<b>Gere o Token da Direct API:</b> Na seção <i>Fontes (Sources)</i>, clique em <b>Direct API</b> e selecione <b>"Gerar token de acesso" (Generate access token)</b>. Faça login, copie o token e guarde-o (o LinkedIn não armazena este token).',
+                    '<b>Crie a Regra de Conversão:</b> No menu <b>Mensurar > Rastreamento de conversões (Conversion tracking)</b>, clique em <b>"Criar conversão"</b> e escolha <b>Conversions API</b>.',
+                    '<b>Defina Nome, Categoria e Valor:</b> Nomeie o evento (ex: Lead, Download, Contato), escolha a categoria, selecione a regra de valor (dinâmico ou fixo) e configure as janelas de cliques/visualizações e modelo de atribuição.',
+                    '<b>Vincule a Direct API e Conjuntos de Anúncios:</b> Selecione o método <b>Direct API</b>, marque os conjuntos de anúncios (Ad Sets) que utilizarão a conversão e clique em <b>Criar</b>. Copie o ID numérico da conversão gerada.',
+                    '<b>Configure no Trackeamento HN e Valide:</b> Preencha o Token de Acesso e o ID da Regra abaixo, clique em <b>"Salvar"</b> e dispare um teste com <b>"Disparar Teste de Envio"</b>. O status no Campaign Manager mudará de <i>Unverified</i> para <i>Ativo</i>.'
+                ],
+                link: 'https://www.linkedin.com/campaignmanager'
             }
         };
 
@@ -3139,6 +3164,22 @@
                     bGa4.innerHTML = '○ Não configurado';
                 }
             }
+
+            // Atualiza badge do LinkedIn
+            const li = wizardIntegrationsData['linkedin_capi'];
+            const bLI = document.getElementById('badge-status-linkedin');
+            if (bLI) {
+                if (li && li.is_active) {
+                    bLI.className = 'platform-status-badge status-badge-active';
+                    bLI.innerHTML = '● Ativo Server-Side';
+                } else if (li && li.has_token) {
+                    bLI.className = 'platform-status-badge status-badge-inactive';
+                    bLI.innerHTML = '○ Pausado';
+                } else {
+                    bLI.className = 'platform-status-badge status-badge-inactive';
+                    bLI.innerHTML = '○ Não configurado';
+                }
+            }
         }
 
         function selectPlatform(platform) {
@@ -3149,6 +3190,7 @@
             if (platform === 'meta_capi') document.getElementById('card-plat-meta')?.classList.add('active');
             if (platform === 'google_ads') document.getElementById('card-plat-gads')?.classList.add('active');
             if (platform === 'ga4') document.getElementById('card-plat-ga4')?.classList.add('active');
+            if (platform === 'linkedin_capi') document.getElementById('card-plat-linkedin')?.classList.add('active');
 
             // Atualiza Guia de Apoio
             const guide = PLATFORM_GUIDES[platform];
@@ -3238,6 +3280,25 @@
                         </div>
                     </div>
                 `;
+            } else if (platform === 'linkedin_capi') {
+                document.getElementById('form-platform-title').innerHTML = '⚙️ Credenciais da LinkedIn Conversions API (Direct API)';
+                fieldsContainer.innerHTML = `
+                    <div class="form-group-integ">
+                        <label>Token de Acesso da Direct API (Access Token) *</label>
+                        <div class="token-input-wrap">
+                            <input type="password" id="field-li-token" class="form-input-integ" placeholder="Token gerado no Signals Manager..." value="${escapeHTML(creds.access_token || '')}">
+                            <button type="button" class="token-toggle-btn" onclick="toggleTokenVisibility('field-li-token', this)">👁️</button>
+                        </div>
+                    </div>
+                    <div class="form-group-integ">
+                        <label>ID da Regra de Conversão (Conversion Rule ID) *</label>
+                        <input type="text" id="field-li-conversion-id" class="form-input-integ" placeholder="ex: 1234567 ou urn:lla:llaPartnerConversion:1234567" value="${escapeHTML(creds.conversion_rule_id || '')}">
+                    </div>
+                    <div class="form-group-integ" style="grid-column: 1 / -1;">
+                        <label>ID da Conta de Anúncios (Ad Account ID - Opcional)</label>
+                        <input type="text" id="field-li-account-id" class="form-input-integ" placeholder="ex: 501234567 (opcional)" value="${escapeHTML(creds.account_id || '')}">
+                    </div>
+                `;
             }
         }
 
@@ -3275,6 +3336,10 @@
             } else if (currentWizardPlatform === 'ga4') {
                 creds.measurement_id = document.getElementById('field-measurement-id')?.value.trim() || '';
                 creds.api_secret = document.getElementById('field-api-secret')?.value.trim() || '';
+            } else if (currentWizardPlatform === 'linkedin_capi') {
+                creds.access_token = document.getElementById('field-li-token')?.value.trim() || '';
+                creds.conversion_rule_id = document.getElementById('field-li-conversion-id')?.value.trim() || '';
+                creds.account_id = document.getElementById('field-li-account-id')?.value.trim() || '';
             }
             return creds;
         }

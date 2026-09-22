@@ -28,24 +28,26 @@ type WorkerPool struct {
 	pg         *storage.PostgresDB
 	httpClient *integrations.HTTPClient
 
-	metaCAPI  *integrations.MetaCAPI
-	ga4MP     *integrations.GA4MP
-	googleAds *integrations.GoogleAds
-	crm       *integrations.CRMWebhook
+	metaCAPI     *integrations.MetaCAPI
+	ga4MP        *integrations.GA4MP
+	googleAds    *integrations.GoogleAds
+	linkedinCAPI *integrations.LinkedInCAPI
+	crm          *integrations.CRMWebhook
 }
 
 func NewWorkerPool(cfg *config.Config, rdb *storage.RedisClient, pg *storage.PostgresDB) *WorkerPool {
 	client := integrations.NewHTTPClient(time.Duration(cfg.DispatcherTimeoutSec) * time.Second)
 
 	return &WorkerPool{
-		cfg:        cfg,
-		redis:      rdb,
-		pg:         pg,
-		httpClient: client,
-		metaCAPI:   integrations.NewMetaCAPI(client),
-		ga4MP:      integrations.NewGA4MP(client),
-		googleAds:  integrations.NewGoogleAds(client),
-		crm:        integrations.NewCRMWebhook(client),
+		cfg:          cfg,
+		redis:        rdb,
+		pg:           pg,
+		httpClient:   client,
+		metaCAPI:     integrations.NewMetaCAPI(client),
+		ga4MP:        integrations.NewGA4MP(client),
+		googleAds:    integrations.NewGoogleAds(client),
+		linkedinCAPI: integrations.NewLinkedInCAPI(client),
+		crm:          integrations.NewCRMWebhook(client),
 	}
 }
 
@@ -176,6 +178,15 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 				token := it.Credentials["api_token"]
 				if err := wp.googleAds.SendConversion(callCtx, endpointURL, token, ev); err != nil {
 					log.Printf("[Dispatcher] Falha Google Ads (site %s): %v", ev.SiteID, err)
+				}
+
+			case "linkedin_capi":
+				token := it.Credentials["access_token"]
+				ruleID := it.Credentials["conversion_rule_id"]
+				if err := wp.linkedinCAPI.SendEvent(callCtx, token, ruleID, ev); err != nil {
+					log.Printf("[Dispatcher] Falha LinkedIn CAPI (site %s): %v", ev.SiteID, err)
+				} else {
+					log.Printf("[Dispatcher] SUCESSO LinkedIn CAPI: evento '%s' enviado!", ev.EventName)
 				}
 
 			case "webhook":

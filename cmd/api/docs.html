@@ -778,12 +778,72 @@ if (typeof fbq === 'function' && eventId) {
             </div>
         </div>
 
-        <!-- PASSO 5: PLAYGROUND DE TESTES INTERATIVO -->
+        <!-- PASSO 5: INTEGRAÇÃO COM LINKEDIN CONVERSIONS API -->
+        <div class="step-card">
+            <div class="step-card-header">
+                <div class="step-number" style="background: linear-gradient(135deg, #0a66c2, #0077b5);">in</div>
+                <div>
+                    <h2>Passo 5: Envios Server-Side para LinkedIn Conversions API (Direct API)</h2>
+                </div>
+            </div>
+            <p class="step-desc">
+                O Trackeamento HN possui conector nativo para a <b>LinkedIn Conversions API (Direct API)</b>, permitindo o encaminhamento de conversões qualificadas (como <code>lead</code>, <code>purchase</code> e <code>contact</code>) diretamente aos servidores do LinkedIn Marketing Solutions com sanitização e hashing SHA-256 em conformidade com as diretrizes oficiais (Help LMS #a1711116).
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                    <h4 style="color: #38bdf8; margin-bottom: 0.5rem; font-size: 0.95rem;">1. Gerar Access Token</h4>
+                    <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+                        No <b>Campaign Manager</b>, acesse <i>Mensurar > Gerenciador de Sinais > Direct API</i> e clique em <b>Gerar token de acesso</b>. Guarde o token com segurança pois ele não é exibido novamente.
+                    </p>
+                </div>
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                    <h4 style="color: #38bdf8; margin-bottom: 0.5rem; font-size: 0.95rem;">2. Criar Regra de Conversão</h4>
+                    <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+                        Em <i>Mensurar > Rastreamento de conversões</i>, crie uma conversão via <b>Conversions API</b>, selecione o método <b>Direct API</b>, vincule aos Ad Sets desejados e copie o <b>Conversion Rule ID</b>.
+                    </p>
+                </div>
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                    <h4 style="color: #38bdf8; margin-bottom: 0.5rem; font-size: 0.95rem;">3. Ativar e Testar no Dashboard</h4>
+                    <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+                        Abra o menu <b>Envios & CAPI (Wizard)</b> no dashboard do Trackeamento HN, selecione <b>LinkedIn CAPI</b>, preencha as credenciais e clique em <b>Disparar Teste de Envio</b> para validar a conexão.
+                    </p>
+                </div>
+            </div>
+
+            <div class="code-box">
+                <div class="code-box-header">
+                    <span class="code-lang">Payload Exemplo Despachado para o LinkedIn REST API</span>
+                    <button class="btn-copy" onclick="copySnippet('code-linkedin-payload')">📋 Copiar Código</button>
+                </div>
+                <pre><code id="code-linkedin-payload"><span class="token-comment">// Endpoint: POST https://api.linkedin.com/rest/conversionEvents</span>
+<span class="token-comment">// Headers: LinkedIn-Version: 202401 | X-Restli-Protocol-Version: 2.0.0</span>
+{
+  "conversion": "urn:lla:llaPartnerConversion:1234567",
+  "conversionHappenedAt": 1711116000000,
+  "conversionValue": {
+    "currencyCode": "BRL",
+    "amount": "150.00"
+  },
+  "user": {
+    "userIds": [
+      {
+        "idType": "SHA256_EMAIL",
+        "idValue": "2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef9f8b1bdd63b"
+      }
+    ]
+  },
+  "eventId": "evt_9876543210"
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- PASSO 6: PLAYGROUND DE TESTES INTERATIVO -->
         <div class="step-card tester-card">
             <div class="step-card-header">
                 <div class="step-number" style="background: linear-gradient(135deg, #10b981, #059669);">🧪</div>
                 <div>
-                    <h2>Console de Teste Interativo (Playground)</h2>
+                    <h2>Passo 6: Console de Teste Interativo (Playground)</h2>
                     <p style="font-size: 0.8rem; color: var(--text-muted);">
                         Envie um evento em tempo real a partir desta tela para testar a comunicação imediata com o coletor em produção:
                     </p>

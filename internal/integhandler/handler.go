@@ -124,8 +124,8 @@ func (h *IntegrationsHandler) HandleGetIntegrations(c *fiber.Ctx) error {
 		}
 	}
 
-	// Garante que as 3 principais plataformas estejam sempre no objeto de retorno
-	platforms := []string{"meta_capi", "google_ads", "ga4"}
+	// Garante que as principais plataformas estejam sempre no objeto de retorno
+	platforms := []string{"meta_capi", "google_ads", "ga4", "linkedin_capi"}
 	response := make([]IntegrationItem, 0, len(platforms))
 
 	for _, p := range platforms {
@@ -153,7 +153,7 @@ func (h *IntegrationsHandler) HandleSaveIntegration(c *fiber.Ctx) error {
 	}
 
 	platform := strings.ToLower(strings.TrimSpace(c.Params("platform")))
-	if platform != "meta_capi" && platform != "google_ads" && platform != "ga4" && platform != "webhook" {
+	if platform != "meta_capi" && platform != "google_ads" && platform != "ga4" && platform != "linkedin_capi" && platform != "webhook" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "plataforma não suportada"})
 	}
 
@@ -315,6 +315,19 @@ func (h *IntegrationsHandler) HandleTestIntegration(c *fiber.Ctx) error {
 
 		gads := integrations.NewGoogleAds(client)
 		respBody, statusCode, testErr = gads.TestPing(ctx, endpointURL, token, action)
+
+	case "linkedin_capi":
+		token := strings.TrimSpace(creds["access_token"])
+		ruleID := strings.TrimSpace(creds["conversion_rule_id"])
+
+		if token == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "access_token é obrigatório para testar a LinkedIn Conversions API",
+			})
+		}
+
+		li := integrations.NewLinkedInCAPI(client)
+		respBody, statusCode, testErr = li.TestPing(ctx, token, ruleID)
 
 	default:
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "plataforma desconhecida para teste"})
