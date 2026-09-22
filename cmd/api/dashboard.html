@@ -847,8 +847,8 @@
             box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 30px rgba(99, 102, 241, 0.15);
             border-radius: 16px;
             width: 100%;
-            max-width: 960px;
-            max-height: 90vh;
+            max-width: 1140px;
+            max-height: 94vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -905,6 +905,10 @@
             display: flex;
             flex-direction: column;
             gap: 1.5rem;
+        }
+
+        .modal-body > * {
+            flex-shrink: 0;
         }
 
         /* Grid de Seleção das Plataformas */
@@ -988,10 +992,12 @@
             border: 1px solid rgba(99, 102, 241, 0.25);
             border-radius: 12px;
             overflow: hidden;
+            flex-shrink: 0;
+            width: 100%;
         }
 
         .guide-accordion-header {
-            padding: 0.9rem 1.25rem;
+            padding: 0.95rem 1.25rem;
             background: rgba(99, 102, 241, 0.08);
             display: flex;
             align-items: center;
@@ -999,7 +1005,7 @@
             cursor: pointer;
             user-select: none;
             font-weight: 600;
-            font-size: 0.85rem;
+            font-size: 0.88rem;
             color: #a5b4fc;
         }
 
@@ -1008,12 +1014,14 @@
         }
 
         .guide-accordion-body {
-            padding: 1.25rem;
+            padding: 1.25rem 1.5rem;
             display: none;
-            font-size: 0.82rem;
+            font-size: 0.84rem;
             color: #cbd5e1;
-            line-height: 1.6;
+            line-height: 1.65;
             border-top: 1px solid rgba(99, 102, 241, 0.15);
+            max-height: 420px;
+            overflow-y: auto;
         }
 
         .guide-accordion.open .guide-accordion-body {
