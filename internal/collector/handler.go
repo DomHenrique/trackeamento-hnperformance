@@ -357,12 +357,12 @@ func (h *Handler) HandleDebugStream(c *fiber.Ctx) error {
 		// 1. Envia eventos recentes do buffer volátil do Redis (histórico recente)
 		if h.redis != nil {
 			ctxHistory, cancelHistory := context.WithTimeout(context.Background(), 2*time.Second)
-			recent, err := h.redis.GetRecentDebugEvents(ctxHistory, siteID, 30)
+			recent, err := h.redis.GetRecentDebugEvents(ctxHistory, siteID, 50)
 			cancelHistory()
 			if err == nil {
 				// Envia os mais antigos primeiro para a timeline exibir cronologicamente
 				for i := len(recent) - 1; i >= 0; i-- {
-					fmt.Fprintf(w, "event: message\ndata: %s\n\n", recent[i])
+					fmt.Fprintf(w, "data: %s\n\n", recent[i])
 				}
 				_ = w.Flush()
 			}
@@ -393,7 +393,7 @@ func (h *Handler) HandleDebugStream(c *fiber.Ctx) error {
 				if !ok {
 					return
 				}
-				fmt.Fprintf(w, "event: message\ndata: %s\n\n", msg.Payload)
+				fmt.Fprintf(w, "data: %s\n\n", msg.Payload)
 				if err := w.Flush(); err != nil {
 					return // Conexão encerrada pelo cliente
 				}
@@ -407,6 +407,38 @@ func (h *Handler) HandleDebugStream(c *fiber.Ctx) error {
 	}))
 
 	return nil
+}
+
+// HandleGetDebugEvents retorna os eventos recentes gravados no Redis em formato JSON via REST para inicialização instantânea
+func (h *Handler) HandleGetDebugEvents(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	if siteID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "site_id é obrigatório",
+		})
+	}
+
+	if h.redis == nil {
+		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+	}
+
+	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Second)
+	defer cancel()
+
+	recent, err := h.redis.GetRecentDebugEvents(ctx, siteID, 50)
+	if err != nil {
+		return c.Status(fiber.StatusOK).JSON([]interface{}{})
+	}
+
+	events := make([]map[string]interface{}, 0, len(recent))
+	for _, raw := range recent {
+		var ev map[string]interface{}
+		if err := json.Unmarshal([]byte(raw), &ev); err == nil {
+			events = append(events, ev)
+		}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(events)
 }
 
 // DebugSimulateRequest estrutura os dados para envio de evento simulado

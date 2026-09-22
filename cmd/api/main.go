@@ -254,6 +254,7 @@ func main() {
 	app.Get("/api/v1/analytics/visitor/journey", authMiddleware, handler.HandleAnalyticsVisitorJourney)
 
 	// Endpoints de Depuração e DebugView em Tempo Real (Requer Autenticação)
+	app.Get("/api/v1/debug/events", authMiddleware, handler.HandleGetDebugEvents)
 	app.Get("/api/v1/debug/stream", authMiddleware, handler.HandleDebugStream)
 	app.Post("/api/v1/debug/simulate", authMiddleware, handler.HandleDebugSimulate)
 	app.Post("/api/v1/debug/clear", authMiddleware, handler.HandleDebugClear)

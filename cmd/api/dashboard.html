@@ -2422,17 +2422,23 @@
             loadActiveData();
         }
 
+        let globalSitesList = [];
+
         async function loadSites() {
             try {
                 const res = await fetch('/api/v1/sites');
                 if (!res.ok) return;
                 const sites = await res.json();
+                globalSitesList = sites;
                 const sel = document.getElementById('select-site');
                 sel.innerHTML = '<option value="">Todos os Sites</option>';
                 sites.forEach(s => {
                     const opt = document.createElement('option');
                     opt.value = s.id;
-                    opt.textContent = `${s.name} (${s.domain})`;
+                    const domainsList = (s.allowed_domains && s.allowed_domains.length > 0) 
+                        ? ` [${s.domain}, ${s.allowed_domains.join(', ')}]`
+                        : ` (${s.domain})`;
+                    opt.textContent = `${s.name}${domainsList}`;
                     sel.appendChild(opt);
                 });
             } catch (e) {
@@ -3013,7 +3019,7 @@
         let debugEventSource = null;
         let currentDebugSiteId = null;
 
-        function initDebugView() {
+        async function initDebugView() {
             let siteID = document.getElementById('select-site').value;
             const siteSelect = document.getElementById('select-site');
 
@@ -3029,14 +3035,49 @@
                 return;
             }
 
-            const selectedOption = siteSelect.options[siteSelect.selectedIndex];
-            document.getElementById('debug-site-name').textContent = selectedOption ? selectedOption.textContent : siteID;
+            const currentSiteObj = globalSitesList.find(s => s.id === siteID);
+            if (currentSiteObj) {
+                const doms = [currentSiteObj.domain, ...(currentSiteObj.allowed_domains || [])].filter(Boolean);
+                document.getElementById('debug-site-name').textContent = `${currentSiteObj.name} (${doms.join(' • ')})`;
+            } else {
+                const selectedOption = siteSelect.options[siteSelect.selectedIndex];
+                document.getElementById('debug-site-name').textContent = selectedOption ? selectedOption.textContent : siteID;
+            }
+
+            // 1. Busca eventos recentes do Redis via REST para preenchimento imediato da tela e dos dispositivos
+            await loadInitialDebugEvents(siteID);
 
             if (debugEventSource && currentDebugSiteId === siteID) {
                 return;
             }
 
+            // 2. Conecta ao fluxo SSE para novos eventos ao vivo
             connectDebugSSE(siteID);
+        }
+
+        async function loadInitialDebugEvents(siteID) {
+            try {
+                const res = await fetch(`/api/v1/debug/events?site_id=${encodeURIComponent(siteID)}`);
+                if (res.ok) {
+                    const events = await res.json();
+                    if (Array.isArray(events) && events.length > 0) {
+                        events.forEach(ev => {
+                            const exists = debugEventsList.some(item => item.event_id === ev.event_id);
+                            if (!exists) {
+                                debugEventsList.push(ev);
+                            }
+                            updateDeviceRegistry(ev);
+                        });
+                        debugEventsList.sort((a, b) => new Date(b.event_time || 0) - new Date(a.event_time || 0));
+                        renderGa4DebugView();
+                        if (!selectedDebugEventId && debugEventsList.length > 0) {
+                            selectDebugEvent(debugEventsList[0].event_id);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[DebugView] Erro ao carregar eventos iniciais:', e);
+            }
         }
 
         function connectDebugSSE(siteID) {
@@ -3061,7 +3102,7 @@
                 statusWrap.className = 'debug-live-indicator';
             };
 
-            debugEventSource.onmessage = function (e) {
+            const onMsg = function (e) {
                 try {
                     const ev = JSON.parse(e.data);
                     handleIncomingDebugEvent(ev);
@@ -3069,6 +3110,9 @@
                     console.error('[DebugView] Erro ao parsear evento SSE:', err);
                 }
             };
+
+            debugEventSource.onmessage = onMsg;
+            debugEventSource.addEventListener('message', onMsg);
 
             debugEventSource.onerror = function () {
                 statusText.textContent = '○ Reconectando...';
@@ -3101,12 +3145,21 @@
             const devType = ev.device_type || 'desktop';
             const ua = ev.user_agent || '';
             let browser = 'Navegador';
-            if (ua.includes('Chrome')) browser = 'Chrome';
-            else if (ua.includes('Safari')) browser = 'Safari';
+            if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+            else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
             else if (ua.includes('Firefox')) browser = 'Firefox';
-            else if (ua.includes('Edge')) browser = 'Edge';
+            else if (ua.includes('Edge') || ua.includes('Edg')) browser = 'Edge';
 
-            const label = `${devType === 'mobile' ? '📱' : devType === 'tablet' ? '📟' : '💻'} ${browser} (${sid.substring(0, 10)}...)`;
+            let os = '';
+            if (ua.includes('Windows')) os = 'Windows';
+            else if (ua.includes('Macintosh') || ua.includes('Mac OS')) os = 'macOS';
+            else if (ua.includes('Linux') && !ua.includes('Android')) os = 'Linux';
+            else if (ua.includes('Android')) os = 'Android';
+            else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+
+            const devIcon = devType === 'mobile' ? '📱' : devType === 'tablet' ? '📟' : '💻';
+            const devName = os ? `${browser} (${os})` : browser;
+            const label = `${devIcon} ${devName} • Sessão ${sid.substring(0, 8)}...`;
 
             if (!detectedDevices.has(sid)) {
                 detectedDevices.set(sid, { id: sid, label, lastSeen: Date.now() });
@@ -3116,6 +3169,7 @@
 
         function refreshDeviceSelectOptions() {
             const sel = document.getElementById('debug-device-select');
+            if (!sel) return;
             const currVal = sel.value;
             sel.innerHTML = `<option value="">📱 Todos os Dispositivos (${detectedDevices.size})</option>`;
             detectedDevices.forEach((dev, sid) => {
@@ -3124,7 +3178,13 @@
                 opt.textContent = dev.label;
                 sel.appendChild(opt);
             });
-            sel.value = currVal;
+            if (detectedDevices.size === 1 && !currVal) {
+                const firstKey = detectedDevices.keys().next().value;
+                sel.value = firstKey;
+                selectedDeviceId = firstKey;
+            } else if (currVal) {
+                sel.value = currVal;
+            }
         }
 
         function onDebugDeviceChange() {

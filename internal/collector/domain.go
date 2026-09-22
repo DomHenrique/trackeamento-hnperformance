@@ -222,9 +222,10 @@ func (h *Handler) InvalidateKey(key string) {
 
 
 type SiteItem struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Domain string `json:"domain"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Domain         string   `json:"domain"`
+	AllowedDomains []string `json:"allowed_domains"`
 }
 
 // HandleListSites retorna a lista de sites ativos para o dropdown da UI (sem expor credenciais/api_key)
@@ -233,7 +234,15 @@ func (h *Handler) HandleListSites(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON([]SiteItem{})
 	}
 
-	rows, err := h.pg.Pool.Query(c.Context(), "SELECT id::text, name, domain FROM sites WHERE is_active = true ORDER BY name ASC")
+	rows, err := h.pg.Pool.Query(c.Context(), `
+		SELECT s.id::text, s.name, s.domain,
+		       COALESCE(ARRAY_AGG(d.domain) FILTER (WHERE d.domain IS NOT NULL AND d.is_active = true), '{}') AS allowed_domains
+		FROM sites s
+		LEFT JOIN site_allowed_domains d ON d.site_id = s.id
+		WHERE s.is_active = true
+		GROUP BY s.id, s.name, s.domain
+		ORDER BY s.name ASC
+	`)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -242,7 +251,7 @@ func (h *Handler) HandleListSites(c *fiber.Ctx) error {
 	sites := make([]SiteItem, 0)
 	for rows.Next() {
 		var s SiteItem
-		if err := rows.Scan(&s.ID, &s.Name, &s.Domain); err == nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Domain, &s.AllowedDomains); err == nil {
 			sites = append(sites, s)
 		}
 	}
