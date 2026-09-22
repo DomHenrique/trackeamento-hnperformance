@@ -3442,7 +3442,7 @@
             }
 
             const origin = window.location.origin;
-            const snippet = `<!-- HN Performance Server-Side Tracking SDK -->\n<script \n  src="${origin}/sdk/tracker.js" \n  data-site-key="${key}" \n  async>\n</script>`;
+            const snippet = `<!-- HN Performance Server-Side Tracking SDK -->\n<script \n  src="${origin}/sdk/tracker.js" \n  data-site-key="${key}" \n  async>\n<` + `/script>`;
             snippetBox.textContent = snippet;
         }
 
