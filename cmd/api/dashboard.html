@@ -671,18 +671,411 @@
             color: #fff;
         }
 
-        /* DebugView Layout e Animações */
-        .debug-grid {
+        /* ========================================================
+           GA4 DEBUGVIEW: LAYOUT EM 3 COLUNAS & COMPONENTES VISUAIS
+           ======================================================== */
+        .ga4-debug-container {
             display: grid;
-            grid-template-columns: 380px 1fr;
-            gap: 1.5rem;
-            align-items: start;
+            grid-template-columns: 180px 1fr 380px;
+            gap: 1.25rem;
+            align-items: stretch;
+            min-height: 640px;
+        }
+
+        @media (max-width: 1280px) {
+            .ga4-debug-container {
+                grid-template-columns: 160px 1fr 340px;
+            }
         }
 
         @media (max-width: 1024px) {
-            .debug-grid {
+            .ga4-debug-container {
                 grid-template-columns: 1fr;
             }
+        }
+
+        /* 1. Coluna Esquerda: Régua Scrubber de 30 Minutos */
+        .ga4-scrubber-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 0.5rem;
+            display: flex;
+            flex-direction: column;
+            max-height: 680px;
+            position: relative;
+        }
+
+        .ga4-scrubber-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-align: center;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            margin-bottom: 0.5rem;
+        }
+
+        .ga4-scrubber-list {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+            padding: 0.5rem 0.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        /* Linha central da régua */
+        .ga4-scrubber-list::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            bottom: 10px;
+            right: 28px;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.12);
+            z-index: 1;
+        }
+
+        .ga4-scrubber-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+            z-index: 2;
+        }
+
+        .ga4-scrubber-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .ga4-scrubber-item.active {
+            background: rgba(56, 189, 248, 0.15);
+        }
+
+        .ga4-scrubber-time {
+            font-size: 0.72rem;
+            color: #94a3b8;
+            font-family: monospace;
+            font-weight: 500;
+        }
+
+        .ga4-scrubber-item.active .ga4-scrubber-time {
+            color: #38bdf8;
+            font-weight: 700;
+        }
+
+        .ga4-scrubber-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #475569;
+            margin-right: 20px;
+            transition: all 0.15s ease;
+        }
+
+        .ga4-scrubber-bubble {
+            min-width: 22px;
+            height: 22px;
+            padding: 0 4px;
+            border-radius: 11px;
+            background: #38bdf8;
+            color: #0f172a;
+            font-weight: 800;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
+            transition: transform 0.15s ease;
+        }
+
+        .ga4-scrubber-bubble:hover {
+            transform: scale(1.15);
+        }
+
+        /* 2. Coluna Central: Linha do Tempo em Cordão de Contas (Beads on a String) */
+        .ga4-timeline-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            max-height: 680px;
+            position: relative;
+        }
+
+        .ga4-timeline-header {
+            padding: 0.85rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .ga4-timeline-stream {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem 1rem 2rem 1rem;
+            position: relative;
+        }
+
+        /* Linha vertical contínua central */
+        .ga4-timeline-rail {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        .ga4-timeline-rail::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 110px;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.12);
+            z-index: 1;
+        }
+
+        .ga4-timeline-top-node {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid #64748b;
+            background: #0f172a;
+            margin-left: 20px;
+            margin-bottom: 1rem;
+            z-index: 2;
+        }
+
+        .ga4-time-gap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.4rem 0;
+            margin-left: 20px;
+            z-index: 2;
+        }
+
+        .ga4-time-gap-pill {
+            font-size: 0.68rem;
+            font-family: monospace;
+            font-style: italic;
+            color: #94a3b8;
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 0.1rem 0.5rem;
+            border-radius: 10px;
+        }
+
+        .ga4-event-bead {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            padding: 0.35rem 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            z-index: 2;
+        }
+
+        .ga4-event-bead:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .ga4-event-bead.active {
+            background: rgba(99, 102, 241, 0.14);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            box-shadow: 0 0 16px rgba(99, 102, 241, 0.15);
+        }
+
+        .ga4-bead-time {
+            width: 80px;
+            text-align: right;
+            font-size: 0.74rem;
+            font-family: monospace;
+            color: #94a3b8;
+            padding-right: 18px;
+            flex-shrink: 0;
+        }
+
+        .ga4-bead-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            margin-right: 14px;
+            z-index: 3;
+            background: #1e293b;
+            color: #fff;
+        }
+
+        .ga4-bead-icon.icon-page_view { background: #0284c7; border-color: #38bdf8; }
+        .ga4-bead-icon.icon-session_start { background: #4f46e5; border-color: #818cf8; }
+        .ga4-bead-icon.icon-first_visit { background: #7c3aed; border-color: #a78bfa; }
+        .ga4-bead-icon.icon-scroll { background: #0d9488; border-color: #2dd4bf; }
+        .ga4-bead-icon.icon-click { background: #d97706; border-color: #fbbf24; }
+        .ga4-bead-icon.icon-whatsapp_click { background: #16a34a; border-color: #4ade80; }
+        .ga4-bead-icon.icon-lead { background: #059669; border-color: #34d399; }
+        .ga4-bead-icon.icon-file_download { background: #ea580c; border-color: #fb923c; }
+
+        .ga4-bead-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            min-width: 0;
+        }
+
+        .ga4-bead-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #f1f5f9;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ga4-mode-tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .ga4-mode-tag.tag-debug {
+            background: rgba(168, 85, 247, 0.2);
+            color: #d8b4fe;
+            border: 1px solid rgba(168, 85, 247, 0.4);
+        }
+
+        .ga4-mode-tag.tag-prod {
+            background: rgba(56, 189, 248, 0.15);
+            color: #7dd3fc;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        /* 3. Coluna Direita: Principais Eventos e Propriedades Ativas */
+        .ga4-side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            max-height: 680px;
+        }
+
+        .ga4-side-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .ga4-side-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 0.65rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 0.75rem;
+        }
+
+        .ga4-side-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .ga4-top-event-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.45rem 0.25rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+
+        .ga4-top-event-item:hover {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+        }
+
+        .ga4-top-event-name {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #e2e8f0;
+            position: relative;
+            padding-bottom: 4px;
+        }
+
+        .ga4-top-event-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 2px;
+            background: #38bdf8;
+            border-radius: 1px;
+            transition: width 0.3s ease;
+        }
+
+        .ga4-top-event-count {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #cbd5e1;
+            font-family: monospace;
+        }
+
+        .ga4-prop-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 0.78rem;
+        }
+
+        .ga4-prop-key {
+            color: #94a3b8;
+            font-family: monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 140px;
+        }
+
+        .ga4-prop-val {
+            color: #f1f5f9;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 180px;
+            text-align: right;
         }
 
         .debug-live-indicator {
@@ -1578,16 +1971,27 @@
                                 0 eventos capturados
                             </span>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <select id="debug-device-select" onchange="onDebugDeviceChange()" style="background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); border-radius: 6px; padding: 0.4rem 0.75rem; font-size: 0.8rem; font-weight: 600;">
+                                <option value="">📱 Dispositivo de depuração (Todos)</option>
+                            </select>
                             <select id="debug-filter-event" onchange="filterDebugEvents()" style="background: rgba(15,23,42,0.8); color: var(--text-main); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.75rem; font-size: 0.8rem;">
                                 <option value="">Todos os Eventos</option>
                                 <option value="page_view">page_view</option>
+                                <option value="session_start">session_start</option>
+                                <option value="first_visit">first_visit</option>
+                                <option value="scroll">scroll</option>
+                                <option value="click">click</option>
+                                <option value="file_download">file_download</option>
                                 <option value="lead">lead</option>
                                 <option value="whatsapp_click">whatsapp_click</option>
                                 <option value="purchase">purchase</option>
                             </select>
+                            <button class="btn-sm-action" onclick="openInspectorModal()" id="btn-top-inspector" style="display: none; background: rgba(56,189,248,0.15); color: #7dd3fc; border-color: rgba(56,189,248,0.3);">
+                                🔍 Inspetor
+                            </button>
                             <button class="btn-sm-action" onclick="clearDebugTimeline()" style="background: rgba(239,68,68,0.15); color: #fca5a5; border-color: rgba(239,68,68,0.3);">
-                                🗑️ Limpar Timeline
+                                🗑️ Limpar
                             </button>
                         </div>
                     </div>
@@ -1601,16 +2005,27 @@
                     </div>
                 </div>
 
-                <!-- Grid Principal: Timeline na esquerda, Inspetor na direita -->
-                <div class="debug-grid">
-                    <!-- Painel Esquerdo: Timeline de Eventos -->
-                    <div class="table-card" style="margin-bottom: 0; display: flex; flex-direction: column; max-height: 640px;">
-                        <div class="table-card-header">
-                            <h3>⏱️ Linha do Tempo (Eventos de Debug)</h3>
+                <!-- Container Principal GA4 DebugView: 3 Colunas -->
+                <div class="ga4-debug-container">
+                    <!-- Coluna 1: Régua Scrubber de 30 Minutos -->
+                    <div class="ga4-scrubber-card">
+                        <div class="ga4-scrubber-header">Últimos 30 min</div>
+                        <div class="ga4-scrubber-list" id="ga4-scrubber-list">
+                            <!-- Preenchido dinamicamente via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Coluna 2: Linha do Tempo em Cordão de Contas (Beads on a String) -->
+                    <div class="ga4-timeline-card">
+                        <div class="ga4-timeline-header">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <h3 style="font-size: 0.95rem; font-weight: 700; color: #f8fafc; margin: 0;">⏱️ Linha do Tempo</h3>
+                                <span id="ga4-minute-filter-badge" style="display: none; font-size: 0.7rem; background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 4px; padding: 0.1rem 0.4rem; cursor: pointer;" onclick="clearMinuteFilter()" title="Clique para remover filtro de minuto">✕ Minuto selecionado</span>
+                            </div>
                             <span style="font-size: 0.75rem; color: var(--text-muted);" id="debug-rate-label">Ao vivo</span>
                         </div>
-                        <div id="debug-timeline-list" style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem;">
-                            <div id="debug-empty-state" style="text-align: center; color: var(--text-muted); padding: 3rem 1rem;">
+                        <div class="ga4-timeline-stream" id="ga4-timeline-stream">
+                            <div id="debug-empty-state" style="text-align: center; color: var(--text-muted); padding: 4rem 1rem;">
                                 <div style="font-size: 2.2rem; margin-bottom: 0.75rem;">📡</div>
                                 <div style="font-weight: 600; color: #cbd5e1; margin-bottom: 0.35rem;">Aguardando eventos de teste...</div>
                                 <div style="font-size: 0.78rem; line-height: 1.5;">
@@ -1620,23 +2035,60 @@
                         </div>
                     </div>
 
-                    <!-- Painel Direito: Inspetor de Detalhes do Evento Selecionado -->
-                    <div class="table-card" style="margin-bottom: 0; display: flex; flex-direction: column; max-height: 640px;">
+                    <!-- Coluna 3: Painel Lateral com Principais Eventos e Propriedades Ativas -->
+                    <div class="ga4-side-panel">
+                        <!-- Card Superior: Principais Eventos -->
+                        <div class="ga4-side-card" style="flex: 1; max-height: 330px;">
+                            <div class="ga4-side-card-header">
+                                <span class="ga4-side-title">Principais Eventos</span>
+                                <span id="ga4-top-events-total" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">0 no total</span>
+                            </div>
+                            <div id="ga4-top-events-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem;">
+                                <div style="text-align: center; color: var(--text-muted); padding: 2rem 0; font-size: 0.78rem;">
+                                    Nenhum evento registrado ainda
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Inferior: Propriedades do Usuário Ativas -->
+                        <div class="ga4-side-card" style="flex: 1; max-height: 330px;">
+                            <div class="ga4-side-card-header">
+                                <span class="ga4-side-title">Propriedades Ativas</span>
+                                <button class="btn-sm-action" onclick="openInspectorModal()" id="btn-open-inspector-details" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; display: none;">
+                                    🔍 Inspecionar
+                                </button>
+                            </div>
+                            <div id="ga4-user-props-list" style="flex: 1; overflow-y: auto;">
+                                <div style="text-align: center; color: var(--text-muted); padding: 2rem 0; font-size: 0.78rem;">
+                                    Aguardando dados de visitante
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal / Inspetor Completo de Detalhes -->
+                <div id="modal-debug-inspector" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+                    <div class="table-card" style="width: 90%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column; margin: 0; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
                         <div class="table-card-header" style="justify-content: space-between;">
                             <div>
-                                <h3 id="inspector-event-name">🔍 Detalhes do Evento</h3>
+                                <h3 id="inspector-event-name" style="margin: 0; font-size: 1rem;">🔍 Detalhes do Evento</h3>
                                 <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;" id="inspector-event-id">
                                     Selecione um evento na timeline para inspecionar
                                 </p>
                             </div>
-                            <button class="btn-sm-action" onclick="copyInspectorJSON()" id="btn-copy-json" style="display: none;">
-                                📋 Copiar JSON
-                            </button>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <button class="btn-sm-action" onclick="copyInspectorJSON()" id="btn-copy-json" style="display: none;">
+                                    📋 Copiar JSON
+                                </button>
+                                <button class="btn-sm-action" onclick="closeInspectorModal()" style="font-size: 1rem; padding: 0.2rem 0.6rem;">
+                                    ✕
+                                </button>
+                            </div>
                         </div>
                         <div id="inspector-body" style="flex: 1; overflow-y: auto; padding: 1.25rem;">
                             <div style="text-align: center; color: var(--text-muted); padding: 4rem 1rem;">
-                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">👆</div>
-                                <div>Nenhum evento selecionado no momento.</div>
+                                Nenhum evento selecionado no momento.
                             </div>
                         </div>
                     </div>
@@ -2550,8 +3002,14 @@
         // ==========================================
         // ⚡ MÓDULO DEBUG VIEW (TEMPO REAL & VALIDAÇÃO)
         // ==========================================
+        // ==========================================
+        // ⚡ MÓDULO GA4 DEBUGVIEW (TEMPO REAL & VALIDAÇÃO)
+        // ==========================================
         let debugEventsList = [];
         let selectedDebugEventId = null;
+        let selectedMinuteBucket = null;
+        let selectedDeviceId = '';
+        let detectedDevices = new Map();
         let debugEventSource = null;
         let currentDebugSiteId = null;
 
@@ -2559,7 +3017,6 @@
             let siteID = document.getElementById('select-site').value;
             const siteSelect = document.getElementById('select-site');
 
-            // Se nenhum site selecionado, seleciona o primeiro site disponível na lista
             if (!siteID && siteSelect.options.length > 1) {
                 siteID = siteSelect.options[1].value;
                 siteSelect.value = siteID;
@@ -2576,7 +3033,7 @@
             document.getElementById('debug-site-name').textContent = selectedOption ? selectedOption.textContent : siteID;
 
             if (debugEventSource && currentDebugSiteId === siteID) {
-                return; // Já conectado no site atual
+                return;
             }
 
             connectDebugSSE(siteID);
@@ -2623,80 +3080,329 @@
         function handleIncomingDebugEvent(ev) {
             if (!ev || !ev.event_id) return;
 
-            // Evita duplicatas se vier do buffer inicial
             const exists = debugEventsList.some(item => item.event_id === ev.event_id);
             if (!exists) {
                 debugEventsList.unshift(ev);
-                if (debugEventsList.length > 100) {
+                if (debugEventsList.length > 250) {
                     debugEventsList.pop();
                 }
             }
 
-            renderDebugTimeline();
+            updateDeviceRegistry(ev);
+            renderGa4DebugView();
 
-            // Auto-seleciona o primeiro evento se nenhum estiver selecionado
             if (!selectedDebugEventId || selectedDebugEventId === ev.event_id) {
                 selectDebugEvent(ev.event_id);
             }
         }
 
-        function filterDebugEvents() {
-            renderDebugTimeline();
+        function updateDeviceRegistry(ev) {
+            const sid = ev.session_id || 'sessao_desconhecida';
+            const devType = ev.device_type || 'desktop';
+            const ua = ev.user_agent || '';
+            let browser = 'Navegador';
+            if (ua.includes('Chrome')) browser = 'Chrome';
+            else if (ua.includes('Safari')) browser = 'Safari';
+            else if (ua.includes('Firefox')) browser = 'Firefox';
+            else if (ua.includes('Edge')) browser = 'Edge';
+
+            const label = `${devType === 'mobile' ? '📱' : devType === 'tablet' ? '📟' : '💻'} ${browser} (${sid.substring(0, 10)}...)`;
+
+            if (!detectedDevices.has(sid)) {
+                detectedDevices.set(sid, { id: sid, label, lastSeen: Date.now() });
+                refreshDeviceSelectOptions();
+            }
         }
 
-        function renderDebugTimeline() {
-            const container = document.getElementById('debug-timeline-list');
+        function refreshDeviceSelectOptions() {
+            const sel = document.getElementById('debug-device-select');
+            const currVal = sel.value;
+            sel.innerHTML = `<option value="">📱 Todos os Dispositivos (${detectedDevices.size})</option>`;
+            detectedDevices.forEach((dev, sid) => {
+                const opt = document.createElement('option');
+                opt.value = sid;
+                opt.textContent = dev.label;
+                sel.appendChild(opt);
+            });
+            sel.value = currVal;
+        }
+
+        function onDebugDeviceChange() {
+            selectedDeviceId = document.getElementById('debug-device-select').value;
+            renderGa4DebugView();
+        }
+
+        function filterDebugEvents() {
+            renderGa4DebugView();
+        }
+
+        function toggleMinuteFilter(minuteStr) {
+            if (selectedMinuteBucket === minuteStr) {
+                selectedMinuteBucket = null;
+            } else {
+                selectedMinuteBucket = minuteStr;
+            }
+            renderGa4DebugView();
+        }
+
+        function clearMinuteFilter() {
+            selectedMinuteBucket = null;
+            renderGa4DebugView();
+        }
+
+        function renderGa4DebugView() {
+            renderGa4Scrubber();
+            renderGa4Timeline();
+            renderGa4TopEvents();
+            renderGa4UserProperties();
+        }
+
+        function renderGa4Scrubber() {
+            const scrubberList = document.getElementById('ga4-scrubber-list');
+            if (!scrubberList) return;
+
+            const now = new Date();
+            const currentMs = now.getTime();
+            const buckets = [];
+
+            for (let i = 0; i < 30; i++) {
+                const d = new Date(currentMs - (i * 60 * 1000));
+                const timeLabel = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                buckets.push({ label: timeLabel, timeMs: d.getTime() });
+            }
+
+            const minuteCounts = {};
+            debugEventsList.forEach(ev => {
+                if (selectedDeviceId && ev.session_id !== selectedDeviceId) return;
+                const evTime = ev.event_time ? new Date(ev.event_time) : new Date();
+                const key = evTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                minuteCounts[key] = (minuteCounts[key] || 0) + 1;
+            });
+
+            let html = '';
+            buckets.forEach(b => {
+                const count = minuteCounts[b.label] || 0;
+                const isSelected = selectedMinuteBucket === b.label;
+                const marker = count > 0 
+                    ? `<div class="ga4-scrubber-bubble">${count}</div>` 
+                    : `<div class="ga4-scrubber-dot"></div>`;
+
+                html += `
+                    <div class="ga4-scrubber-item ${isSelected ? 'active' : ''}" onclick="toggleMinuteFilter('${escapeHTML(b.label)}')">
+                        <span class="ga4-scrubber-time">${escapeHTML(b.label)}</span>
+                        ${marker}
+                    </div>
+                `;
+            });
+
+            scrubberList.innerHTML = html;
+
+            const badge = document.getElementById('ga4-minute-filter-badge');
+            if (badge) {
+                if (selectedMinuteBucket) {
+                    badge.textContent = `✕ Minuto: ${selectedMinuteBucket}`;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+
+        function renderGa4Timeline() {
+            const container = document.getElementById('ga4-timeline-stream');
             const filterType = document.getElementById('debug-filter-event').value;
             const counter = document.getElementById('debug-event-counter');
 
-            const filtered = filterType ? debugEventsList.filter(e => e.event_name === filterType) : debugEventsList;
+            let filtered = debugEventsList;
+            if (selectedDeviceId) {
+                filtered = filtered.filter(e => e.session_id === selectedDeviceId);
+            }
+            if (selectedMinuteBucket) {
+                filtered = filtered.filter(e => {
+                    const evTime = e.event_time ? new Date(e.event_time) : new Date();
+                    return evTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) === selectedMinuteBucket;
+                });
+            }
+            if (filterType) {
+                filtered = filtered.filter(e => e.event_name === filterType);
+            }
+
             counter.textContent = `${debugEventsList.length} eventos capturados`;
 
             if (!filtered || filtered.length === 0) {
                 container.innerHTML = `
-                    <div id="debug-empty-state" style="text-align: center; color: var(--text-muted); padding: 3rem 1rem;">
+                    <div id="debug-empty-state" style="text-align: center; color: var(--text-muted); padding: 4rem 1rem;">
                         <div style="font-size: 2.2rem; margin-bottom: 0.75rem;">📡</div>
-                        <div style="font-weight: 600; color: #cbd5e1; margin-bottom: 0.35rem;">Nenhum evento ${filterType ? 'do tipo "' + escapeHTML(filterType) + '"' : 'de teste'} capturado</div>
+                        <div style="font-weight: 600; color: #cbd5e1; margin-bottom: 0.35rem;">Nenhum evento encontrado no filtro</div>
                         <div style="font-size: 0.78rem; line-height: 1.5;">
-                            Dispare um evento no site com <code>?hn_debug=true</code> ou use o formulário do <b>Simulador</b> abaixo.
+                            Dispare um evento no site ou clique na régua para limpar filtros.
                         </div>
                     </div>
                 `;
                 return;
             }
 
-            let html = '';
-            filtered.forEach(ev => {
+            let html = '<div class="ga4-timeline-rail"><div class="ga4-timeline-top-node"></div>';
+
+            filtered.forEach((ev, idx) => {
                 const isSelected = ev.event_id === selectedDebugEventId;
                 const time = ev.event_time ? new Date(ev.event_time) : new Date();
-                const timeStr = time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '.' + String(time.getMilliseconds()).padStart(3, '0');
-                
-                let badgeClass = 'badge-evt-custom';
-                if (['page_view', 'lead', 'whatsapp_click', 'purchase'].includes(ev.event_name)) {
-                    badgeClass = 'badge-evt-' + ev.event_name;
+                const timeStr = time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                if (idx > 0) {
+                    const prevTime = new Date(filtered[idx - 1].event_time || Date.now());
+                    const diffSec = Math.max(0, Math.round((prevTime.getTime() - time.getTime()) / 1000));
+                    if (diffSec > 0) {
+                        const gapText = diffSec >= 60 ? Math.round(diffSec / 60) + 'm' : diffSec + 's';
+                        html += `
+                            <div class="ga4-time-gap">
+                                <span class="ga4-time-gap-pill">${gapText}</span>
+                            </div>
+                        `;
+                    }
                 }
 
-                let botBadge = '';
-                if (ev.is_bot) {
-                    botBadge = `<span class="badge-status" style="background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); font-size: 0.65rem; padding: 0.1rem 0.35rem;">🤖 Robô</span>`;
+                let iconChar = '⚡';
+                let iconClass = 'icon-' + ev.event_name;
+                if (ev.event_name === 'page_view') iconChar = '📄';
+                else if (ev.event_name === 'session_start') iconChar = '🚀';
+                else if (ev.event_name === 'first_visit') iconChar = '⭐';
+                else if (ev.event_name === 'scroll') iconChar = '📜';
+                else if (ev.event_name === 'click') iconChar = '👆';
+                else if (ev.event_name === 'whatsapp_click') iconChar = '💬';
+                else if (ev.event_name === 'lead' || ev.event_name === 'purchase') iconChar = '🎯';
+                else if (ev.event_name === 'file_download') iconChar = '📥';
+
+                let extraParamBadge = '';
+                if (ev.custom_data && ev.custom_data.percent_scrolled) {
+                    extraParamBadge = `<span style="font-size: 0.7rem; color: #38bdf8; font-family: monospace;">(90%)</span>`;
+                } else if (ev.custom_data && ev.custom_data.link_domain) {
+                    extraParamBadge = `<span style="font-size: 0.7rem; color: #fbbf24; font-family: monospace;">(${escapeHTML(ev.custom_data.link_domain)})</span>`;
+                } else if (ev.custom_data && ev.custom_data.file_extension) {
+                    extraParamBadge = `<span style="font-size: 0.7rem; color: #fb923c; font-family: monospace;">(.${escapeHTML(ev.custom_data.file_extension)})</span>`;
                 }
+
+                const modeTag = ev.is_debug 
+                    ? `<span class="ga4-mode-tag tag-debug">DEBUG</span>` 
+                    : `<span class="ga4-mode-tag tag-prod">PROD</span>`;
+
+                const botBadge = ev.is_bot 
+                    ? `<span style="font-size: 0.65rem; background: rgba(239,68,68,0.2); color: #fca5a5; padding: 0.1rem 0.3rem; border-radius: 4px;">🤖 Robô</span>` 
+                    : '';
 
                 html += `
-                    <div class="debug-event-card ${isSelected ? 'active' : ''}" onclick="selectDebugEvent('${escapeHTML(ev.event_id)}')">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
-                            <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                <span class="badge-evt-type ${badgeClass}">${escapeHTML(ev.event_name)}</span>
-                                ${botBadge}
-                            </div>
-                            <span style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace;">${timeStr}</span>
+                    <div class="ga4-event-bead ${isSelected ? 'active' : ''}" onclick="selectDebugEvent('${escapeHTML(ev.event_id)}')">
+                        <div class="ga4-bead-time">${timeStr}</div>
+                        <div class="ga4-bead-icon ${iconClass}">${iconChar}</div>
+                        <div class="ga4-bead-content">
+                            <span class="ga4-bead-name">${escapeHTML(ev.event_name)}</span>
+                            ${extraParamBadge}
+                            ${modeTag}
+                            ${botBadge}
                         </div>
-                        <div style="font-size: 0.76rem; color: #cbd5e1; margin-bottom: 0.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            <b>ID:</b> <span style="font-family: monospace; color: #a5b4fc;">${escapeHTML(ev.event_id)}</span>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderGa4TopEvents() {
+            const container = document.getElementById('ga4-top-events-list');
+            const totalEl = document.getElementById('ga4-top-events-total');
+            if (!container) return;
+
+            const counts = {};
+            let total = 0;
+            debugEventsList.forEach(e => {
+                if (selectedDeviceId && e.session_id !== selectedDeviceId) return;
+                counts[e.event_name] = (counts[e.event_name] || 0) + 1;
+                total++;
+            });
+
+            if (totalEl) totalEl.textContent = `${total} no total`;
+
+            const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            if (entries.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 2rem 0; font-size: 0.78rem;">Nenhum evento registrado ainda</div>';
+                return;
+            }
+
+            const maxCount = entries[0][1] || 1;
+            let html = '';
+            entries.forEach(([name, count]) => {
+                const widthPct = Math.max(8, Math.round((count / maxCount) * 100));
+                html += `
+                    <div class="ga4-top-event-item" onclick="setEventFilter('${escapeHTML(name)}')">
+                        <div class="ga4-top-event-name">
+                            ${escapeHTML(name)}
+                            <div class="ga4-top-event-bar" style="width: ${widthPct}%;"></div>
                         </div>
-                        <div style="font-size: 0.74rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
-                            <span>Origem: <b style="color: #94a3b8;">${escapeHTML(ev.attribution?.utm_source || 'direto')}</b></span>
-                            <span style="text-transform: capitalize;">${escapeHTML(ev.device_type || 'desktop')}</span>
-                        </div>
+                        <span class="ga4-top-event-count">${count}</span>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function setEventFilter(name) {
+            const sel = document.getElementById('debug-filter-event');
+            if (sel) {
+                sel.value = sel.value === name ? '' : name;
+                renderGa4DebugView();
+            }
+        }
+
+        function renderGa4UserProperties() {
+            const container = document.getElementById('ga4-user-props-list');
+            const topBtn = document.getElementById('btn-top-inspector');
+            const sideBtn = document.getElementById('btn-open-inspector-details');
+            if (!container) return;
+
+            let ev = null;
+            if (selectedDebugEventId) {
+                ev = debugEventsList.find(e => e.event_id === selectedDebugEventId);
+            }
+            if (!ev && debugEventsList.length > 0) {
+                ev = debugEventsList[0];
+            }
+
+            if (!ev) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 2rem 0; font-size: 0.78rem;">Aguardando dados de visitante</div>';
+                if (topBtn) topBtn.style.display = 'none';
+                if (sideBtn) sideBtn.style.display = 'none';
+                return;
+            }
+
+            if (topBtn) topBtn.style.display = 'inline-block';
+            if (sideBtn) sideBtn.style.display = 'inline-block';
+
+            const attr = ev.attribution || {};
+            const props = [
+                { key: 'visitor_id', val: ev.visitor_id || '-' },
+                { key: 'session_id', val: ev.session_id || '-' },
+                { key: 'device_category', val: ev.device_type || 'desktop' },
+                { key: 'source / medium', val: `${attr.utm_source || 'direto'} / ${attr.utm_medium || '(none)'}` },
+                { key: 'campaign', val: attr.utm_campaign || '-' },
+                { key: 'first_visit', val: ev.user_data?.is_first_visit ? 'true' : 'false' },
+                { key: 'origin_mode', val: ev.is_debug ? 'debug' : 'production' }
+            ];
+
+            if (ev.user_data?.email) {
+                props.push({ key: 'user_email', val: ev.user_data.email });
+            }
+            if (ev.user_data?.phone) {
+                props.push({ key: 'user_phone', val: ev.user_data.phone });
+            }
+
+            let html = '';
+            props.forEach(p => {
+                html += `
+                    <div class="ga4-prop-row">
+                        <span class="ga4-prop-key">${escapeHTML(p.key)}</span>
+                        <span class="ga4-prop-val">${escapeHTML(p.val)}</span>
                     </div>
                 `;
             });
@@ -2709,16 +3415,31 @@
             const ev = debugEventsList.find(e => e.event_id === eventId);
             if (!ev) return;
 
-            // Atualiza visualização ativa na timeline
-            document.querySelectorAll('.debug-event-card').forEach(card => card.classList.remove('active'));
-            const cards = document.querySelectorAll('.debug-event-card');
-            cards.forEach(card => {
-                if (card.textContent.includes(eventId)) {
-                    card.classList.add('active');
-                }
-            });
+            document.querySelectorAll('.ga4-event-bead').forEach(card => card.classList.remove('active'));
+            renderGa4Timeline();
+            renderGa4UserProperties();
+            renderInspector(ev);
+        }
+
+        function openInspectorModal() {
+            let ev = debugEventsList.find(e => e.event_id === selectedDebugEventId);
+            if (!ev && debugEventsList.length > 0) {
+                ev = debugEventsList[0];
+            }
+            if (!ev) return;
 
             renderInspector(ev);
+            const modal = document.getElementById('modal-debug-inspector');
+            if (modal) {
+                modal.style.display = 'flex';
+            }
+        }
+
+        function closeInspectorModal() {
+            const modal = document.getElementById('modal-debug-inspector');
+            if (modal) {
+                modal.style.display = 'none';
+            }
         }
 
         function renderInspector(ev) {
@@ -2988,7 +3709,10 @@
         async function clearDebugTimeline() {
             debugEventsList = [];
             selectedDebugEventId = null;
-            renderDebugTimeline();
+            selectedMinuteBucket = null;
+            detectedDevices.clear();
+            refreshDeviceSelectOptions();
+            renderGa4DebugView();
 
             document.getElementById('inspector-event-name').innerHTML = '🔍 Detalhes do Evento';
             document.getElementById('inspector-event-id').textContent = 'Selecione um evento na timeline para inspecionar';

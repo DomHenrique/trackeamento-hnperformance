@@ -174,6 +174,11 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 
 	isDebug := req.IsDebug || c.Query("debug") == "true" || c.Query("debug") == "1" || c.Query("hn_debug") == "true" || c.Query("hn_debug") == "1" || c.Get("X-Debug") == "true"
 
+	originMode := "production"
+	if isDebug {
+		originMode = "debug"
+	}
+
 	payload := EventPayload{
 		EventID:       eventID,
 		SiteID:        siteID,
@@ -192,6 +197,7 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		IsBot:         isBot,
 		BotReason:     botReason,
 		IsDebug:       isDebug,
+		OriginMode:    originMode,
 		CreatedAt:     time.Now().UTC(),
 	}
 
@@ -202,8 +208,11 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		payload.UserData["is_first_visit"] = true
 	}
 
-	// 9. Roteamento: se for evento de depuração (debug), transmite para o canal do DebugView e buffer volátil,
-	// DESCARTANDO da fila analítica do ClickHouse (zero poluição de dados e relatórios de clientes).
+	// 9. Roteamento:
+	// - Se for evento de depuração (debug), transmite para o canal do DebugView e buffer volátil,
+	//   DESCARTANDO da fila analítica do ClickHouse (zero poluição de dados e relatórios de clientes).
+	// - Se for evento de produção, enfileira para o ClickHouse E TAMBÉM transmite para o canal do DebugView
+	//   com a marcação origin_mode="production", permitindo depuração em tempo real mesmo sem a flag ?hn_debug.
 	data, err := json.Marshal(payload)
 	if err == nil {
 		if isDebug {
@@ -216,13 +225,15 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 				}
 			}(data, siteID)
 		} else {
-			go func(pData []byte) {
+			go func(pData []byte, sID string) {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				defer cancel()
 				if h.redis != nil {
 					_ = h.redis.PushRawEvent(ctx, pData)
+					_ = h.redis.PublishDebugEvent(ctx, sID, pData)
+					_ = h.redis.PushDebugBuffer(ctx, sID, pData)
 				}
-			}(data)
+			}(data, siteID)
 		}
 	}
 
@@ -257,7 +268,14 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 
 		if err == nil && isActive {
 			domains := []string{}
-			rows, errRows := h.pg.Pool.Query(ctx, "SELECT domain FROM site_allowed_domains WHERE site_id = $1 AND is_active = true", siteID)
+			// Inclui tanto o domínio raiz de sites.domain quanto os cadastrados em site_allowed_domains
+			rows, errRows := h.pg.Pool.Query(ctx, `
+				SELECT DISTINCT LOWER(TRIM(d)) FROM (
+					SELECT domain AS d FROM sites WHERE id = $1
+					UNION
+					SELECT domain AS d FROM site_allowed_domains WHERE site_id = $1 AND is_active = true
+				) sub WHERE d IS NOT NULL AND d != ''
+			`, siteID)
 			if errRows == nil {
 				defer rows.Close()
 				for rows.Next() {

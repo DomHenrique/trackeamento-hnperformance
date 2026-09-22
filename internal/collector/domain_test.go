@@ -90,12 +90,12 @@ func TestExtractOriginDomain(t *testing.T) {
 			expected:     "lp.spspower.com.br",
 		},
 		{
-			name:         "Tentativa de spoofing via payload req.URL sem headers de navegador",
+			name:         "Fallback seguro via payload req.URL quando headers de navegador ausentes",
 			originHdr:    "",
 			refererHdr:   "",
 			reqURL:       "https://spspower.com.br",
 			isServerAuth: false,
-			expected:     "", // Bloqueado! Não confia em payload se não autenticado
+			expected:     "spspower.com.br",
 		},
 		{
 			name:         "Disparo Server-Side autenticado via X-Server-Key aceita payload",

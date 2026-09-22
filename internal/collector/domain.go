@@ -17,8 +17,10 @@ type SiteMetadata struct {
 }
 
 // ExtractOriginDomain extrai o domínio limpo da requisição.
-// Para tráfego web de navegador, extrai estritamente dos cabeçalhos Origin e Referer.
-// Se isServerAuth for verdadeiro (requisição com X-Server-Key autenticado), permite extrair do payload (req.URL / req.PageURL / req.Referrer).
+// Prioriza os cabeçalhos padrão de navegador Origin e Referer.
+// Se ambos estiverem ausentes (ex: políticas restritivas no-referrer, sendBeacon ou modo preview do GTM)
+// ou se for chamada server-side autenticada (isServerAuth), realiza fallback seguro para a URL do payload (req.URL / req.PageURL / req.Referrer).
+// O domínio extraído ainda é estritamente validado contra a whitelist de domínios permitidos do site.
 func ExtractOriginDomain(c *fiber.Ctx, req *EventRequest, isServerAuth bool) string {
 	// 1. Tenta header Origin (enviado por fetch/XHR do navegador)
 	origin := strings.TrimSpace(c.Get("Origin"))
@@ -36,8 +38,8 @@ func ExtractOriginDomain(c *fiber.Ctx, req *EventRequest, isServerAuth bool) str
 		}
 	}
 
-	// 3. Apenas se for chamada server-side autenticada via X-Server-Key, permite obter do payload
-	if isServerAuth {
+	// 3. Fallback: se Origin e Referer estiverem ausentes ou se for chamada server-side autenticada
+	if req != nil {
 		pageURL := req.URL
 		if pageURL == "" {
 			pageURL = req.PageURL

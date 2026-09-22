@@ -47,5 +47,6 @@ type EventPayload struct {
 	IsBot         bool                   `json:"is_bot"`
 	BotReason     string                 `json:"bot_reason"`
 	IsDebug       bool                   `json:"is_debug"`
+	OriginMode    string                 `json:"origin_mode,omitempty"` // "debug" ou "production"
 	CreatedAt     time.Time              `json:"created_at"`
 }

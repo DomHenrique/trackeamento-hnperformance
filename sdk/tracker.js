@@ -71,15 +71,29 @@
         }
     }
 
-    // Detecção de Modo Debug (GTM Preview, URL params, sessionStorage, script attr ou global)
+    // Detecção Robusta de Modo Debug (GTM Preview, Tag Assistant, URL params, sessionStorage, script attr ou global)
     var isDebug = false;
     try {
         var fullUrl = window.location.href || '';
         var searchStr = window.location.search || '';
+        var winName = window.name || '';
+        var rawCookies = document.cookie || '';
+
         var isGTMPreview = fullUrl.indexOf('gtm_debug=') !== -1 || 
                            searchStr.indexOf('gtm_debug=') !== -1 || 
-                           (document.referrer && document.referrer.indexOf('tagassistant.google.com') !== -1);
-        var hasUrlDebug = fullUrl.indexOf('hn_debug=true') !== -1 || fullUrl.indexOf('hn_debug=1') !== -1 || fullUrl.indexOf('debug_mode=1') !== -1 || fullUrl.indexOf('debug_mode=true') !== -1;
+                           (document.referrer && document.referrer.indexOf('tagassistant.google.com') !== -1) ||
+                           window.__TAG_ASSISTANT_DEBUG__ === true ||
+                           winName.indexOf('goog_tag_assistant_') !== -1 ||
+                           winName.indexOf('TAG_ASSISTANT') !== -1 ||
+                           winName.indexOf('gtm_debug') !== -1 ||
+                           rawCookies.indexOf('gtm_debug=') !== -1 ||
+                           rawCookies.indexOf('__gtm_preview=') !== -1 ||
+                           rawCookies.indexOf('_tag_assistant=') !== -1;
+
+        var hasUrlDebug = fullUrl.indexOf('hn_debug=true') !== -1 || 
+                          fullUrl.indexOf('hn_debug=1') !== -1 || 
+                          fullUrl.indexOf('debug_mode=1') !== -1 || 
+                          fullUrl.indexOf('debug_mode=true') !== -1;
         var hasSessionDebug = sessionStorage.getItem('_hn_debug') === '1';
         var hasScriptDebug = (currentScript && (currentScript.getAttribute('data-debug') === 'true' || currentScript.getAttribute('data-debug') === '1')) ||
                              !!document.querySelector('script[data-debug="true"]');
@@ -100,7 +114,7 @@
     }
 
     if (isDebug) {
-        debugLog('⚡ Modo Debug ativo! Eventos serão transmitidos ao vivo para o DebugView e isolados do ClickHouse.');
+        debugLog('⚡ Modo Debug ativo! Eventos serão transmitidos ao vivo para o DebugView.');
     }
 
     // 2. Gerador criptográfico de Type-Prefixed IDs
@@ -122,13 +136,31 @@
         return prefix + result;
     }
 
-    // 3. Gestão de Sessão (hn_ses_...)
+    // 3. Gestão de Sessão (hn_ses_...) e Detecção de Primeira Visita (GA4 Lifecycle)
     var SESSION_KEY = '_hn_sid';
-    var sessionId = sessionStorage.getItem(SESSION_KEY);
-    if (!sessionId) {
+    var FIRST_VISIT_KEY = '_hn_first_visit';
+    var isNewSession = false;
+    var isFirstVisit = false;
+    var sessionId = null;
+
+    try {
+        sessionId = sessionStorage.getItem(SESSION_KEY);
+        if (!sessionId) {
+            sessionId = generatePrefixedId('hn_ses_', 24);
+            sessionStorage.setItem(SESSION_KEY, sessionId);
+            isNewSession = true;
+        }
+    } catch (e) {
         sessionId = generatePrefixedId('hn_ses_', 24);
-        sessionStorage.setItem(SESSION_KEY, sessionId);
+        isNewSession = true;
     }
+
+    try {
+        if (!localStorage.getItem(FIRST_VISIT_KEY)) {
+            isFirstVisit = true;
+            localStorage.setItem(FIRST_VISIT_KEY, String(Date.now()));
+        }
+    } catch (e) {}
 
     // 4. Captura e Persistência de Atribuição (UTMs e Click IDs)
     var ATTR_STORAGE_KEY = '_hn_attr';
@@ -285,28 +317,125 @@
         return eventId;
     }
 
-    // 6. Ouvintes Automáticos de Interação
+    // 6. Ouvintes Automáticos de Interação & Enhanced Measurement (Padrão GA4)
 
-    // A) Disparo Automático de PageView
+    // A) Ciclo de Vida da Sessão e PageView
     function onReady() {
-        trackEvent('page_view');
+        if (isFirstVisit) {
+            trackEvent('first_visit', {}, {
+                first_visit_time: localStorage.getItem(FIRST_VISIT_KEY) || String(Date.now())
+            });
+        }
+        if (isNewSession) {
+            trackEvent('session_start', {}, {
+                session_id: sessionId
+            });
+        }
+        trackEvent('page_view', {}, {
+            page_title: document.title || '',
+            page_location: window.location.href
+        });
     }
+
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         onReady();
     } else {
         document.addEventListener('DOMContentLoaded', onReady);
     }
 
-    // B) Clique em Links de WhatsApp
+    // B) Rolagem Profunda de 90% (Scroll Depth - Padrão GA4)
+    var scrollTracked = false;
+    var scrollThrottleTimer = null;
+
+    function checkScrollDepth() {
+        if (scrollTracked) return;
+        try {
+            var docEl = document.documentElement || document.body;
+            var scrollTop = window.pageYOffset || docEl.scrollTop || 0;
+            var winHeight = window.innerHeight || docEl.clientHeight || 0;
+            var docHeight = Math.max(
+                docEl.scrollHeight || 0,
+                docEl.offsetHeight || 0,
+                docEl.clientHeight || 0
+            );
+
+            if (docHeight > winHeight) {
+                var percent = Math.round(((scrollTop + winHeight) / docHeight) * 100);
+                if (percent >= 90) {
+                    scrollTracked = true;
+                    trackEvent('scroll', {}, {
+                        percent_scrolled: 90,
+                        page_title: document.title || '',
+                        page_location: window.location.href
+                    });
+                    if (window.removeEventListener) {
+                        window.removeEventListener('scroll', throttledScrollCheck, { passive: true });
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    function throttledScrollCheck() {
+        if (scrollTracked) return;
+        if (!scrollThrottleTimer) {
+            scrollThrottleTimer = setTimeout(function () {
+                scrollThrottleTimer = null;
+                checkScrollDepth();
+            }, 250);
+        }
+    }
+
+    if (window.addEventListener) {
+        window.addEventListener('scroll', throttledScrollCheck, { passive: true });
+    }
+
+    // C) Cliques em Links: WhatsApp, Outbound Links e Downloads de Arquivos
     document.addEventListener('click', function (e) {
         var target = e.target;
         while (target && target !== document) {
             if (target.tagName === 'A' && target.href) {
-                var href = target.href.toLowerCase();
-                if (href.indexOf('wa.me') !== -1 || href.indexOf('api.whatsapp.com') !== -1 || href.indexOf('whatsapp.com') !== -1) {
+                var rawHref = target.href;
+                var lowerHref = rawHref.toLowerCase();
+                var linkText = (target.innerText || target.title || '').trim().substring(0, 100);
+
+                // 1. WhatsApp
+                if (lowerHref.indexOf('wa.me') !== -1 || lowerHref.indexOf('api.whatsapp.com') !== -1 || lowerHref.indexOf('whatsapp.com') !== -1) {
                     trackEvent('whatsapp_click', {}, {
-                        link_url: target.href,
-                        button_text: (target.innerText || target.title || '').trim().substring(0, 100)
+                        link_url: rawHref,
+                        button_text: linkText
+                    });
+                    break;
+                }
+
+                // 2. Download de Arquivos (.pdf, .xlsx, .docx, .zip, etc.)
+                var fileRegex = /\.(pdf|xlsx?|docx?|pptx?|zip|rar|csv|txt|mp3|mp4|exe|dmg|apk|gz)$/i;
+                var cleanPath = (target.pathname || '').split('?')[0].split('#')[0];
+                if (fileRegex.test(cleanPath)) {
+                    var extMatch = cleanPath.match(fileRegex);
+                    var ext = extMatch ? extMatch[1].toLowerCase() : '';
+                    var fileName = cleanPath.substring(cleanPath.lastIndexOf('/') + 1);
+                    trackEvent('file_download', {}, {
+                        file_name: fileName,
+                        file_extension: ext,
+                        link_url: rawHref,
+                        link_text: linkText
+                    });
+                    break;
+                }
+
+                // 3. Outbound Link (Clique de Saída para Domínio Externo)
+                var targetHost = (target.hostname || '').toLowerCase();
+                var currentHost = (window.location.hostname || '').toLowerCase();
+                if (targetHost && targetHost !== currentHost && 
+                    lowerHref.indexOf('javascript:') !== 0 && 
+                    lowerHref.indexOf('mailto:') !== 0 && 
+                    lowerHref.indexOf('tel:') !== 0) {
+                    trackEvent('click', {}, {
+                        outbound: true,
+                        link_url: rawHref,
+                        link_domain: targetHost,
+                        link_text: linkText
                     });
                     break;
                 }

@@ -266,3 +266,88 @@ func TestHandleDebugSimulateAndClear(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleCollect_AutomaticEvents(t *testing.T) {
+	cfg := &config.Config{Env: "test"}
+	h := &Handler{
+		cfg: cfg,
+	}
+
+	app := fiber.New()
+	app.Post("/api/v1/collect", h.HandleCollect)
+
+	testKey := prefixedid.GenerateSiteKey()
+	h.siteKeys.Store(testKey, &SiteMetadata{
+		ID:             "site_auto_events",
+		AllowedDomains: []string{"spspower.com.br"},
+	})
+
+	events := []struct {
+		name       string
+		eventName  string
+		customData map[string]interface{}
+	}{
+		{
+			name:      "Ingestão session_start",
+			eventName: "session_start",
+			customData: map[string]interface{}{
+				"session_number": 1,
+			},
+		},
+		{
+			name:      "Ingestão first_visit",
+			eventName: "first_visit",
+			customData: map[string]interface{}{
+				"first_open_time": 1726000000,
+			},
+		},
+		{
+			name:      "Ingestão scroll (90% depth)",
+			eventName: "scroll",
+			customData: map[string]interface{}{
+				"percent_scrolled": 90,
+			},
+		},
+		{
+			name:      "Ingestão click outbound",
+			eventName: "click",
+			customData: map[string]interface{}{
+				"link_url":    "https://externalpartner.com/contact",
+				"link_domain": "externalpartner.com",
+				"outbound":    true,
+			},
+		},
+		{
+			name:      "Ingestão file_download",
+			eventName: "file_download",
+			customData: map[string]interface{}{
+				"file_name":      "catalogo_sps_2026.pdf",
+				"file_extension": "pdf",
+			},
+		},
+	}
+
+	for _, tc := range events {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]interface{}{
+				"site_key":    testKey,
+				"event_name":  tc.eventName,
+				"url":         "https://spspower.com.br/produtos",
+				"custom_data": tc.customData,
+				"is_debug":    true,
+			})
+			req := httptest.NewRequest("POST", "/api/v1/collect", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Origin", "https://spspower.com.br")
+
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("falha ao enviar evento %s: %v", tc.eventName, err)
+			}
+			if resp.StatusCode != fiber.StatusNoContent {
+				t.Errorf("evento %s: esperado status %d, obtido %d", tc.eventName, fiber.StatusNoContent, resp.StatusCode)
+			}
+		})
+	}
+}
+
