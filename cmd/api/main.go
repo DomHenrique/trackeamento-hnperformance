@@ -102,10 +102,16 @@ func main() {
 	// Middlewares globais defensivos
 	app.Use(recover.New())
 	app.Use(helmet.New(helmet.Config{
-		XSSProtection:      "1; mode=block",
-		ContentTypeNosniff: "nosniff",
-		XFrameOptions:      "DENY",
-		ReferrerPolicy:     "strict-origin-when-cross-origin",
+		Next: func(c *fiber.Ctx) bool {
+			// Não aplicar restrições de mesma origem (CORP/COEP) nos recursos públicos do tracker e ingestão
+			path := c.Path()
+			return strings.HasPrefix(path, "/sdk") || strings.HasPrefix(path, "/api/v1/collect") || path == "/t"
+		},
+		XSSProtection:             "1; mode=block",
+		ContentTypeNosniff:        "nosniff",
+		XFrameOptions:             "DENY",
+		ReferrerPolicy:            "strict-origin-when-cross-origin",
+		CrossOriginResourcePolicy: "cross-origin",
 	}))
 	if cfg.Env == "development" {
 		app.Use(logger.New())
@@ -117,9 +123,15 @@ func main() {
 		AllowMethods: "GET,POST,OPTIONS",
 		AllowHeaders: "Origin,Content-Type,Accept,X-Site-Key,X-Server-Key",
 	})
-	app.Use("/api/v1/collect", ingestionCors)
-	app.Use("/t", ingestionCors)
-	app.Use("/sdk", ingestionCors)
+	setPublicHeaders := func(c *fiber.Ctx) error {
+		c.Set("Access-Control-Allow-Origin", "*")
+		c.Set("Cross-Origin-Resource-Policy", "cross-origin")
+		return c.Next()
+	}
+	app.Use("/api/v1/collect", ingestionCors, setPublicHeaders)
+	app.Use("/t", ingestionCors, setPublicHeaders)
+	app.Use("/sdk", ingestionCors, setPublicHeaders)
+
 
 	// CORS Segregado: Rotas administrativas restritas a hostnames estritamente autorizados
 	adminCors := cors.New(cors.Config{
@@ -246,10 +258,12 @@ func main() {
 	app.Post("/api/v1/sites/:site_id/keys", authMiddleware, integHandler.HandleCreateSiteKey)
 	app.Post("/api/v1/sites/:site_id/keys/:key_id/revoke", authMiddleware, integHandler.HandleRevokeSiteKey)
 
-	// Endpoint para servir o SDK JS do Tracker
+	// Endpoint para servir o SDK JS do Tracker (acesso público para sites clientes)
 	app.Get("/sdk/tracker.js", func(c *fiber.Ctx) error {
 		c.Set("Content-Type", "application/javascript; charset=utf-8")
-		c.Set("Cache-Control", "public, max-age=3600")
+		c.Set("Cache-Control", "public, max-age=300, must-revalidate")
+		c.Set("Access-Control-Allow-Origin", "*")
+		c.Set("Cross-Origin-Resource-Policy", "cross-origin")
 		return c.SendFile("./sdk/tracker.js")
 	})
 

@@ -4422,7 +4422,7 @@
                     window.location.href = '/';
                     return;
                 }
-                loadSites();
+                await loadSites();
                 loadActiveData();
                 setInterval(loadActiveData, 30000);
             } catch (e) {
