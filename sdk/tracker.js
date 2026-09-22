@@ -283,10 +283,10 @@
 
         var jsonStr = JSON.stringify(payload);
 
-        // Prioridade: Beacon API (não bloqueia saída de página)
+        // Prioridade: Beacon API (não bloqueia saída de página e evita preflight complexo com text/plain)
         if (navigator.sendBeacon) {
             try {
-                var blob = new Blob([jsonStr], { type: 'application/json' });
+                var blob = new Blob([jsonStr], { type: 'text/plain;charset=UTF-8' });
                 if (navigator.sendBeacon(apiEndpoint, blob)) {
                     return eventId;
                 }
@@ -300,6 +300,8 @@
                     method: 'POST',
                     body: jsonStr,
                     keepalive: true,
+                    mode: 'cors',
+                    credentials: 'include',
                     headers: { 'Content-Type': 'application/json' }
                 }).catch(function () {});
                 return eventId;

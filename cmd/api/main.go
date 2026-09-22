@@ -117,20 +117,30 @@ func main() {
 		app.Use(logger.New())
 	}
 
-	// CORS Segregado: Ingestão de eventos e SDK são públicos
+	// CORS Segregado: Ingestão de eventos e SDK são públicos (com suporte a credenciais e cookies de visitante)
 	ingestionCors := cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowMethods: "GET,POST,OPTIONS",
-		AllowHeaders: "Origin,Content-Type,Accept,X-Site-Key,X-Server-Key",
+		AllowOriginsFunc: func(origin string) bool {
+			return true // Reflete a origem da requisição permitindo credenciais/cookies de forma compatível com a especificação CORS
+		},
+		AllowCredentials: true,
+		AllowMethods:     "GET,POST,OPTIONS",
+		AllowHeaders:     "Origin,Content-Type,Accept,X-Site-Key,X-Server-Key,X-Requested-With",
 	})
 	setPublicHeaders := func(c *fiber.Ctx) error {
-		c.Set("Access-Control-Allow-Origin", "*")
+		origin := c.Get("Origin")
+		if origin != "" {
+			c.Set("Access-Control-Allow-Origin", origin)
+			c.Set("Access-Control-Allow-Credentials", "true")
+		} else {
+			c.Set("Access-Control-Allow-Origin", "*")
+		}
 		c.Set("Cross-Origin-Resource-Policy", "cross-origin")
 		return c.Next()
 	}
 	app.Use("/api/v1/collect", ingestionCors, setPublicHeaders)
 	app.Use("/t", ingestionCors, setPublicHeaders)
 	app.Use("/sdk", ingestionCors, setPublicHeaders)
+
 
 
 	// CORS Segregado: Rotas administrativas restritas a hostnames estritamente autorizados
