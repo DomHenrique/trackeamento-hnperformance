@@ -54,8 +54,19 @@ func TestAnalyticsHandlers_ClickHouseNil(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Handler checks clickhouse nil first (503)
 	if respJourneyMissing.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("expected status 503, got %d", respJourneyMissing.StatusCode)
 	}
+
+	// Test HandleAnalyticsPages when ClickHouse is unavailable
+	app.Get("/api/v1/analytics/pages", handler.HandleAnalyticsPages)
+	reqPages := httptest.NewRequest(http.MethodGet, "/api/v1/analytics/pages?site_id=s_123&range=7d", nil)
+	respPages, err := app.Test(reqPages)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if respPages.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("expected status 503, got %d", respPages.StatusCode)
+	}
 }
+

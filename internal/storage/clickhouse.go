@@ -80,11 +80,35 @@ type OverviewStats struct {
 }
 
 type PageItem struct {
-	PageURL     string    `json:"page_url"`
-	Pageviews   uint64    `json:"pageviews"`
-	Visitors    uint64    `json:"visitors"`
-	Conversions uint64    `json:"conversions"`
-	LastSeenAt  time.Time `json:"last_seen_at"`
+	PageTitle      string    `json:"page_title"`
+	PageURL        string    `json:"page_url"`
+	Pageviews      uint64    `json:"pageviews"`
+	Visitors       uint64    `json:"visitors"`
+	Conversions    uint64    `json:"conversions"`
+	ConversionRate float64   `json:"conversion_rate"`
+	LastSeenAt     time.Time `json:"last_seen_at"`
+}
+
+type MonitoredPagesTimePoint struct {
+	Date        string `json:"date"`
+	ActivePages uint64 `json:"active_pages"`
+	Pageviews   uint64 `json:"pageviews"`
+	Visitors    uint64 `json:"visitors"`
+	Conversions uint64 `json:"conversions"`
+}
+
+type MonitoredPagesSummary struct {
+	TotalActivePages  uint64  `json:"total_active_pages"`
+	TotalPageviews    uint64  `json:"total_pageviews"`
+	TotalVisitors     uint64  `json:"total_visitors"`
+	TotalConversions  uint64  `json:"total_conversions"`
+	AvgConversionRate float64 `json:"avg_conversion_rate"`
+}
+
+type MonitoredPagesReport struct {
+	Summary    MonitoredPagesSummary     `json:"summary"`
+	TimeSeries []MonitoredPagesTimePoint `json:"time_series"`
+	Pages      []PageItem                `json:"pages"`
 }
 
 type LeadRecord struct {
@@ -298,41 +322,116 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, rangeSt
 	return stats, nil
 }
 
-func (c *ClickHouseDB) GetMonitoredPages(ctx context.Context, siteID, rangeStr string) ([]PageItem, error) {
+func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, rangeStr string) (*MonitoredPagesReport, error) {
 	if c.Conn == nil {
 		return nil, fmt.Errorf("clickhouse indisponivel")
 	}
 
 	since := ParseDateRange(rangeStr)
-	query := `
+	report := &MonitoredPagesReport{
+		Summary:    MonitoredPagesSummary{},
+		TimeSeries: make([]MonitoredPagesTimePoint, 0),
+		Pages:      make([]PageItem, 0),
+	}
+
+	// 1. Série Temporal Diária de Páginas Ativas & Volume
+	queryTS := `
 		SELECT 
-			if(page_url != '', page_url, landing_page) AS url,
+			toStartOfInterval(event_time, INTERVAL 1 DAY) AS dt,
+			uniqExact(splitByChar('#', cutURLParameters(if(page_url != '', page_url, landing_page)))[1]) AS active_pages,
+			countIf(event_name = 'page_view') AS pvs,
+			uniqExact(visitor_id) AS visitors,
+			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase')) AS convs
+		FROM tracking_events.events
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+		GROUP BY dt
+		ORDER BY dt ASC
+	`
+	rowsTS, err := c.Conn.Query(ctx, queryTS, siteID, siteID, since)
+	if err == nil {
+		defer rowsTS.Close()
+		for rowsTS.Next() {
+			var dt time.Time
+			var activePages, pvs, visitors, convs uint64
+			if err := rowsTS.Scan(&dt, &activePages, &pvs, &visitors, &convs); err == nil {
+				report.TimeSeries = append(report.TimeSeries, MonitoredPagesTimePoint{
+					Date:        dt.Format("02/01"),
+					ActivePages: activePages,
+					Pageviews:   pvs,
+					Visitors:    visitors,
+					Conversions: convs,
+				})
+			}
+		}
+	}
+
+	// 2. Tabela de Páginas Consolidadas com Canonicalização e Extração de Título
+	queryPages := `
+		SELECT 
+			splitByChar('#', cutURLParameters(if(page_url != '', page_url, landing_page)))[1] AS clean_url,
+			argMax(nullIf(JSONExtractString(custom_data_json, 'page_title'), ''), event_time) AS title,
 			countIf(event_name = 'page_view') AS pvs,
 			uniqExact(visitor_id) AS visitors,
 			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase')) AS convs,
 			max(event_time) AS last_seen
 		FROM tracking_events.events
 		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
-		GROUP BY url
+		GROUP BY clean_url
+		HAVING clean_url != ''
 		ORDER BY pvs DESC
-		LIMIT 100
+		LIMIT 200
 	`
-	rows, err := c.Conn.Query(ctx, query, siteID, siteID, since)
+	rows, err := c.Conn.Query(ctx, queryPages, siteID, siteID, since)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao consultar paginas: %w", err)
 	}
 	defer rows.Close()
 
-	pages := make([]PageItem, 0)
+	var totalPVs, totalConvs uint64
 	for rows.Next() {
 		var p PageItem
-		if err := rows.Scan(&p.PageURL, &p.Pageviews, &p.Visitors, &p.Conversions, &p.LastSeenAt); err == nil {
+		var rawTitle *string
+		if err := rows.Scan(&p.PageURL, &rawTitle, &p.Pageviews, &p.Visitors, &p.Conversions, &p.LastSeenAt); err == nil {
+			if rawTitle != nil {
+				p.PageTitle = strings.TrimSpace(*rawTitle)
+			}
 			if p.PageURL != "" {
-				pages = append(pages, p)
+				if p.Visitors > 0 {
+					p.ConversionRate = math.Round((float64(p.Conversions)/float64(p.Visitors)*100)*100) / 100
+				}
+				totalPVs += p.Pageviews
+				totalConvs += p.Conversions
+				report.Pages = append(report.Pages, p)
 			}
 		}
 	}
-	return pages, nil
+
+	report.Summary.TotalActivePages = uint64(len(report.Pages))
+	report.Summary.TotalPageviews = totalPVs
+	report.Summary.TotalConversions = totalConvs
+
+	// Consulta de visitantes únicos totais no período para o resumo
+	queryVisitors := `
+		SELECT uniqExact(visitor_id)
+		FROM tracking_events.events
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+	`
+	rowVis := c.Conn.QueryRow(ctx, queryVisitors, siteID, siteID, since)
+	_ = rowVis.Scan(&report.Summary.TotalVisitors)
+
+	if report.Summary.TotalVisitors > 0 {
+		report.Summary.AvgConversionRate = math.Round((float64(report.Summary.TotalConversions)/float64(report.Summary.TotalVisitors)*100)*100) / 100
+	}
+
+	return report, nil
+}
+
+func (c *ClickHouseDB) GetMonitoredPages(ctx context.Context, siteID, rangeStr string) ([]PageItem, error) {
+	rep, err := c.GetMonitoredPagesReport(ctx, siteID, rangeStr)
+	if err != nil {
+		return nil, err
+	}
+	return rep.Pages, nil
 }
 
 func (c *ClickHouseDB) GetLeadsReport(ctx context.Context, siteID, rangeStr string, limit int) ([]LeadRecord, error) {

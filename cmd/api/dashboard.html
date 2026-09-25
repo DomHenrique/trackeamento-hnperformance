@@ -428,6 +428,107 @@
             }
         }
 
+        /* Search Console Performance Styles */
+        .sc-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .sc-metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .sc-metric-card:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+        }
+
+        .sc-metric-card.active {
+            background: rgba(30, 41, 59, 0.85);
+        }
+
+        .sc-metric-card.active.card-active-pages {
+            border-color: #8b5cf6;
+            box-shadow: 0 4px 20px -3px rgba(139, 92, 246, 0.25);
+        }
+
+        .sc-metric-card.active.card-pageviews {
+            border-color: #38bdf8;
+            box-shadow: 0 4px 20px -3px rgba(56, 189, 248, 0.25);
+        }
+
+        .sc-metric-card.active.card-visitors {
+            border-color: #10b981;
+            box-shadow: 0 4px 20px -3px rgba(16, 185, 129, 0.25);
+        }
+
+        .sc-metric-card.active.card-conversions {
+            border-color: #f59e0b;
+            box-shadow: 0 4px 20px -3px rgba(245, 158, 11, 0.25);
+        }
+
+        .sc-metric-card:not(.active) {
+            opacity: 0.45;
+            filter: grayscale(0.7);
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        .sc-metric-top {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .sc-metric-checkbox {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
+            color: #fff;
+            transition: all 0.2s;
+        }
+
+        .sc-metric-card:not(.active) .sc-metric-checkbox {
+            background-color: #475569 !important;
+            color: transparent;
+        }
+
+        .sc-metric-label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: -0.01em;
+        }
+
+        .sc-metric-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+            color: #fff;
+        }
+
+        .sc-metric-sub {
+            font-size: 0.74rem;
+            color: #64748b;
+            margin-top: 0.25rem;
+        }
+
         /* Estilos de Funis & Atribuição */
         .subtab-nav {
             display: flex;
@@ -1722,29 +1823,101 @@
 
             <!-- TAB 2: PÁGINAS MONITORADAS (ESTILO SEARCH CONSOLE) -->
             <div id="tab-pages" class="tab-pane">
-                <div class="table-card">
-                    <div class="table-card-header">
+                <!-- Search Console Metric Toggle Cards -->
+                <div class="sc-metrics-grid">
+                    <div class="sc-metric-card active card-active-pages" id="sc-toggle-active_pages" onclick="togglePagesMetric('active_pages')">
+                        <div class="sc-metric-top">
+                            <div class="sc-metric-checkbox" style="background-color: #8b5cf6;">✓</div>
+                            <span class="sc-metric-label">Páginas Ativas</span>
+                        </div>
+                        <div class="sc-metric-value" id="sc-val-active-pages" style="color: #a78bfa;">0</div>
+                        <div class="sc-metric-sub">Páginas com tráfego</div>
+                    </div>
+
+                    <div class="sc-metric-card active card-pageviews" id="sc-toggle-pageviews" onclick="togglePagesMetric('pageviews')">
+                        <div class="sc-metric-top">
+                            <div class="sc-metric-checkbox" style="background-color: #38bdf8;">✓</div>
+                            <span class="sc-metric-label">Total de PageViews</span>
+                        </div>
+                        <div class="sc-metric-value" id="sc-val-pageviews" style="color: #38bdf8;">0</div>
+                        <div class="sc-metric-sub">Visualizações totais</div>
+                    </div>
+
+                    <div class="sc-metric-card active card-visitors" id="sc-toggle-visitors" onclick="togglePagesMetric('visitors')">
+                        <div class="sc-metric-top">
+                            <div class="sc-metric-checkbox" style="background-color: #10b981;">✓</div>
+                            <span class="sc-metric-label">Visitantes Únicos</span>
+                        </div>
+                        <div class="sc-metric-value" id="sc-val-visitors" style="color: #34d399;">0</div>
+                        <div class="sc-metric-sub">Usuários distintos</div>
+                    </div>
+
+                    <div class="sc-metric-card active card-conversions" id="sc-toggle-conversions" onclick="togglePagesMetric('conversions')">
+                        <div class="sc-metric-top">
+                            <div class="sc-metric-checkbox" style="background-color: #f59e0b;">✓</div>
+                            <span class="sc-metric-label">Total de Conversões</span>
+                        </div>
+                        <div class="sc-metric-value" id="sc-val-conversions" style="color: #fbbf24;">0</div>
+                        <div class="sc-metric-sub">Leads & WhatsApp</div>
+                    </div>
+                </div>
+
+                <!-- Gráfico Temporal Estilo Search Console -->
+                <div class="table-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
                         <div>
-                            <h3>Páginas Monitoradas pelo Tracker</h3>
-                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
-                                URLs detectadas automaticamente via script client-side com contagem de tráfego e conversões.
+                            <h4 style="font-size: 1rem; font-weight: 600; color: #fff; margin: 0;">Desempenho Temporal Diário</h4>
+                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem;">
+                                Evolução diária de páginas ativas e volume de tráfego (clique nos cards acima para ocultar/exibir as séries).
                             </p>
                         </div>
+                        <div style="font-size: 0.75rem; color: #94a3b8; background: rgba(30, 41, 59, 0.6); padding: 0.4rem 0.85rem; border-radius: 6px; border: 1px solid var(--border);">
+                            ✨ URLs canônicas consolidadas (sem poluição de query strings)
+                        </div>
                     </div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Caminho da Página (URL)</th>
-                                <th style="text-align: right;">PageViews</th>
-                                <th style="text-align: right;">Visitantes Únicos</th>
-                                <th style="text-align: right;">Conversões</th>
-                                <th style="text-align: right;">Último Acesso</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pages-table-body">
-                            <tr><td colspan="5" style="color: #64748b;">Carregando páginas...</td></tr>
-                        </tbody>
-                    </table>
+                    <div style="height: 290px; position: relative;">
+                        <canvas id="pagesTrafficChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Tabela de Páginas & Títulos Estilo Search Console -->
+                <div class="table-card">
+                    <div class="table-card-header" style="flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h3>Páginas & Títulos Monitorados</h3>
+                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                URLs limpas completas e títulos capturados via script client-side sem fragmentação por parâmetros.
+                            </p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div style="position: relative;">
+                                <input type="text" id="pages-search-input" placeholder="🔍 Filtrar por Título ou URL..." 
+                                       oninput="filterPagesTable()" 
+                                       style="background: #1e293b; border: 1px solid var(--border); color: #fff; padding: 0.45rem 0.9rem; border-radius: 6px; font-size: 0.82rem; min-width: 260px; outline: none;">
+                            </div>
+                            <span id="pages-count-badge" style="font-size: 0.78rem; color: #94a3b8; background: #1e293b; padding: 0.45rem 0.8rem; border-radius: 6px; border: 1px solid var(--border);">
+                                0 páginas
+                            </span>
+                        </div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="min-width: 220px;">Título da Página</th>
+                                    <th style="min-width: 320px;">Caminho da Página (URL Limpa)</th>
+                                    <th style="text-align: right; min-width: 100px;">PageViews</th>
+                                    <th style="text-align: right; min-width: 120px;">Visitantes Únicos</th>
+                                    <th style="text-align: right; min-width: 100px;">Conversões</th>
+                                    <th style="text-align: right; min-width: 110px;">Tx. Conversão</th>
+                                    <th style="text-align: right; min-width: 130px;">Último Acesso</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pages-table-body">
+                                <tr><td colspan="7" style="color: #64748b; text-align: center; padding: 2rem;">Carregando páginas...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -2621,55 +2794,289 @@
             });
         }
 
+        let pagesDataCache = [];
+        let pagesTimeSeriesCache = [];
+        let pagesActiveMetrics = {
+            active_pages: true,
+            pageviews: true,
+            visitors: true,
+            conversions: true
+        };
+        let pagesChartInstance = null;
+
+        function togglePagesMetric(metric) {
+            pagesActiveMetrics[metric] = !pagesActiveMetrics[metric];
+            
+            // Garante que pelo menos uma métrica permaneça ativa
+            const anyActive = Object.values(pagesActiveMetrics).some(v => v);
+            if (!anyActive) {
+                pagesActiveMetrics[metric] = true;
+            }
+            
+            const cardMap = {
+                'active_pages': 'sc-toggle-active_pages',
+                'pageviews': 'sc-toggle-pageviews',
+                'visitors': 'sc-toggle-visitors',
+                'conversions': 'sc-toggle-conversions'
+            };
+            
+            for (const [m, id] of Object.entries(cardMap)) {
+                const el = document.getElementById(id);
+                if (el) {
+                    if (pagesActiveMetrics[m]) {
+                        el.classList.add('active');
+                    } else {
+                        el.classList.remove('active');
+                    }
+                }
+            }
+            
+            renderPagesTrafficChart(pagesTimeSeriesCache);
+        }
+
+        function renderPagesTrafficChart(timeSeries) {
+            const canvas = document.getElementById('pagesTrafficChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (pagesChartInstance) {
+                pagesChartInstance.destroy();
+            }
+
+            pagesTimeSeriesCache = timeSeries || [];
+            const labels = pagesTimeSeriesCache.map(t => t.date);
+            const activePages = pagesTimeSeriesCache.map(t => t.active_pages || 0);
+            const pvs = pagesTimeSeriesCache.map(t => t.pageviews || 0);
+            const visitors = pagesTimeSeriesCache.map(t => t.visitors || 0);
+            const convs = pagesTimeSeriesCache.map(t => t.conversions || 0);
+
+            const datasets = [];
+
+            if (pagesActiveMetrics.active_pages) {
+                datasets.push({
+                    label: 'Páginas Ativas',
+                    data: activePages.length ? activePages : [0],
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2.5,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    yAxisID: 'y'
+                });
+            }
+
+            if (pagesActiveMetrics.pageviews) {
+                datasets.push({
+                    label: 'PageViews',
+                    data: pvs.length ? pvs : [0],
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    yAxisID: 'y'
+                });
+            }
+
+            if (pagesActiveMetrics.visitors) {
+                datasets.push({
+                    label: 'Visitantes Únicos',
+                    data: visitors.length ? visitors : [0],
+                    borderColor: '#10b981',
+                    borderDash: [4, 4],
+                    fill: false,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    yAxisID: 'y'
+                });
+            }
+
+            if (pagesActiveMetrics.conversions) {
+                datasets.push({
+                    label: 'Conversões',
+                    data: convs.length ? convs : [0],
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    fill: false,
+                    tension: 0.35,
+                    borderWidth: 2.5,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    yAxisID: 'y'
+                });
+            }
+
+            pagesChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels.length ? labels : ['Sem dados'],
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#fff',
+                            bodyColor: '#cbd5e1',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 10,
+                            boxPadding: 4,
+                            usePointStyle: true
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.04)' },
+                            ticks: { color: '#64748b', font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.04)' },
+                            ticks: { color: '#64748b', font: { size: 11 } },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderPagesTable(pages) {
+            const tbody = document.getElementById('pages-table-body');
+            const countBadge = document.getElementById('pages-count-badge');
+            if (!tbody) return;
+
+            if (!pages || pages.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="color: #64748b; text-align: center; padding: 2rem;">Nenhuma página monitorada encontrada.</td></tr>';
+                if (countBadge) countBadge.textContent = '0 páginas';
+                return;
+            }
+
+            if (countBadge) {
+                countBadge.textContent = `${pages.length} ${pages.length === 1 ? 'página' : 'páginas'}`;
+            }
+
+            let html = '';
+            pages.forEach(p => {
+                const lastDate = p.last_seen_at ? new Date(p.last_seen_at).toLocaleString('pt-BR') : '-';
+                const titleText = p.page_title && p.page_title.trim() !== '' 
+                    ? escapeHTML(p.page_title) 
+                    : '<span style="color: #64748b; font-style: italic;">(Sem título informado)</span>';
+                
+                const convRate = p.conversion_rate !== undefined ? p.conversion_rate : (p.visitors > 0 ? (p.conversions / p.visitors * 100) : 0);
+                const convColor = p.conversions > 0 ? '#34d399' : '#64748b';
+
+                html += `
+                    <tr>
+                        <td style="font-weight: 500; color: #f1f5f9; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHTML(p.page_title || '')}">
+                            📄 ${titleText}
+                        </td>
+                        <td style="max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <a href="${escapeHTML(p.page_url)}" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; text-decoration: none; font-size: 0.82rem; font-family: monospace;" title="Abrir ${escapeHTML(p.page_url)}">
+                                ${escapeHTML(p.page_url)} ↗
+                            </a>
+                        </td>
+                        <td style="text-align: right; font-weight: 600; color: #fff;">${Number(p.pageviews).toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; color: #cbd5e1;">${Number(p.visitors).toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; color: ${convColor}; font-weight: 600;">${Number(p.conversions).toLocaleString('pt-BR')}</td>
+                        <td style="text-align: right; font-weight: 600; color: ${convColor};">${Number(convRate).toFixed(1)}%</td>
+                        <td style="text-align: right; color: #64748b; font-size: 0.78rem;">${lastDate}</td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        function filterPagesTable() {
+            const query = (document.getElementById('pages-search-input')?.value || '').toLowerCase().trim();
+            if (!query) {
+                renderPagesTable(pagesDataCache);
+                return;
+            }
+
+            const filtered = pagesDataCache.filter(p => {
+                const titleMatch = (p.page_title || '').toLowerCase().includes(query);
+                const urlMatch = (p.page_url || '').toLowerCase().includes(query);
+                return titleMatch || urlMatch;
+            });
+
+            renderPagesTable(filtered);
+        }
+
         async function loadPages(siteID, range) {
             const tbody = document.getElementById('pages-table-body');
             const overviewTop = document.getElementById('overview-top-pages');
             try {
                 const res = await fetch(`/api/v1/analytics/pages?site_id=${siteID}&range=${range}`);
                 if (!res.ok) throw new Error('Erro ao carregar páginas');
-                const pages = await res.json();
+                const data = await res.json();
 
-                if (!pages || pages.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="color: #64748b;">Nenhuma página monitorada com tráfego neste período.</td></tr>';
-                    overviewTop.innerHTML = '<tr><td colspan="2" style="color: #64748b;">Nenhuma página registrada.</td></tr>';
-                    return;
+                const pages = Array.isArray(data) ? data : (data.pages || []);
+                const timeSeries = Array.isArray(data) ? [] : (data.time_series || []);
+                const summary = Array.isArray(data) ? {} : (data.summary || {});
+
+                pagesDataCache = pages;
+                pagesTimeSeriesCache = timeSeries;
+
+                const totalActive = summary.total_active_pages !== undefined ? summary.total_active_pages : pages.length;
+                const totalPVs = summary.total_pageviews !== undefined ? summary.total_pageviews : pages.reduce((a, b) => a + (b.pageviews || 0), 0);
+                const totalVisitors = summary.total_visitors !== undefined ? summary.total_visitors : pages.reduce((a, b) => a + (b.visitors || 0), 0);
+                const totalConvs = summary.total_conversions !== undefined ? summary.total_conversions : pages.reduce((a, b) => a + (b.conversions || 0), 0);
+
+                const elActive = document.getElementById('sc-val-active-pages');
+                if (elActive) elActive.textContent = Number(totalActive).toLocaleString('pt-BR');
+
+                const elPVs = document.getElementById('sc-val-pageviews');
+                if (elPVs) elPVs.textContent = Number(totalPVs).toLocaleString('pt-BR');
+
+                const elVisitors = document.getElementById('sc-val-visitors');
+                if (elVisitors) elVisitors.textContent = Number(totalVisitors).toLocaleString('pt-BR');
+
+                const elConvs = document.getElementById('sc-val-conversions');
+                if (elConvs) elConvs.textContent = Number(totalConvs).toLocaleString('pt-BR');
+
+                renderPagesTrafficChart(timeSeries);
+                filterPagesTable();
+
+                if (overviewTop) {
+                    if (pages.length === 0) {
+                        overviewTop.innerHTML = '<tr><td colspan="2" style="color: #64748b;">Nenhuma página registrada.</td></tr>';
+                    } else {
+                        let htmlTop = '';
+                        pages.slice(0, 5).forEach(p => {
+                            const displayLabel = p.page_title && p.page_title.trim() !== '' ? p.page_title : p.page_url;
+                            htmlTop += `
+                                <tr>
+                                    <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHTML(p.page_url)}">
+                                        <span style="color: #38bdf8; font-weight: 500;">${escapeHTML(displayLabel)}</span>
+                                    </td>
+                                    <td style="text-align: right; font-weight: 600;">${Number(p.pageviews).toLocaleString('pt-BR')}</td>
+                                </tr>
+                            `;
+                        });
+                        overviewTop.innerHTML = htmlTop;
+                    }
                 }
 
-                let html = '';
-                let htmlTop = '';
-                pages.forEach((p, idx) => {
-                    const lastDate = new Date(p.last_seen_at).toLocaleString('pt-BR');
-                    html += `
-                        <tr>
-                            <td>
-                                <a href="${escapeHTML(p.page_url)}" target="_blank" style="color: #38bdf8; text-decoration: none; font-weight: 500;">
-                                    ${escapeHTML(p.page_url)}
-                                </a>
-                            </td>
-                            <td style="text-align: right; font-weight: 600;">${Number(p.pageviews).toLocaleString('pt-BR')}</td>
-                            <td style="text-align: right;">${Number(p.visitors).toLocaleString('pt-BR')}</td>
-                            <td style="text-align: right; color: #34d399; font-weight: 600;">${Number(p.conversions).toLocaleString('pt-BR')}</td>
-                            <td style="text-align: right; color: #64748b; font-size: 0.78rem;">${lastDate}</td>
-                        </tr>
-                    `;
-
-                    if (idx < 5) {
-                        htmlTop += `
-                            <tr>
-                                <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                    <span style="color: #38bdf8;">${escapeHTML(p.page_url)}</span>
-                                </td>
-                                <td style="text-align: right; font-weight: 600;">${Number(p.pageviews).toLocaleString('pt-BR')}</td>
-                            </tr>
-                        `;
-                    }
-                });
-
-                tbody.innerHTML = html;
-                overviewTop.innerHTML = htmlTop;
-
             } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="5" style="color: #f87171;">Falha ao carregar páginas monitoradas.</td></tr>';
+                console.error("Erro ao carregar páginas monitoradas:", e);
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="color: #f87171; text-align: center; padding: 2rem;">Falha ao carregar páginas monitoradas.</td></tr>';
+                }
             }
         }
 

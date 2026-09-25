@@ -32,7 +32,7 @@ func (h *Handler) HandleAnalyticsOverview(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(stats)
 }
 
-// HandleAnalyticsPages lista as páginas monitoradas e suas taxas de visualização e conversão
+// HandleAnalyticsPages lista o relatório de páginas monitoradas com séries temporais e canonicalização
 func (h *Handler) HandleAnalyticsPages(c *fiber.Ctx) error {
 	if h.ch == nil || h.ch.Conn == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
@@ -43,14 +43,14 @@ func (h *Handler) HandleAnalyticsPages(c *fiber.Ctx) error {
 	siteID := strings.TrimSpace(c.Query("site_id"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 
-	pages, err := h.ch.GetMonitoredPages(c.Context(), siteID, rangeStr)
+	report, err := h.ch.GetMonitoredPagesReport(c.Context(), siteID, rangeStr)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Erro ao consultar páginas monitoradas: %v", err),
 		})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(pages)
+	return c.Status(fiber.StatusOK).JSON(report)
 }
 
 // HandleAnalyticsLeads retorna a lista cronológica de conversões com auditoria de parâmetros
