@@ -338,7 +338,7 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, rang
 	queryTS := `
 		SELECT 
 			toStartOfInterval(event_time, INTERVAL 1 DAY) AS dt,
-			uniqExact(splitByChar('#', cutURLParameters(if(page_url != '', page_url, landing_page)))[1]) AS active_pages,
+			uniqExact(splitByChar('#', cutQueryString(if(page_url != '', page_url, landing_page)))[1]) AS active_pages,
 			countIf(event_name = 'page_view') AS pvs,
 			uniqExact(visitor_id) AS visitors,
 			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase')) AS convs
@@ -368,8 +368,8 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, rang
 	// 2. Tabela de Páginas Consolidadas com Canonicalização e Extração de Título
 	queryPages := `
 		SELECT 
-			splitByChar('#', cutURLParameters(if(page_url != '', page_url, landing_page)))[1] AS clean_url,
-			argMax(nullIf(JSONExtractString(custom_data_json, 'page_title'), ''), event_time) AS title,
+			splitByChar('#', cutQueryString(if(page_url != '', page_url, landing_page)))[1] AS clean_url,
+			argMax(JSONExtractString(custom_data_json, 'page_title'), event_time) AS title,
 			countIf(event_name = 'page_view') AS pvs,
 			uniqExact(visitor_id) AS visitors,
 			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase')) AS convs,
@@ -390,11 +390,9 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, rang
 	var totalPVs, totalConvs uint64
 	for rows.Next() {
 		var p PageItem
-		var rawTitle *string
+		var rawTitle string
 		if err := rows.Scan(&p.PageURL, &rawTitle, &p.Pageviews, &p.Visitors, &p.Conversions, &p.LastSeenAt); err == nil {
-			if rawTitle != nil {
-				p.PageTitle = strings.TrimSpace(*rawTitle)
-			}
+			p.PageTitle = strings.TrimSpace(rawTitle)
 			if p.PageURL != "" {
 				if p.Visitors > 0 {
 					p.ConversionRate = math.Round((float64(p.Conversions)/float64(p.Visitors)*100)*100) / 100
