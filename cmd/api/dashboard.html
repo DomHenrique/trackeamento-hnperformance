@@ -2404,6 +2404,38 @@
         </div>
     </main>
 
+    <!-- Modal: Cadastro de Novo Site / Cliente -->
+    <div id="modal-create-site" class="modal-overlay">
+        <div class="modal-container" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3><span>🌐</span> Cadastrar Novo Site / Cliente</h3>
+                <button class="modal-close-btn" onclick="closeCreateSiteModal()">✕</button>
+            </div>
+            <div class="modal-body" style="gap: 1.1rem;">
+                <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+                    Cada site possui métricas isoladas, sua própria chave de API padronizada (<code>hn_site_...</code>) e whitelist de domínios dedicada.
+                </p>
+                <div class="form-group-integ">
+                    <label>Nome do Site / Cliente *</label>
+                    <input type="text" id="input-new-site-name" class="form-input-integ" placeholder="ex: SPS Power, Roda Viva, Nova LP">
+                </div>
+                <div class="form-group-integ">
+                    <label>Domínio Principal *</label>
+                    <input type="text" id="input-new-site-domain" class="form-input-integ" placeholder="ex: spspower.com.br ou novocliente.com.br">
+                    <span style="font-size: 0.72rem; color: #64748b; margin-top: 0.2rem;">Não precisa incluir https:// nem www (subdomínios são aceitos automaticamente).</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-refresh" onclick="closeCreateSiteModal()" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #cbd5e1;">
+                    Cancelar
+                </button>
+                <button class="btn-integ-wizard" id="btn-submit-new-site" onclick="submitCreateSite()">
+                    <span>💾</span> Criar Site & Gerar Chave
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Criação de Nova Chave de Acesso -->
     <div id="modal-create-key" class="modal-overlay">
         <div class="modal-container" style="max-width: 500px;">
@@ -2596,44 +2628,183 @@
         }
 
         let globalSitesList = [];
+        let previousSiteSelectValue = '';
 
-        async function loadSites() {
+        function getSelectedSiteAndDomain() {
+            const sel = document.getElementById('select-site');
+            const raw = sel ? sel.value : '';
+            if (!raw || raw === '__new_site__') return { siteID: '', domain: '' };
+            if (raw.includes(':')) {
+                const parts = raw.split(':');
+                return { siteID: parts[0], domain: parts[1] };
+            }
+            return { siteID: raw, domain: '' };
+        }
+
+        function openCreateSiteModal() {
+            document.getElementById('input-new-site-name').value = '';
+            document.getElementById('input-new-site-domain').value = '';
+            document.getElementById('modal-create-site').classList.add('active');
+            setTimeout(() => {
+                document.getElementById('input-new-site-name')?.focus();
+            }, 100);
+        }
+
+        function closeCreateSiteModal() {
+            document.getElementById('modal-create-site').classList.remove('active');
+            const sel = document.getElementById('select-site');
+            if (sel && sel.value === '__new_site__') {
+                sel.value = previousSiteSelectValue || '';
+            }
+        }
+
+        async function submitCreateSite() {
+            const nameInput = document.getElementById('input-new-site-name');
+            const domainInput = document.getElementById('input-new-site-domain');
+            const btn = document.getElementById('btn-submit-new-site');
+
+            const name = nameInput.value.trim();
+            const domain = domainInput.value.trim();
+
+            if (!name || !domain) {
+                alert('Por favor, informe o Nome do Site e o Domínio Principal.');
+                return;
+            }
+
+            btn.disabled = true;
+            const origText = btn.innerHTML;
+            btn.innerHTML = '<span>⏳</span> Criando site...';
+
             try {
+                const res = await fetch('/api/v1/sites', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, domain })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    alert('Erro ao criar site: ' + (data.error || 'Falha desconhecida'));
+                    btn.disabled = false;
+                    btn.innerHTML = origText;
+                    return;
+                }
+
+                closeCreateSiteModal();
+                await loadSites(false);
+
+                // Seleciona o novo site criado no seletor
+                const sel = document.getElementById('select-site');
+                if (sel) {
+                    sel.value = data.id;
+                    previousSiteSelectValue = data.id;
+                }
+
+                alert(`✅ Site "${name}" cadastrado com sucesso!\n\nChave de API gerada: ${data.site_key}\nDomínio autorizado: ${domain}`);
+                await loadActiveData();
+            } catch (e) {
+                alert('Erro ao comunicar com a API: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origText;
+            }
+        }
+
+        async function loadSites(preserveSelection = true) {
+            try {
+                const prevValue = preserveSelection ? (document.getElementById('select-site')?.value || '') : '';
                 const res = await fetch('/api/v1/sites');
                 if (!res.ok) return;
                 const sites = await res.json();
                 globalSitesList = sites;
                 const sel = document.getElementById('select-site');
-                sel.innerHTML = '<option value="">Todos os Sites</option>';
+                sel.innerHTML = '';
+
+                // 1. Opção Geral
+                const optAll = document.createElement('option');
+                optAll.value = '';
+                optAll.textContent = '🌐 Todos os Sites';
+                sel.appendChild(optAll);
+
+                // 2. Agrupamentos Hierárquicos por Site
                 sites.forEach(s => {
-                    const opt = document.createElement('option');
-                    opt.value = s.id;
-                    const domainsList = (s.allowed_domains && s.allowed_domains.length > 0) 
-                        ? ` [${s.domain}, ${s.allowed_domains.join(', ')}]`
-                        : ` (${s.domain})`;
-                    opt.textContent = `${s.name}${domainsList}`;
-                    sel.appendChild(opt);
+                    const group = document.createElement('optgroup');
+                    group.label = `🏢 ${s.name}`;
+
+                    // Opção do Site Inteiro
+                    const optSite = document.createElement('option');
+                    optSite.value = s.id;
+                    optSite.textContent = `📊 ${s.name} (Todos os Domínios)`;
+                    group.appendChild(optSite);
+
+                    // Opção do Domínio Principal
+                    if (s.domain) {
+                        const optPrimary = document.createElement('option');
+                        optPrimary.value = `${s.id}:${s.domain}`;
+                        optPrimary.textContent = `⭐ ${s.domain} (Principal)`;
+                        group.appendChild(optPrimary);
+                    }
+
+                    // Opções dos Domínios Adicionais
+                    if (s.allowed_domains && Array.isArray(s.allowed_domains)) {
+                        s.allowed_domains.forEach(d => {
+                            if (d && d !== s.domain) {
+                                const optSec = document.createElement('option');
+                                optSec.value = `${s.id}:${d}`;
+                                optSec.textContent = `🔗 ${d}`;
+                                group.appendChild(optSec);
+                            }
+                        });
+                    }
+
+                    sel.appendChild(group);
                 });
+
+                // 3. Ação Rápida de Cadastro
+                const groupAction = document.createElement('optgroup');
+                groupAction.label = '──────────────';
+                const optNew = document.createElement('option');
+                optNew.value = '__new_site__';
+                optNew.textContent = '➕ Cadastrar Novo Site / Cliente...';
+                groupAction.appendChild(optNew);
+                sel.appendChild(groupAction);
+
+                if (prevValue && Array.from(sel.options).some(o => o.value === prevValue)) {
+                    sel.value = prevValue;
+                } else {
+                    sel.value = '';
+                }
+                previousSiteSelectValue = sel.value;
             } catch (e) {
                 console.error("Erro ao carregar sites:", e);
             }
         }
 
         async function loadActiveData() {
-            const siteID = document.getElementById('select-site').value;
+            const sel = document.getElementById('select-site');
+            if (sel && sel.value === '__new_site__') {
+                openCreateSiteModal();
+                sel.value = previousSiteSelectValue || '';
+                return;
+            }
+            if (sel) {
+                previousSiteSelectValue = sel.value;
+            }
+
+            const { siteID, domain } = getSelectedSiteAndDomain();
             const range = document.getElementById('select-range').value;
 
             if (currentTab === 'overview' || currentTab === 'traffic') {
-                await loadOverview(siteID, range);
+                await loadOverview(siteID, domain, range);
             }
             if (currentTab === 'pages') {
-                await loadPages(siteID, range);
+                await loadPages(siteID, domain, range);
             }
             if (currentTab === 'leads') {
-                await loadLeads(siteID, range);
+                await loadLeads(siteID, domain, range);
             }
             if (currentTab === 'funnels') {
-                await loadFunnelsData(siteID, range);
+                await loadFunnelsData(siteID, domain, range);
             }
             if (currentTab === 'debug') {
                 initDebugView();
@@ -2643,9 +2814,9 @@
             }
         }
 
-        async function loadOverview(siteID, range) {
+        async function loadOverview(siteID, domain, range) {
             try {
-                const res = await fetch(`/api/v1/analytics/overview?site_id=${siteID}&range=${range}`);
+                const res = await fetch(`/api/v1/analytics/overview?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`);
                 if (!res.ok) throw new Error('Falha ao carregar visão geral');
                 const data = await res.json();
 
@@ -3017,11 +3188,11 @@
             renderPagesTable(filtered);
         }
 
-        async function loadPages(siteID, range) {
+        async function loadPages(siteID, domain, range) {
             const tbody = document.getElementById('pages-table-body');
             const overviewTop = document.getElementById('overview-top-pages');
             try {
-                const res = await fetch(`/api/v1/analytics/pages?site_id=${siteID}&range=${range}`);
+                const res = await fetch(`/api/v1/analytics/pages?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`);
                 if (!res.ok) throw new Error('Erro ao carregar páginas');
                 const data = await res.json();
 
@@ -3080,10 +3251,10 @@
             }
         }
 
-        async function loadLeads(siteID, range) {
+        async function loadLeads(siteID, domain, range) {
             const tbody = document.getElementById('leads-table-body');
             try {
-                const res = await fetch(`/api/v1/analytics/leads?site_id=${siteID}&range=${range}&limit=100`);
+                const res = await fetch(`/api/v1/analytics/leads?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}&limit=100`);
                 if (!res.ok) throw new Error('Erro ao carregar leads');
                 const leads = await res.json();
 
@@ -3133,9 +3304,9 @@
         }
 
         function exportLeadsCSV() {
-            const siteID = document.getElementById('select-site').value;
+            const { siteID, domain } = getSelectedSiteAndDomain();
             const range = document.getElementById('select-range').value;
-            window.location.href = `/api/v1/analytics/leads/export?site_id=${siteID}&range=${range}`;
+            window.location.href = `/api/v1/analytics/leads/export?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`;
         }
 
         // --- Módulo de Funis & Atribuição Multi-Toque ---
@@ -3150,24 +3321,24 @@
             if (target) target.classList.add('active');
             if (el) el.classList.add('active');
 
-            const siteID = document.getElementById('select-site').value;
+            const { siteID, domain } = getSelectedSiteAndDomain();
             const range = document.getElementById('select-range').value;
-            if (subTabId === 'funnel-steps') loadFunnelSteps(siteID, range);
-            if (subTabId === 'media-paths') loadAttributionPaths(siteID, range);
+            if (subTabId === 'funnel-steps') loadFunnelSteps(siteID, domain, range);
+            if (subTabId === 'media-paths') loadAttributionPaths(siteID, domain, range);
         }
 
-        async function loadFunnelsData(siteID, range) {
+        async function loadFunnelsData(siteID, domain, range) {
             await Promise.all([
-                loadFunnelSteps(siteID, range),
-                loadAttributionPaths(siteID, range)
+                loadFunnelSteps(siteID, domain, range),
+                loadAttributionPaths(siteID, domain, range)
             ]);
         }
 
-        async function loadFunnelSteps(siteID, range) {
+        async function loadFunnelSteps(siteID, domain, range) {
             const container = document.getElementById('funnel-steps-list');
             const bottleneckBox = document.getElementById('funnel-bottleneck-box');
             try {
-                const res = await fetch(`/api/v1/analytics/funnel?site_id=${siteID}&range=${range}`);
+                const res = await fetch(`/api/v1/analytics/funnel?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`);
                 if (!res.ok) throw new Error('Erro ao carregar funil');
                 const data = await res.json();
 
@@ -3233,11 +3404,11 @@
             }
         }
 
-        async function loadAttributionPaths(siteID, range) {
+        async function loadAttributionPaths(siteID, domain, range) {
             const pathsTbody = document.getElementById('attribution-paths-tbody');
             const compareTbody = document.getElementById('channel-compare-tbody');
             try {
-                const res = await fetch(`/api/v1/analytics/attribution/paths?site_id=${siteID}&range=${range}`);
+                const res = await fetch(`/api/v1/analytics/attribution/paths?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`);
                 if (!res.ok) throw new Error('Erro ao carregar atribuição');
                 const data = await res.json();
 
@@ -3427,12 +3598,11 @@
         let currentDebugSiteId = null;
 
         async function initDebugView() {
-            let siteID = document.getElementById('select-site').value;
+            let { siteID } = getSelectedSiteAndDomain();
             const siteSelect = document.getElementById('select-site');
 
-            if (!siteID && siteSelect.options.length > 1) {
-                siteID = siteSelect.options[1].value;
-                siteSelect.value = siteID;
+            if (!siteID && globalSitesList && globalSitesList.length > 0) {
+                siteID = globalSitesList[0].id;
             }
 
             if (!siteID) {
@@ -4113,9 +4283,10 @@
         async function handleSimulateEvent(e) {
             e.preventDefault();
             const btn = document.getElementById('btn-submit-simulate');
-            const siteID = document.getElementById('select-site').value || currentDebugSiteId;
+            const { siteID } = getSelectedSiteAndDomain();
+            const activeSiteId = siteID || currentDebugSiteId || (globalSitesList[0] ? globalSitesList[0].id : '');
 
-            if (!siteID) {
+            if (!activeSiteId) {
                 alert('Selecione um site no topo antes de disparar o teste.');
                 return;
             }
@@ -4132,7 +4303,7 @@
             const currency = document.getElementById('sim-currency').value.trim() || 'BRL';
 
             const payload = {
-                site_id: siteID,
+                site_id: activeSiteId,
                 event_name: eventName,
                 page_url: pageURL,
                 user_data: {},
@@ -4262,20 +4433,13 @@
         };
 
         async function openIntegrationsWizard() {
-            const siteSelect = document.getElementById('select-site');
-            let siteId = siteSelect.value;
-            let siteName = siteSelect.options[siteSelect.selectedIndex]?.text || 'HN Performance Principal';
-
-            // Se "Todos os Sites" estiver selecionado, seleciona o primeiro site real da lista
-            if (!siteId && siteSelect.options.length > 1) {
-                siteId = siteSelect.options[1].value;
-                siteName = siteSelect.options[1].text;
-            }
-
+            let siteId = getActiveSiteIdForWizard();
             if (!siteId) {
                 alert('Cadastre ou selecione um site para gerenciar as integrações de envio.');
                 return;
             }
+            const currentSiteObj = globalSitesList.find(s => s.id === siteId);
+            let siteName = currentSiteObj ? currentSiteObj.name : 'Site Selecionado';
 
             document.getElementById('wizard-site-name').textContent = siteName;
             document.getElementById('modal-integrations-wizard').classList.add('active');
@@ -4514,12 +4678,12 @@
         }
 
         function getActiveSiteIdForWizard() {
-            const siteSelect = document.getElementById('select-site');
-            let siteId = siteSelect.value;
-            if (!siteId && siteSelect.options.length > 1) {
-                siteId = siteSelect.options[1].value;
+            const { siteID } = getSelectedSiteAndDomain();
+            if (siteID) return siteID;
+            if (globalSitesList && globalSitesList.length > 0) {
+                return globalSitesList[0].id;
             }
-            return siteId;
+            return '';
         }
 
         function collectFormCredentials() {
@@ -4635,12 +4799,12 @@
         let siteKeysList = [];
 
         function getActiveSettingsSiteId() {
-            const siteSelect = document.getElementById('select-site');
-            let siteId = siteSelect.value;
-            if (!siteId && siteSelect.options.length > 1) {
-                siteId = siteSelect.options[1].value;
+            const { siteID } = getSelectedSiteAndDomain();
+            if (siteID) return siteID;
+            if (globalSitesList && globalSitesList.length > 0) {
+                return globalSitesList[0].id;
             }
-            return siteId;
+            return '';
         }
 
         async function loadSiteSettingsTab() {

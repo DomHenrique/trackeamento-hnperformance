@@ -211,12 +211,13 @@ func ParseDateRange(rangeStr string) time.Time {
 	}
 }
 
-func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, rangeStr string) (*OverviewStats, error) {
+func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, domainFilter, rangeStr string) (*OverviewStats, error) {
 	if c.Conn == nil {
 		return nil, fmt.Errorf("clickhouse indisponivel")
 	}
 
 	since := ParseDateRange(rangeStr)
+	domainFilter = strings.TrimSpace(domainFilter)
 	stats := &OverviewStats{
 		TimeSeries:      make([]TimePoint, 0),
 		TopSources:      make([]SourceItem, 0),
@@ -232,9 +233,11 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, rangeSt
 			countIf(event_name = 'whatsapp_click') AS total_whatsapp,
 			uniqExactIf(visitor_id, event_time >= now() - INTERVAL 30 MINUTE) AS active_30m
 		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+		  AND event_time >= ? AND is_bot = 0
 	`
-	row := c.Conn.QueryRow(ctx, queryKPIs, siteID, siteID, since)
+	row := c.Conn.QueryRow(ctx, queryKPIs, siteID, siteID, domainFilter, domainFilter, since)
 	if err := row.Scan(&stats.TotalEvents, &stats.UniqueVisitors, &stats.TotalLeads, &stats.TotalWhatsAppClicks, &stats.ActiveLast30Min); err != nil {
 		return nil, fmt.Errorf("falha ao consultar KPIs gerais: %w", err)
 	}
@@ -247,11 +250,13 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, rangeSt
 			uniqExact(visitor_id) AS visitors,
 			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase')) AS convs
 		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+		  AND event_time >= ? AND is_bot = 0
 		GROUP BY dt
 		ORDER BY dt ASC
 	`
-	rowsTS, err := c.Conn.Query(ctx, queryTimeSeries, siteID, siteID, since)
+	rowsTS, err := c.Conn.Query(ctx, queryTimeSeries, siteID, siteID, domainFilter, domainFilter, since)
 	if err == nil {
 		defer rowsTS.Close()
 		for rowsTS.Next() {
@@ -276,12 +281,14 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, rangeSt
 			if(utm_campaign = '', '(sem campanha)', utm_campaign) AS camp,
 			count(*) AS total
 		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+		  AND event_time >= ? AND is_bot = 0
 		GROUP BY src, med, camp
 		ORDER BY total DESC
 		LIMIT 10
 	`
-	rowsSrc, err := c.Conn.Query(ctx, querySources, siteID, siteID, since)
+	rowsSrc, err := c.Conn.Query(ctx, querySources, siteID, siteID, domainFilter, domainFilter, since)
 	if err == nil {
 		defer rowsSrc.Close()
 		for rowsSrc.Next() {
@@ -304,10 +311,12 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, rangeSt
 			if(device_type = '', 'desktop', device_type) AS dev,
 			count(*) AS total
 		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+		  AND event_time >= ? AND is_bot = 0
 		GROUP BY dev
 	`
-	rowsDev, err := c.Conn.Query(ctx, queryDevices, siteID, siteID, since)
+	rowsDev, err := c.Conn.Query(ctx, queryDevices, siteID, siteID, domainFilter, domainFilter, since)
 	if err == nil {
 		defer rowsDev.Close()
 		for rowsDev.Next() {
@@ -322,12 +331,13 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, rangeSt
 	return stats, nil
 }
 
-func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, rangeStr string) (*MonitoredPagesReport, error) {
+func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, domainFilter, rangeStr string) (*MonitoredPagesReport, error) {
 	if c.Conn == nil {
 		return nil, fmt.Errorf("clickhouse indisponivel")
 	}
 
 	since := ParseDateRange(rangeStr)
+	domainFilter = strings.TrimSpace(domainFilter)
 	report := &MonitoredPagesReport{
 		Summary:    MonitoredPagesSummary{},
 		TimeSeries: make([]MonitoredPagesTimePoint, 0),
@@ -343,11 +353,13 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, rang
 			uniqExact(visitor_id) AS visitors,
 			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase')) AS convs
 		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+		  AND event_time >= ? AND is_bot = 0
 		GROUP BY dt
 		ORDER BY dt ASC
 	`
-	rowsTS, err := c.Conn.Query(ctx, queryTS, siteID, siteID, since)
+	rowsTS, err := c.Conn.Query(ctx, queryTS, siteID, siteID, domainFilter, domainFilter, since)
 	if err == nil {
 		defer rowsTS.Close()
 		for rowsTS.Next() {
@@ -375,13 +387,15 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, rang
 			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase')) AS convs,
 			max(event_time) AS last_seen
 		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+		  AND event_time >= ? AND is_bot = 0
 		GROUP BY clean_url
 		HAVING clean_url != ''
 		ORDER BY pvs DESC
 		LIMIT 200
 	`
-	rows, err := c.Conn.Query(ctx, queryPages, siteID, siteID, since)
+	rows, err := c.Conn.Query(ctx, queryPages, siteID, siteID, domainFilter, domainFilter, since)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao consultar paginas: %w", err)
 	}
@@ -412,9 +426,11 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, rang
 	queryVisitors := `
 		SELECT uniqExact(visitor_id)
 		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+		  AND event_time >= ? AND is_bot = 0
 	`
-	rowVis := c.Conn.QueryRow(ctx, queryVisitors, siteID, siteID, since)
+	rowVis := c.Conn.QueryRow(ctx, queryVisitors, siteID, siteID, domainFilter, domainFilter, since)
 	_ = rowVis.Scan(&report.Summary.TotalVisitors)
 
 	if report.Summary.TotalVisitors > 0 {
@@ -424,15 +440,15 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, rang
 	return report, nil
 }
 
-func (c *ClickHouseDB) GetMonitoredPages(ctx context.Context, siteID, rangeStr string) ([]PageItem, error) {
-	rep, err := c.GetMonitoredPagesReport(ctx, siteID, rangeStr)
+func (c *ClickHouseDB) GetMonitoredPages(ctx context.Context, siteID, domainFilter, rangeStr string) ([]PageItem, error) {
+	rep, err := c.GetMonitoredPagesReport(ctx, siteID, domainFilter, rangeStr)
 	if err != nil {
 		return nil, err
 	}
 	return rep.Pages, nil
 }
 
-func (c *ClickHouseDB) GetLeadsReport(ctx context.Context, siteID, rangeStr string, limit int) ([]LeadRecord, error) {
+func (c *ClickHouseDB) GetLeadsReport(ctx context.Context, siteID, domainFilter, rangeStr string, limit int) ([]LeadRecord, error) {
 	if c.Conn == nil {
 		return nil, fmt.Errorf("clickhouse indisponivel")
 	}
@@ -442,6 +458,7 @@ func (c *ClickHouseDB) GetLeadsReport(ctx context.Context, siteID, rangeStr stri
 	}
 
 	since := ParseDateRange(rangeStr)
+	domainFilter = strings.TrimSpace(domainFilter)
 	query := `
 		SELECT 
 			toString(event_id), toString(site_id), toString(visitor_id), event_name, event_time, 
@@ -450,13 +467,14 @@ func (c *ClickHouseDB) GetLeadsReport(ctx context.Context, siteID, rangeStr stri
 			gclid, fbclid, device_type, ip_address, custom_data_json
 		FROM tracking_events.events
 		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
 		  AND event_name IN ('lead', 'whatsapp_click', 'purchase') 
 		  AND event_time >= ? 
 		  AND is_bot = 0
 		ORDER BY event_time DESC
 		LIMIT ?
 	`
-	rows, err := c.Conn.Query(ctx, query, siteID, siteID, since, limit)
+	rows, err := c.Conn.Query(ctx, query, siteID, siteID, domainFilter, domainFilter, since, limit)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao consultar leads: %w", err)
 	}
@@ -501,28 +519,33 @@ func (c *ClickHouseDB) GetLeadsReport(ctx context.Context, siteID, rangeStr stri
 }
 
 // GetFunnelAnalysis calcula a retenção e taxas de abandono (drop-off) em 4 etapas do funil
-func (c *ClickHouseDB) GetFunnelAnalysis(ctx context.Context, siteID, rangeStr string) (*FunnelAnalysis, error) {
+func (c *ClickHouseDB) GetFunnelAnalysis(ctx context.Context, siteID, domainFilter, rangeStr string) (*FunnelAnalysis, error) {
 	if c.Conn == nil {
 		return nil, fmt.Errorf("clickhouse indisponivel")
 	}
 
 	since := ParseDateRange(rangeStr)
+	domainFilter = strings.TrimSpace(domainFilter)
 	query := `
 		SELECT 
 			uniqExact(visitor_id) AS total_visitors,
 			uniqExactIf(visitor_id, event_name = 'page_view') AS step1_views,
 			uniqExactIf(visitor_id, event_name NOT IN ('page_view', 'bot_detected') OR visitor_id IN (
 				SELECT visitor_id FROM tracking_events.events 
-				WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0 
+				WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+				  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+				  AND event_time >= ? AND is_bot = 0 
 				GROUP BY visitor_id HAVING count(*) >= 2
 			)) AS step2_engaged,
 			uniqExactIf(visitor_id, event_name IN ('whatsapp_click', 'cta_click', 'click', 'form_start')) AS step3_cta,
 			uniqExactIf(visitor_id, event_name IN ('lead', 'purchase', 'form_submit', 'contact')) AS step4_conv
 		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+		  AND event_time >= ? AND is_bot = 0
 	`
 	var totalVisitors, step1, step2, step3, step4 uint64
-	row := c.Conn.QueryRow(ctx, query, siteID, siteID, since, siteID, siteID, since)
+	row := c.Conn.QueryRow(ctx, query, siteID, siteID, domainFilter, domainFilter, since, siteID, siteID, domainFilter, domainFilter, since)
 	if err := row.Scan(&totalVisitors, &step1, &step2, &step3, &step4); err != nil {
 		return nil, fmt.Errorf("falha ao consultar funil: %w", err)
 	}
@@ -604,7 +627,7 @@ func (c *ClickHouseDB) GetFunnelAnalysis(ctx context.Context, siteID, rangeStr s
 }
 
 // GetAttributionPaths agrega sequências de canais e calcula comparativo First-Touch vs Last-Touch
-func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, rangeStr string, limit int) (*AttributionPathsReport, error) {
+func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, domainFilter, rangeStr string, limit int) (*AttributionPathsReport, error) {
 	if c.Conn == nil {
 		return nil, fmt.Errorf("clickhouse indisponivel")
 	}
@@ -613,15 +636,18 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, rangeStr
 		limit = 15
 	}
 	since := ParseDateRange(rangeStr)
+	domainFilter = strings.TrimSpace(domainFilter)
 
 	queryTotalConvs := `
 		SELECT uniqExact(visitor_id)
 		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+		  AND event_time >= ? AND is_bot = 0
 		  AND event_name IN ('lead', 'purchase', 'whatsapp_click')
 	`
 	var totalConvs uint64
-	_ = c.Conn.QueryRow(ctx, queryTotalConvs, siteID, siteID, since).Scan(&totalConvs)
+	_ = c.Conn.QueryRow(ctx, queryTotalConvs, siteID, siteID, domainFilter, domainFilter, since).Scan(&totalConvs)
 
 	report := &AttributionPathsReport{
 		TotalConversions: totalConvs,
@@ -646,14 +672,18 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, rangeStr
 					min(event_time) AS first_seen,
 					max(event_time) AS conv_time
 				FROM tracking_events.events
-				WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+				WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+				  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+				  AND event_time >= ? AND is_bot = 0
 				GROUP BY visitor_id, src
 				ORDER BY min(event_time) ASC
 			)
 			WHERE visitor_id IN (
 				SELECT DISTINCT visitor_id 
 				FROM tracking_events.events 
-				WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+				WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+				  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+				  AND event_time >= ? AND is_bot = 0
 				  AND event_name IN ('lead', 'purchase', 'whatsapp_click')
 			)
 			GROUP BY visitor_id
@@ -663,7 +693,7 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, rangeStr
 		ORDER BY conversions DESC
 		LIMIT ?
 	`
-	rows, err := c.Conn.Query(ctx, queryPaths, siteID, siteID, since, siteID, siteID, since, limit)
+	rows, err := c.Conn.Query(ctx, queryPaths, siteID, siteID, domainFilter, domainFilter, since, siteID, siteID, domainFilter, domainFilter, since, limit)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -685,17 +715,21 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, rangeStr
 		FROM (
 			SELECT visitor_id, utm_source, row_number() OVER (PARTITION BY visitor_id ORDER BY event_time ASC) as rn
 			FROM tracking_events.events
-			WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+			WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+			  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+			  AND event_time >= ? AND is_bot = 0
 			  AND visitor_id IN (
 				SELECT DISTINCT visitor_id FROM tracking_events.events 
-				WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+				WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+				  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+				  AND event_time >= ? AND is_bot = 0
 				  AND event_name IN ('lead', 'purchase', 'whatsapp_click')
 			  )
 		)
 		WHERE rn = 1
 		GROUP BY chan
 	`
-	rowsFirst, errF := c.Conn.Query(ctx, queryFirst, siteID, siteID, since, siteID, siteID, since)
+	rowsFirst, errF := c.Conn.Query(ctx, queryFirst, siteID, siteID, domainFilter, domainFilter, since, siteID, siteID, domainFilter, domainFilter, since)
 	if errF == nil {
 		defer rowsFirst.Close()
 		for rowsFirst.Next() {
@@ -715,17 +749,21 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, rangeStr
 		FROM (
 			SELECT visitor_id, utm_source, row_number() OVER (PARTITION BY visitor_id ORDER BY event_time DESC) as rn
 			FROM tracking_events.events
-			WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+			WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+			  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+			  AND event_time >= ? AND is_bot = 0
 			  AND visitor_id IN (
 				SELECT DISTINCT visitor_id FROM tracking_events.events 
-				WHERE (site_id = toUUIDOrZero(?) OR ? = '') AND event_time >= ? AND is_bot = 0
+				WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+				  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+				  AND event_time >= ? AND is_bot = 0
 				  AND event_name IN ('lead', 'purchase', 'whatsapp_click')
 			  )
 		)
 		WHERE rn = 1
 		GROUP BY chan
 	`
-	rowsLast, errL := c.Conn.Query(ctx, queryLast, siteID, siteID, since, siteID, siteID, since)
+	rowsLast, errL := c.Conn.Query(ctx, queryLast, siteID, siteID, domainFilter, domainFilter, since, siteID, siteID, domainFilter, domainFilter, since)
 	if errL == nil {
 		defer rowsLast.Close()
 		for rowsLast.Next() {

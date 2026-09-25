@@ -20,9 +20,10 @@ func (h *Handler) HandleAnalyticsOverview(c *fiber.Ctx) error {
 	}
 
 	siteID := strings.TrimSpace(c.Query("site_id"))
+	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 
-	stats, err := h.ch.GetAnalyticsOverview(c.Context(), siteID, rangeStr)
+	stats, err := h.ch.GetAnalyticsOverview(c.Context(), siteID, domain, rangeStr)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Erro ao consultar métricas: %v", err),
@@ -41,9 +42,10 @@ func (h *Handler) HandleAnalyticsPages(c *fiber.Ctx) error {
 	}
 
 	siteID := strings.TrimSpace(c.Query("site_id"))
+	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 
-	report, err := h.ch.GetMonitoredPagesReport(c.Context(), siteID, rangeStr)
+	report, err := h.ch.GetMonitoredPagesReport(c.Context(), siteID, domain, rangeStr)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Erro ao consultar páginas monitoradas: %v", err),
@@ -62,10 +64,11 @@ func (h *Handler) HandleAnalyticsLeads(c *fiber.Ctx) error {
 	}
 
 	siteID := strings.TrimSpace(c.Query("site_id"))
+	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 	limit := c.QueryInt("limit", 100)
 
-	leads, err := h.ch.GetLeadsReport(c.Context(), siteID, rangeStr, limit)
+	leads, err := h.ch.GetLeadsReport(c.Context(), siteID, domain, rangeStr, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Erro ao consultar relatório de leads: %v", err),
@@ -84,9 +87,10 @@ func (h *Handler) HandleExportLeadsCSV(c *fiber.Ctx) error {
 	}
 
 	siteID := strings.TrimSpace(c.Query("site_id"))
+	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "30d"))
 
-	leads, err := h.ch.GetLeadsReport(c.Context(), siteID, rangeStr, 1000)
+	leads, err := h.ch.GetLeadsReport(c.Context(), siteID, domain, rangeStr, 1000)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Erro ao gerar relatório para exportação: %v", err),
@@ -167,9 +171,10 @@ func (h *Handler) HandleAnalyticsFunnel(c *fiber.Ctx) error {
 	}
 
 	siteID := strings.TrimSpace(c.Query("site_id"))
+	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 
-	funnel, err := h.ch.GetFunnelAnalysis(c.Context(), siteID, rangeStr)
+	funnel, err := h.ch.GetFunnelAnalysis(c.Context(), siteID, domain, rangeStr)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Erro ao consultar análise de funil: %v", err),
@@ -188,10 +193,11 @@ func (h *Handler) HandleAnalyticsAttributionPaths(c *fiber.Ctx) error {
 	}
 
 	siteID := strings.TrimSpace(c.Query("site_id"))
+	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 	limit := c.QueryInt("limit", 15)
 
-	paths, err := h.ch.GetAttributionPaths(c.Context(), siteID, rangeStr, limit)
+	paths, err := h.ch.GetAttributionPaths(c.Context(), siteID, domain, rangeStr, limit)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Erro ao consultar caminhos de atribuição: %v", err),

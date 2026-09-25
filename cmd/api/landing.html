@@ -956,13 +956,24 @@
 
                 let html = '';
                 domains.forEach(d => {
+                    const isPrimary = d.is_primary;
+                    const badgeHtml = isPrimary
+                        ? `<span class="badge" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.3); font-size: 0.7rem; padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.4rem;">⭐ Domínio Principal</span>`
+                        : `<span class="badge badge-wildcard" style="margin-left: 0.4rem;">+ Whitelist Adicional</span>`;
+
+                    const actionHtml = isPrimary
+                        ? `<span style="font-size: 0.75rem; color: #64748b; font-style: italic; padding: 0.2rem 0.4rem;">(Principal do Site)</span>`
+                        : (currentUser ? `<button class="btn btn-danger" onclick="handleDeleteDomain('${escapeJS(d.id)}')" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Remover</button>` : '');
+
                     html += `
                         <div class="item-card">
                             <div>
                                 <span class="item-domain">${escapeHTML(d.domain)}</span>
-                                <span class="badge badge-wildcard" style="margin-left: 0.4rem;">*.subdomínios</span>
+                                ${badgeHtml}
                             </div>
-                            ${currentUser ? `<button class="btn btn-danger" onclick="handleDeleteDomain('${escapeJS(d.id)}')" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Remover</button>` : ''}
+                            <div>
+                                ${actionHtml}
+                            </div>
                         </div>
                     `;
                 });
@@ -1007,9 +1018,12 @@
                 const res = await fetch(`/api/v1/domains/${id}`, { method: 'DELETE' });
                 if (res.ok) {
                     loadDomainsForSelectedSite();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'Erro ao remover domínio');
                 }
             } catch (e) {
-                alert('Erro ao remover domínio');
+                alert('Erro ao remover domínio: ' + e.message);
             }
         }
 

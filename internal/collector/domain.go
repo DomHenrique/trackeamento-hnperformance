@@ -300,12 +300,19 @@ func (h *Handler) HandleCreateSite(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("erro ao cadastrar site: %v", err)})
 	}
 
-	// Adiciona o proprio dominio como permitido por padrao
+	// 1. Adiciona o próprio domínio como permitido por padrão na whitelist
 	_, _ = h.pg.Pool.Exec(c.Context(), `
 		INSERT INTO site_allowed_domains (site_id, domain, is_active)
 		VALUES ($1, $2, true)
 		ON CONFLICT (site_id, domain) DO NOTHING
 	`, newSiteID, domain)
+
+	// 2. Registra na tabela site_api_keys para integração e gestão de chaves
+	_, _ = h.pg.Pool.Exec(c.Context(), `
+		INSERT INTO site_api_keys (site_id, key, name, status, created_by, created_at, updated_at)
+		VALUES ($1, $2, 'Chave Padrão', 'active', 'system', now(), now())
+		ON CONFLICT (key) DO NOTHING
+	`, newSiteID, newSiteKey)
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"id":       newSiteID,
@@ -320,11 +327,12 @@ type AllowedDomainItem struct {
 	SiteID    string    `json:"site_id"`
 	SiteName  string    `json:"site_name,omitempty"`
 	Domain    string    `json:"domain"`
+	IsPrimary bool      `json:"is_primary"`
 	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// HandleListDomains retorna os domínios permitidos
+// HandleListDomains retorna os domínios permitidos, indicando se é o domínio principal
 func (h *Handler) HandleListDomains(c *fiber.Ctx) error {
 	if h.pg == nil || h.pg.Pool == nil {
 		return c.Status(fiber.StatusOK).JSON([]AllowedDomainItem{})
@@ -336,19 +344,19 @@ func (h *Handler) HandleListDomains(c *fiber.Ctx) error {
 
 	if siteID != "" {
 		query = `
-			SELECT d.id::text, d.site_id::text, s.name, d.domain, d.is_active, d.created_at
+			SELECT d.id::text, d.site_id::text, s.name, d.domain, (d.domain = s.domain) AS is_primary, d.is_active, d.created_at
 			FROM site_allowed_domains d
 			JOIN sites s ON s.id = d.site_id
 			WHERE d.site_id = $1
-			ORDER BY d.created_at DESC
+			ORDER BY (d.domain = s.domain) DESC, d.created_at DESC
 		`
 		args = append(args, siteID)
 	} else {
 		query = `
-			SELECT d.id::text, d.site_id::text, s.name, d.domain, d.is_active, d.created_at
+			SELECT d.id::text, d.site_id::text, s.name, d.domain, (d.domain = s.domain) AS is_primary, d.is_active, d.created_at
 			FROM site_allowed_domains d
 			JOIN sites s ON s.id = d.site_id
-			ORDER BY d.created_at DESC
+			ORDER BY s.name ASC, (d.domain = s.domain) DESC, d.created_at DESC
 		`
 	}
 
@@ -361,7 +369,7 @@ func (h *Handler) HandleListDomains(c *fiber.Ctx) error {
 	domains := make([]AllowedDomainItem, 0)
 	for rows.Next() {
 		var item AllowedDomainItem
-		if err := rows.Scan(&item.ID, &item.SiteID, &item.SiteName, &item.Domain, &item.IsActive, &item.CreatedAt); err == nil {
+		if err := rows.Scan(&item.ID, &item.SiteID, &item.SiteName, &item.Domain, &item.IsPrimary, &item.IsActive, &item.CreatedAt); err == nil {
 			domains = append(domains, item)
 		}
 	}
@@ -412,7 +420,7 @@ func (h *Handler) HandleAddDomain(c *fiber.Ctx) error {
 	})
 }
 
-// HandleDeleteDomain remove ou desativa um domínio
+// HandleDeleteDomain remove ou desativa um domínio (protegendo o domínio principal)
 func (h *Handler) HandleDeleteDomain(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -421,6 +429,21 @@ func (h *Handler) HandleDeleteDomain(c *fiber.Ctx) error {
 
 	if h.pg == nil || h.pg.Pool == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "banco de dados indisponivel"})
+	}
+
+	// Verifica se é o domínio principal do site
+	var isPrimary bool
+	_ = h.pg.Pool.QueryRow(c.Context(), `
+		SELECT (d.domain = s.domain)
+		FROM site_allowed_domains d
+		JOIN sites s ON s.id = d.site_id
+		WHERE d.id = $1
+	`, id).Scan(&isPrimary)
+
+	if isPrimary {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Não é possível remover o domínio principal do site. Para alterar o domínio principal, edite as configurações do site.",
+		})
 	}
 
 	var siteID string
