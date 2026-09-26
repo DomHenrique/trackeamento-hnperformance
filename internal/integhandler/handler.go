@@ -57,12 +57,16 @@ type TestIntegrationRequest struct {
 
 // TestIntegrationResponse resposta estruturada com o resultado do ping teste
 type TestIntegrationResponse struct {
-	Success      bool   `json:"success"`
-	StatusCode   int    `json:"status_code"`
-	Platform     string `json:"platform"`
-	LatencyMs    int64  `json:"latency_ms"`
-	ResponseBody string `json:"response_body"`
-	Error        string `json:"error,omitempty"`
+	Success           bool   `json:"success"`
+	StatusCode        int    `json:"status_code"`
+	Platform          string `json:"platform"`
+	LatencyMs         int64  `json:"latency_ms"`
+	ResponseBody      string `json:"response_body"`
+	Error             string `json:"error,omitempty"`
+	FriendlyTitle     string `json:"friendly_title,omitempty"`
+	FriendlyMessage   string `json:"friendly_message,omitempty"`
+	ActionAdvice      string `json:"action_advice,omitempty"`
+	PropagationNotice string `json:"propagation_notice,omitempty"`
 }
 
 // HandleGetIntegrations retorna as integrações de um site com credenciais sensíveis mascaradas
@@ -346,13 +350,26 @@ func (h *IntegrationsHandler) HandleTestIntegration(c *fiber.Ctx) error {
 		bodyStr = `{"status": "ok", "message": "Evento aceito pela API com sucesso"}`
 	}
 
+	var friendlyTitle, friendlyMsg, actionAdvice, propagationNotice string
+	if platform == "linkedin_capi" {
+		diag := integrations.InterpretLinkedInError(statusCode, respBody)
+		friendlyTitle = diag.FriendlyTitle
+		friendlyMsg = diag.FriendlyMessage
+		actionAdvice = diag.ActionAdvice
+		propagationNotice = diag.PropagationNotice
+	}
+
 	return c.Status(fiber.StatusOK).JSON(TestIntegrationResponse{
-		Success:      success,
-		StatusCode:   statusCode,
-		Platform:     platform,
-		LatencyMs:    latency,
-		ResponseBody: bodyStr,
-		Error:        errMsg,
+		Success:           success,
+		StatusCode:        statusCode,
+		Platform:          platform,
+		LatencyMs:         latency,
+		ResponseBody:      bodyStr,
+		Error:             errMsg,
+		FriendlyTitle:     friendlyTitle,
+		FriendlyMessage:   friendlyMsg,
+		ActionAdvice:      actionAdvice,
+		PropagationNotice: propagationNotice,
 	})
 }
 

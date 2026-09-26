@@ -817,7 +817,7 @@ if (typeof fbq === 'function' && eventId) {
                     <button class="btn-copy" onclick="copySnippet('code-linkedin-payload')">📋 Copiar Código</button>
                 </div>
                 <pre><code id="code-linkedin-payload"><span class="token-comment">// Endpoint: POST https://api.linkedin.com/rest/conversionEvents</span>
-<span class="token-comment">// Headers: LinkedIn-Version: 202401 | X-Restli-Protocol-Version: 2.0.0</span>
+<span class="token-comment">// Headers: LinkedIn-Version: YYYYMM (dinâmico mês corrente ou LINKEDIN_API_VERSION) | X-Restli-Protocol-Version: 2.0.0</span>
 {
   "conversion": "urn:lla:llaPartnerConversion:1234567",
   "conversionHappenedAt": 1711116000000,

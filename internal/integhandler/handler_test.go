@@ -2,6 +2,7 @@ package integhandler
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http/httptest"
 	"testing"
 
@@ -135,4 +136,36 @@ func TestHandleSiteKeys_Validation(t *testing.T) {
 		t.Errorf("esperado 400 para key_id inválido na revogação, obteve %d", respRevoke.StatusCode)
 	}
 }
+
+func TestHandleTestIntegration_LinkedIn_ResponseStructure(t *testing.T) {
+	resp := TestIntegrationResponse{
+		Success:           false,
+		StatusCode:        401,
+		Platform:          "linkedin_capi",
+		LatencyMs:         150,
+		ResponseBody:      `{"status":401,"message":"Invalid access token"}`,
+		FriendlyTitle:     "Token de Acesso Inválido ou Expirado",
+		FriendlyMessage:   "O LinkedIn rejeitou a autenticação do token informado.",
+		ActionAdvice:      "Gere um novo token no Signals Manager.",
+		PropagationNotice: "",
+	}
+
+	body, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("Erro ao serializar TestIntegrationResponse: %v", err)
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatalf("Erro ao deserializar TestIntegrationResponse: %v", err)
+	}
+
+	if parsed["friendly_title"] != "Token de Acesso Inválido ou Expirado" {
+		t.Errorf("friendly_title inesperado: %v", parsed["friendly_title"])
+	}
+	if parsed["action_advice"] != "Gere um novo token no Signals Manager." {
+		t.Errorf("action_advice inesperado: %v", parsed["action_advice"])
+	}
+}
+
 
