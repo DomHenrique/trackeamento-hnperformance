@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"testing"
+	"time"
 
 	"tracking-engine/internal/collector"
 )
@@ -162,3 +163,46 @@ func TestReconcileAndRoute_FallbacksAndGuards(t *testing.T) {
 		t.Errorf("esperado cancelamento por sinal GPC ativo, obtido %v", err)
 	}
 }
+
+func TestPurgeInactiveVisitors_NilPool(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil, nil, "test_pepper")
+
+	res, err := svc.PurgeInactiveVisitors(ctx, time.Now())
+	if err != nil {
+		t.Fatalf("PurgeInactiveVisitors falhou com nil pool: %v", err)
+	}
+	if res == nil {
+		t.Fatalf("esperado resultado não-nulo para PurgeInactiveVisitors")
+	}
+	if res.TotalDeleted != 0 {
+		t.Errorf("esperado TotalDeleted=0, obtido %d", res.TotalDeleted)
+	}
+}
+
+func TestPurgeVisitorData_Validations(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil, nil, "test_pepper")
+
+	// 1. Visitor ID vazio
+	_, err := svc.PurgeVisitorData(ctx, "00000000-0000-0000-0000-000000000001", "   ")
+	if err == nil {
+		t.Errorf("esperado erro para visitorID vazio")
+	}
+
+	// 2. Site ID inválido (não UUID)
+	_, err = svc.PurgeVisitorData(ctx, "invalido", "hn_vis_123456789012345678901234")
+	if err == nil {
+		t.Errorf("esperado erro para siteID inválido")
+	}
+
+	// 3. Pool nulo com argumentos válidos (graceful return)
+	rows, err := svc.PurgeVisitorData(ctx, "00000000-0000-0000-0000-000000000001", "hn_vis_123456789012345678901234")
+	if err != nil {
+		t.Errorf("esperado nil error para pool nulo, obtido %v", err)
+	}
+	if rows != 0 {
+		t.Errorf("esperado 0 rows para pool nulo, obtido %d", rows)
+	}
+}
+

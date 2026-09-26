@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -23,6 +24,7 @@ var nonDigitRegex = regexp.MustCompile(`\D`)
 type Service struct {
 	pg     *storage.PostgresDB
 	redis  *storage.RedisClient
+	ch     *storage.ClickHouseDB
 	pepper string
 }
 
@@ -32,6 +34,12 @@ func NewService(pg *storage.PostgresDB, rdb *storage.RedisClient, pepper string)
 		redis:  rdb,
 		pepper: pepper,
 	}
+}
+
+// WithClickHouse associa a conexão do ClickHouse para suporte a mutações de exclusão (LGPD)
+func (s *Service) WithClickHouse(ch *storage.ClickHouseDB) *Service {
+	s.ch = ch
+	return s
 }
 
 // NormalizeEmail converte para minúsculas e remove espaços em branco
@@ -222,4 +230,96 @@ func (s *Service) checkAndRouteDispatch(ctx context.Context, ev *collector.Event
 	}
 
 	return s.redis.PushDispatchEvent(ctx, data)
+}
+
+// PurgeResult armazena as estatísticas de execução de purga
+type PurgeResult struct {
+	TotalDeleted int64         `json:"total_deleted"`
+	BatchesCount int           `json:"batches_count"`
+	Duration     time.Duration `json:"duration"`
+}
+
+// PurgeInactiveVisitors remove visitantes inativos do PostgreSQL em lotes de 1.000 para evitar bloqueios de tabela
+func (s *Service) PurgeInactiveVisitors(ctx context.Context, cutoffTime time.Time) (*PurgeResult, error) {
+	if s.pg == nil || s.pg.Pool == nil {
+		return &PurgeResult{}, nil
+	}
+
+	start := time.Now()
+	var totalDeleted int64
+	batches := 0
+	batchSize := 1000
+
+	query := `
+		DELETE FROM visitors
+		WHERE id IN (
+			SELECT id FROM visitors
+			WHERE last_seen_at < $1
+			LIMIT $2
+		)
+	`
+
+	for {
+		if ctx != nil && ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		tag, err := s.pg.Pool.Exec(ctx, query, cutoffTime, batchSize)
+		if err != nil {
+			return nil, fmt.Errorf("falha ao executar lote de purga: %w", err)
+		}
+
+		rowsAffected := tag.RowsAffected()
+		totalDeleted += rowsAffected
+		batches++
+
+		if rowsAffected < int64(batchSize) {
+			break
+		}
+
+		// Pausa de 10ms entre lotes para cooperar com autovacuum e conexões concorrentes
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	return &PurgeResult{
+		TotalDeleted: totalDeleted,
+		BatchesCount: batches,
+		Duration:     time.Since(start),
+	}, nil
+}
+
+// PurgeVisitorData atende ao direito de eliminação do titular (Art. 18 LGPD)
+func (s *Service) PurgeVisitorData(ctx context.Context, siteID, visitorID string) (int64, error) {
+	siteUUID, err := uuid.Parse(siteID)
+	if err != nil {
+		return 0, fmt.Errorf("site_id inválido: %w", err)
+	}
+
+	visitorID = strings.TrimSpace(visitorID)
+	if visitorID == "" {
+		return 0, errors.New("visitor_id não pode ser vazio")
+	}
+
+	if s.pg == nil || s.pg.Pool == nil {
+		return 0, nil
+	}
+
+	tag, err := s.pg.Pool.Exec(ctx, `
+		DELETE FROM visitors
+		WHERE site_id = $1 AND visitor_id = $2
+	`, siteUUID, visitorID)
+	if err != nil {
+		return 0, fmt.Errorf("falha ao purgar visitante no Postgres: %w", err)
+	}
+
+	rows := tag.RowsAffected()
+	log.Printf("[Identity/Compliance] Titular purgado com sucesso: site=%s (registros=%d)", siteID, rows)
+
+	// Propaga mutação assíncrona no ClickHouse caso configurado
+	if s.ch != nil && s.ch.Conn != nil {
+		mutationQuery := `ALTER TABLE tracking_events.events DELETE WHERE site_id = $1 AND visitor_id = $2`
+		_ = s.ch.Conn.Exec(ctx, mutationQuery, siteUUID, visitorID)
+	}
+
+	return rows, nil
 }
