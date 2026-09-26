@@ -165,7 +165,54 @@
         }
     } catch (e) {}
 
-    // 4. Captura e Persistência de Atribuição (UTMs e Click IDs)
+    // 4. Gestão de Governança de Privacidade, Consentimento e Sinais do Navegador (GPC)
+    var CONSENT_STORAGE_KEY = '_hn_consent';
+    var isGPCActive = false;
+    try {
+        var nav = window.navigator || {};
+        if (nav.globalPrivacyControl === true || window.globalPrivacyControl === true) {
+            isGPCActive = true;
+        }
+    } catch (e) {}
+
+    var userConsent = {
+        necessary: true,
+        analytics: true,
+        marketing: !isGPCActive
+    };
+
+    try {
+        var rawConsent = localStorage.getItem(CONSENT_STORAGE_KEY);
+        if (rawConsent) {
+            var parsed = JSON.parse(rawConsent);
+            if (typeof parsed.analytics === 'boolean') userConsent.analytics = parsed.analytics;
+            if (typeof parsed.marketing === 'boolean') userConsent.marketing = parsed.marketing;
+            if (isGPCActive) userConsent.marketing = false; // GPC prevalece restritivamente
+        }
+    } catch (e) {}
+
+    function updateConsent(newConsent) {
+        if (!newConsent || typeof newConsent !== 'object') return;
+        if (typeof newConsent.analytics === 'boolean') userConsent.analytics = newConsent.analytics;
+        if (typeof newConsent.marketing === 'boolean') userConsent.marketing = newConsent.marketing;
+        if (isGPCActive) userConsent.marketing = false;
+
+        try {
+            localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(userConsent));
+        } catch (e) {}
+
+        if (!userConsent.marketing) {
+            try {
+                localStorage.removeItem(ATTR_STORAGE_KEY);
+            } catch (e) {}
+        } else {
+            persistURLParams();
+        }
+
+        debugLog('🔒 Preferências de privacidade atualizadas:', userConsent);
+    }
+
+    // 5. Captura e Persistência de Atribuição (UTMs e Click IDs sob Consentimento de Marketing)
     var ATTR_STORAGE_KEY = '_hn_attr';
     var trackedParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'ttclid'];
 
@@ -188,21 +235,24 @@
         return params;
     }
 
-    // Salva ou recupera parâmetros anteriores (first-touch persistence no navegador)
-    var currentParams = parseURLParams();
-    var storedParams = {};
-    try {
-        var rawStored = localStorage.getItem(ATTR_STORAGE_KEY);
-        if (rawStored) storedParams = JSON.parse(rawStored);
-    } catch (e) {}
+    function persistURLParams() {
+        if (!userConsent.marketing) return; // Modo restrito: não persiste parâmetros de publicidade sem consentimento
+        var current = parseURLParams();
+        var stored = {};
+        try {
+            var rawStored = localStorage.getItem(ATTR_STORAGE_KEY);
+            if (rawStored) stored = JSON.parse(rawStored);
+        } catch (e) {}
 
-    // Mescla parâmetros atuais sobrescrevendo se novos forem encontrados
-    for (var k in currentParams) {
-        if (currentParams.hasOwnProperty(k)) storedParams[k] = currentParams[k];
+        for (var k in current) {
+            if (current.hasOwnProperty(k)) stored[k] = current[k];
+        }
+        try {
+            localStorage.setItem(ATTR_STORAGE_KEY, JSON.stringify(stored));
+        } catch (e) {}
     }
-    try {
-        localStorage.setItem(ATTR_STORAGE_KEY, JSON.stringify(storedParams));
-    } catch (e) {}
+
+    persistURLParams();
 
     // Helper para extrair cookies de parceiros se existirem (_fbp, _fbc)
     function getCookie(name) {
@@ -261,11 +311,19 @@
         userData = userData || {};
         customData = customData || {};
 
-        // Injeta cookies Meta caso presentes
-        var fbp = getCookie('_fbp');
-        var fbc = getCookie('_fbc');
-        if (fbp && !userData.fbp) userData.fbp = fbp;
-        if (fbc && !userData.fbc) userData.fbc = fbc;
+        // A identidade do visitante (visitor_id) é gerida com autoridade exclusiva pelo servidor via cookie HTTP de 1ª parte (_vid).
+        // Remove qualquer visitor_id arbitrário enviado pelo cliente para impedir Session Fixation e respeitar a limpeza de cookies pelo usuário.
+        if (userData && userData.visitor_id) {
+            delete userData.visitor_id;
+        }
+
+        // Injeta cookies Meta caso presentes e permitidos por consentimento de marketing
+        if (userConsent.marketing) {
+            var fbp = getCookie('_fbp');
+            var fbc = getCookie('_fbc');
+            if (fbp && !userData.fbp) userData.fbp = fbp;
+            if (fbc && !userData.fbc) userData.fbc = fbc;
+        }
 
         var eventIsDebug = isDebug || (customData && (customData.debug === true || customData.debug_mode === true || customData.is_debug === true));
 
@@ -279,6 +337,11 @@
             user_data: userData,
             custom_data: customData,
             client_signals: getClientSignals(),
+            consent: {
+                necessary: true,
+                analytics: !!userConsent.analytics,
+                marketing: !!userConsent.marketing
+            },
             is_debug: !!eventIsDebug
         };
 
@@ -482,10 +545,14 @@
         }
     }, true);
 
-    // 7. API Pública Global
-    window.hnTrack = function (eventName, options) {
+    // 7. API Pública Global (Eventos e Consentimento)
+    window.hnTrack = function (actionOrName, options) {
+        if (actionOrName === 'consent') {
+            updateConsent(options);
+            return;
+        }
         options = options || {};
-        return trackEvent(eventName, options.user_data, options.custom_data);
+        return trackEvent(actionOrName, options.user_data, options.custom_data);
     };
 
 })(window, document);

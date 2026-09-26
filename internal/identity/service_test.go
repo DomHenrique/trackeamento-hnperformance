@@ -1,7 +1,10 @@
 package identity
 
 import (
+	"context"
 	"testing"
+
+	"tracking-engine/internal/collector"
 )
 
 func TestNormalizeEmail(t *testing.T) {
@@ -88,5 +91,74 @@ func TestHashHMACSHA256(t *testing.T) {
 	// Pepper vazio usa fallback SHA256 padrão
 	if HashHMACSHA256(email, "") != stdHash {
 		t.Errorf("pepper vazio deve retornar SHA256 padrão")
+	}
+}
+
+func TestReconcileAndRoute_FallbacksAndGuards(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil, nil, "test_pepper")
+
+	// 1. Visitante vazio não deve quebrar
+	err := svc.ReconcileAndRoute(ctx, &collector.EventPayload{
+		VisitorID: "",
+		EventName: "pageview",
+	})
+	if err != nil {
+		t.Errorf("esperado nil para visitorID vazio, obtido %v", err)
+	}
+
+	// 2. SiteID inválido não deve quebrar
+	err = svc.ReconcileAndRoute(ctx, &collector.EventPayload{
+		SiteID:    "invalid-uuid",
+		VisitorID: "hn_vis_123456789012345678901234",
+		EventName: "pageview",
+	})
+	if err != nil {
+		t.Errorf("esperado nil para siteID inválido, obtido %v", err)
+	}
+
+	// 3. Evento não-conversão sem redis configurado não deve gerar erro
+	err = svc.ReconcileAndRoute(ctx, &collector.EventPayload{
+		SiteID:    "00000000-0000-0000-0000-000000000001",
+		VisitorID: "hn_vis_123456789012345678901234",
+		EventName: "pageview",
+	})
+	if err != nil {
+		t.Errorf("esperado nil para evento não-conversão, obtido %v", err)
+	}
+
+	// 4. Robô em evento de conversão deve ser bloqueado antes de tentar dispatch
+	err = svc.ReconcileAndRoute(ctx, &collector.EventPayload{
+		SiteID:    "00000000-0000-0000-0000-000000000001",
+		VisitorID: "hn_vis_123456789012345678901234",
+		EventName: "lead",
+		IsBot:     true,
+		BotReason: "headless-detected",
+	})
+	if err != nil {
+		t.Errorf("esperado interceptação silenciosa de bot sem erro, obtido %v", err)
+	}
+
+	// 5. Conversão sem consentimento de marketing deve ser abortada antes do dispatch
+	err = svc.ReconcileAndRoute(ctx, &collector.EventPayload{
+		SiteID:    "00000000-0000-0000-0000-000000000001",
+		VisitorID: "hn_vis_123456789012345678901234",
+		EventName: "lead",
+		Consent:   collector.ConsentState{Analytics: true, Marketing: false},
+	})
+	if err != nil {
+		t.Errorf("esperado cancelamento silencioso por falta de consentimento de marketing, obtido %v", err)
+	}
+
+	// 6. Conversão sob sinal Sec-GPC ativo deve ter despacho externo cancelado
+	err = svc.ReconcileAndRoute(ctx, &collector.EventPayload{
+		SiteID:         "00000000-0000-0000-0000-000000000001",
+		VisitorID:      "hn_vis_123456789012345678901234",
+		EventName:      "lead",
+		Consent:        collector.ConsentState{Analytics: true, Marketing: true},
+		PrivacySignals: collector.PrivacySignals{GPC: true},
+	})
+	if err != nil {
+		t.Errorf("esperado cancelamento por sinal GPC ativo, obtido %v", err)
 	}
 }

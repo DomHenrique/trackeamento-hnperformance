@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -39,8 +40,10 @@ type Config struct {
 	ClickHousePassword string
 
 	// Security & Ingestion
-	ServerKey  string
-	HMACPepper string
+	ServerKey         string
+	HMACPepper        string
+	TrustedProxiesRaw string
+	TrustedCIDRs      []*net.IPNet
 
 	// Ingester
 	IngesterBatchSize int
@@ -59,6 +62,7 @@ type Config struct {
 }
 
 func Load() *Config {
+	rawTrustedProxies := getEnv("TRUSTED_PROXIES", "")
 	return &Config{
 		Env:            getEnv("ENV", "development"),
 		TrackingDomain: getEnv("TRACKING_DOMAIN", "localhost"),
@@ -66,8 +70,10 @@ func Load() *Config {
 		AdminUser:     getEnv("ADMIN_USER", "admin"),
 		AdminPassword: getEnv("ADMIN_PASSWORD", "hn_admin_secret_pass_2026"),
 
-		ServerKey:  getEnv("SERVER_API_KEY", "hn_server_internal_secret_key"),
-		HMACPepper: getEnv("HMAC_PEPPER", "hn_pepper_secret_salt_2026"),
+		ServerKey:         getEnv("SERVER_API_KEY", "hn_server_internal_secret_key"),
+		HMACPepper:        getEnv("HMAC_PEPPER", "hn_pepper_secret_salt_2026"),
+		TrustedProxiesRaw: rawTrustedProxies,
+		TrustedCIDRs:      ParseCIDRList(rawTrustedProxies),
 
 		RedisAddr:           getEnv("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword:       getEnv("REDIS_PASSWORD", "redis_secret_pass"),
@@ -150,6 +156,15 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Validação de TRUSTED_PROXIES: não permitir 0.0.0.0/0 pois anula a segurança de IP
+	if strings.Contains(c.TrustedProxiesRaw, "0.0.0.0/0") {
+		issues = append(issues, "TRUSTED_PROXIES não pode conter 0.0.0.0/0 pois permite falsificação total de IP por qualquer cliente")
+	}
+
+	if isProd && len(c.TrustedCIDRs) == 0 {
+		log.Printf("[SECURITY NOTICE] TRUSTED_PROXIES está vazio em produção: todos os cabeçalhos encaminhados (CF-Connecting-IP, X-Real-IP, X-Forwarded-For) serão desconsiderados por segurança (fail-secure).")
+	}
+
 	for _, issue := range issues {
 		log.Printf("[SECURITY WARNING] %s", issue)
 	}
@@ -159,6 +174,51 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// ParseCIDRList converte a string TRUSTED_PROXIES (separada por vírgulas) em []*net.IPNet
+func ParseCIDRList(raw string) []*net.IPNet {
+	var list []*net.IPNet
+	entries := strings.Split(raw, ",")
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		// Se for IP avulso (sem barra), adiciona /32 para IPv4 ou /128 para IPv6
+		if !strings.Contains(entry, "/") {
+			parsedIP := net.ParseIP(entry)
+			if parsedIP == nil {
+				log.Printf("[Config] IP inválido ignorado em TRUSTED_PROXIES: %s", entry)
+				continue
+			}
+			if parsedIP.To4() != nil {
+				entry = entry + "/32"
+			} else {
+				entry = entry + "/128"
+			}
+		}
+		_, cidrNet, err := net.ParseCIDR(entry)
+		if err != nil {
+			log.Printf("[Config] Bloco CIDR inválido ignorado em TRUSTED_PROXIES: %s (%v)", entry, err)
+			continue
+		}
+		list = append(list, cidrNet)
+	}
+	return list
+}
+
+// IsTrustedProxy verifica se um IP remoto pertence aos blocos autorizados configurados
+func (c *Config) IsTrustedProxy(remoteIP net.IP) bool {
+	if remoteIP == nil || len(c.TrustedCIDRs) == 0 {
+		return false
+	}
+	for _, cidr := range c.TrustedCIDRs {
+		if cidr.Contains(remoteIP) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Config) PostgresDSN() string {

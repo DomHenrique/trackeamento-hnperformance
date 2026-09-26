@@ -177,6 +177,13 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 		return
 	}
 
+	// Gatekeeper Final de Privacidade: mensagens sem consentimento de marketing ou sob GPC são descartadas e confirmadas
+	if !ev.Consent.Marketing || ev.PrivacySignals.GPC {
+		log.Printf("[Dispatcher] Interceptado por compliance: evento %s site=%s sem consentimento de marketing (marketing=%v, gpc=%v). Despacho externo abortado.", ev.EventID, ev.SiteID, ev.Consent.Marketing, ev.PrivacySignals.GPC)
+		_ = wp.redis.Client.XAck(ctx, stream, group, msg.ID).Err()
+		return
+	}
+
 	// Busca integrações ativas do site no PostgreSQL
 	integrationsList := wp.loadSiteIntegrations(ctx, ev.SiteID)
 	if len(integrationsList) == 0 {

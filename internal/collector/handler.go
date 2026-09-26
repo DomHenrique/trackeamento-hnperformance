@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -81,57 +82,102 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	}
 	siteID := siteMeta.ID
 
-	// 1. Gerenciamento do Cookie 1st-Party _vid
-	visitorID := c.Cookies(VisitorCookieName)
-	if visitorID == "" {
-		if v, ok := req.UserData["visitor_id"].(string); ok && v != "" {
-			visitorID = v
-		}
+	// 1. Gerenciamento de Governança de Privacidade e Consentimento
+	gpcHeader := strings.TrimSpace(c.Get("Sec-GPC"))
+	dntHeader := strings.TrimSpace(c.Get("DNT"))
+	isGPC := gpcHeader == "1"
+	isDNT := dntHeader == "1"
+
+	privacy := siteMeta.PrivacySettings
+	if privacy == nil {
+		privacy = DefaultPrivacySettings()
 	}
 
+	consent := ConsentState{
+		Necessary: true,
+		Analytics: false,
+		Marketing: false,
+	}
+
+	analyticsPolicy := privacy.CategoriesPolicy["analytics"]
+	marketingPolicy := privacy.CategoriesPolicy["marketing"]
+
+	if req.Consent != nil {
+		// Preferência explícita do usuário enviada pelo SDK/CMP
+		consent.Analytics = req.Consent.Analytics
+		consent.Marketing = req.Consent.Marketing
+	} else {
+		// Se não foi informada escolha explícita, respeita a política configurada para o site
+		consent.Analytics = !analyticsPolicy.RequiresConsent
+		consent.Marketing = !marketingPolicy.RequiresConsent
+	}
+
+	// Se GPC/DNT estiver ativo e a política mandar respeitar, revoga marketing
+	if (isGPC || isDNT) && privacy.EnforceGPC {
+		consent.Marketing = false
+	}
+
+	// 2. Gerenciamento do Cookie 1st-Party _vid (Condicionado a consentimento e política)
+	allowsCookie := consent.Analytics && (analyticsPolicy.IssueVisitorCookie || !analyticsPolicy.RequiresConsent)
+
+	rawCookieVid := strings.TrimSpace(c.Cookies(VisitorCookieName))
+	var visitorID string
 	isNewVisitor := false
-	if visitorID == "" {
+
+	if rawCookieVid != "" && prefixedid.IsValidVisitorID(rawCookieVid) {
+		visitorID = rawCookieVid
+	} else if allowsCookie {
+		// Se ausente, inválido ou corrompido, gera nova identidade canônica no servidor.
+		// Identificadores arbitrários em req.UserData["visitor_id"] são expressamente desconsiderados
+		// para evitar Session Fixation e Cookie Poisoning.
 		visitorID = prefixedid.GenerateVisitorID()
 		isNewVisitor = true
+	} else {
+		// Sem autorização para cookie analítico: visitante opera sem persistência de identidade
+		visitorID = ""
 	}
 
-	// Renova/Emite o cookie com expiração de 1 ano
-	c.Cookie(&fiber.Cookie{
-		Name:     VisitorCookieName,
-		Value:    visitorID,
-		MaxAge:   OneYearSeconds,
-		Path:     "/",
-		SameSite: "Lax",
-		Secure:   h.cfg.Env == "production",
-		HTTPOnly: false, // Permite acesso pelo SDK JavaScript se necessário
-	})
-
-	// 2. Extração de IP Real
-	ip := c.Get("CF-Connecting-IP")
-	if ip == "" {
-		ip = c.Get("X-Real-IP")
-	}
-	if ip == "" {
-		ip = c.IP()
+	if req.UserData != nil && visitorID != "" {
+		req.UserData["visitor_id"] = visitorID
 	}
 
-	// 3. User-Agent e Tipo de Dispositivo
+	// Emite o cookie apenas se a política e o consentimento permitirem
+	if allowsCookie && visitorID != "" {
+		c.Cookie(&fiber.Cookie{
+			Name:     VisitorCookieName,
+			Value:    visitorID,
+			MaxAge:   OneYearSeconds,
+			Path:     "/",
+			SameSite: "Lax",
+			Secure:   h.cfg.Env == "production",
+			HTTPOnly: false, // Permite acesso pelo SDK JavaScript se necessário
+		})
+	}
+
+	// 3. Extração de IP Real Confiável (com validação de TRUSTED_PROXIES e mascaramento de privacidade)
+	rawIP := ResolveClientIP(c, h.cfg)
+	ip := rawIP
+	if privacy.MaskIP {
+		ip = MaskIP(rawIP)
+	}
+
+	// 4. User-Agent e Tipo de Dispositivo
 	ua := c.Get("User-Agent")
 	deviceType := detectDeviceType(ua)
 
-	// 4. Session ID
+	// 5. Session ID
 	sessionID := req.SessionID
 	if sessionID == "" {
 		sessionID = prefixedid.GenerateSessionID()
 	}
 
-	// 5. Event ID para deduplicação (especialmente com Meta Pixel)
+	// 6. Event ID para deduplicação (especialmente com Meta Pixel)
 	eventID := req.EventID
 	if eventID == "" {
 		eventID = prefixedid.GenerateEventID()
 	}
 
-	// 6. URL e Referrer
+	// 7. URL e Referrer
 	pageURL := req.URL
 	if pageURL == "" {
 		pageURL = req.PageURL
@@ -154,16 +200,16 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		})
 	}
 
-	// 7. Extração de parâmetros de Atribuição
+	// 8. Extração de parâmetros de Atribuição
 	attrParams := attribution.ParseURL(pageURL, referrer)
 
-	// 8. Normalização do nome do evento
+	// 9. Normalização do nome do evento
 	eventName := strings.TrimSpace(req.EventName)
 	if eventName == "" {
 		eventName = "page_view"
 	}
 
-	// 9. Detecção de Robô e Navegações Automatizadas (Stealth Tagging)
+	// 10. Detecção de Robô e Navegações Automatizadas (Stealth Tagging)
 	isBot, botReason := DetectBot(ua, eventName, req.ClientSignals)
 	if isBot {
 		log.Printf("[BotDetector] Robô identificado site=%s reason=%s event=%s ip=%s ua=%s", siteID, botReason, eventName, ip, ua)
@@ -189,25 +235,27 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	}
 
 	payload := EventPayload{
-		EventID:       eventID,
-		SiteID:        siteID,
-		SiteKey:       siteKey,
-		VisitorID:     visitorID,
-		SessionID:     sessionID,
-		EventName:     eventName,
-		EventTime:     time.Now().UTC(),
-		IPAddress:     ip,
-		UserAgent:     ua,
-		DeviceType:    deviceType,
-		Attribution:   attrParams,
-		UserData:      req.UserData,
-		CustomData:    req.CustomData,
-		ClientSignals: req.ClientSignals,
-		IsBot:         isBot,
-		BotReason:     botReason,
-		IsDebug:       isDebug,
-		OriginMode:    originMode,
-		CreatedAt:     time.Now().UTC(),
+		EventID:        eventID,
+		SiteID:         siteID,
+		SiteKey:        siteKey,
+		VisitorID:      visitorID,
+		SessionID:      sessionID,
+		EventName:      eventName,
+		EventTime:      time.Now().UTC(),
+		IPAddress:      ip,
+		UserAgent:      ua,
+		DeviceType:     deviceType,
+		Attribution:    attrParams,
+		UserData:       req.UserData,
+		CustomData:     req.CustomData,
+		ClientSignals:  req.ClientSignals,
+		Consent:        consent,
+		PrivacySignals: PrivacySignals{GPC: isGPC, DNT: isDNT},
+		IsBot:          isBot,
+		BotReason:      botReason,
+		IsDebug:        isDebug,
+		OriginMode:     originMode,
+		CreatedAt:      time.Now().UTC(),
 	}
 
 	if isNewVisitor {
@@ -285,18 +333,19 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 	if h.pg != nil && h.pg.Pool != nil {
 		var siteID string
 		var isActive bool
+		var rawPrivacy []byte
 
 		// 2.1 Primeiro tenta na tabela site_api_keys (suporte a múltiplas chaves e revogação)
 		err := h.pg.Pool.QueryRow(ctx, `
-			SELECT k.site_id::text, (k.status = 'active' AND s.is_active = true)
+			SELECT k.site_id::text, (k.status = 'active' AND s.is_active = true), COALESCE(s.privacy_settings, '{}'::jsonb)
 			FROM site_api_keys k
 			JOIN sites s ON s.id = k.site_id
 			WHERE k.key = $1
-		`, siteKey).Scan(&siteID, &isActive)
+		`, siteKey).Scan(&siteID, &isActive, &rawPrivacy)
 
 		// 2.2 Fallback retroativo para sites.api_key caso ainda não esteja em site_api_keys
 		if err != nil {
-			err = h.pg.Pool.QueryRow(ctx, "SELECT id::text, is_active FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive)
+			err = h.pg.Pool.QueryRow(ctx, "SELECT id::text, is_active, COALESCE(privacy_settings, '{}'::jsonb) FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive, &rawPrivacy)
 		}
 
 		if err == nil && isActive {
@@ -319,9 +368,15 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 				}
 			}
 
+			privacy := DefaultPrivacySettings()
+			if len(rawPrivacy) > 2 {
+				_ = json.Unmarshal(rawPrivacy, privacy)
+			}
+
 			meta := &SiteMetadata{
-				ID:             siteID,
-				AllowedDomains: domains,
+				ID:              siteID,
+				AllowedDomains:  domains,
+				PrivacySettings: privacy,
 			}
 			h.siteKeys.Store(siteKey, meta)
 
@@ -346,8 +401,9 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 	// Em ambiente dev, aceita chaves de teste com prefixo test_
 	if h.cfg.Env == "development" && strings.HasPrefix(siteKey, "test_") {
 		meta := &SiteMetadata{
-			ID:             "00000000-0000-0000-0000-000000000001",
-			AllowedDomains: []string{"localhost", "127.0.0.1"},
+			ID:              "00000000-0000-0000-0000-000000000001",
+			AllowedDomains:  []string{"localhost", "127.0.0.1"},
+			PrivacySettings: DefaultPrivacySettings(),
 		}
 		h.siteKeys.Store(siteKey, meta)
 		return meta, true
@@ -581,4 +637,49 @@ func (h *Handler) HandleDebugClear(c *fiber.Ctx) error {
 		"status":  "cleared",
 		"site_id": siteID,
 	})
+}
+
+// ResolveClientIP extrai o IP real do cliente aplicando validação estrita contra TRUSTED_PROXIES
+func ResolveClientIP(c *fiber.Ctx, cfg *config.Config) string {
+	remoteIP := c.Context().RemoteIP()
+	remoteIPStr := c.IP()
+	if len(remoteIP) > 0 {
+		remoteIPStr = remoteIP.String()
+	}
+
+	// Se não houver configuração ou se a conexão direta não vier de um proxy confiável,
+	// ignora categoricamente os cabeçalhos de proxy para prevenir IP spoofing
+	if cfg == nil || !cfg.IsTrustedProxy(remoteIP) {
+		return remoteIPStr
+	}
+
+	// Conexão TCP imediata veio de um proxy confiável; avalia os cabeçalhos encaminhados
+	// 1. Cloudflare
+	if cfIP := strings.TrimSpace(c.Get("CF-Connecting-IP")); cfIP != "" {
+		if parsed := net.ParseIP(cfIP); parsed != nil {
+			return cfIP
+		}
+	}
+
+	// 2. Nginx / Traefik
+	if realIP := strings.TrimSpace(c.Get("X-Real-IP")); realIP != "" {
+		if parsed := net.ParseIP(realIP); parsed != nil {
+			return realIP
+		}
+	}
+
+	// 3. X-Forwarded-For (primeiro IP válido da cadeia)
+	if xff := strings.TrimSpace(c.Get("X-Forwarded-For")); xff != "" {
+		parts := strings.Split(xff, ",")
+		for _, part := range parts {
+			cleanPart := strings.TrimSpace(part)
+			if cleanPart != "" {
+				if parsed := net.ParseIP(cleanPart); parsed != nil {
+					return cleanPart
+				}
+			}
+		}
+	}
+
+	return remoteIPStr
 }

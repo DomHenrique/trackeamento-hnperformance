@@ -77,14 +77,16 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 		return s.checkAndRouteDispatch(ctx, ev, nil)
 	}
 
-	rawUUID := strings.TrimPrefix(ev.VisitorID, "v_")
-	visitorUUID, err := uuid.Parse(rawUUID)
-	if err != nil {
-		// Gera UUID determinístico caso não seja parseável
-		visitorUUID = uuid.New()
+	visitorID := strings.TrimSpace(ev.VisitorID)
+	if visitorID == "" {
+		return s.checkAndRouteDispatch(ctx, ev, nil)
 	}
 
-	siteUUID, _ := uuid.Parse(ev.SiteID)
+	siteUUID, err := uuid.Parse(ev.SiteID)
+	if err != nil {
+		log.Printf("[Identity] SiteID inválido (%s): %v", ev.SiteID, err)
+		return s.checkAndRouteDispatch(ctx, ev, nil)
+	}
 
 	// Extração de dados de contato caso existam no payload
 	var rawEmail, rawPhone, rawName string
@@ -103,7 +105,7 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 	emailHash := HashHMACSHA256(rawEmail, s.pepper)
 	phoneHash := HashHMACSHA256(rawPhone, s.pepper)
 
-	// 1. Verifica se visitante já existe
+	// 1. Verifica se visitante já existe para este site específico
 	var existingVisitor struct {
 		ID             uuid.UUID
 		FirstGCLID     *string
@@ -114,8 +116,8 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 	}
 
 	query := `SELECT id, first_gclid, first_fbclid, first_utm_source, identified_email_hash, identified_phone_hash 
-              FROM visitors WHERE id = $1`
-	err = s.pg.Pool.QueryRow(ctx, query, visitorUUID).Scan(
+              FROM visitors WHERE site_id = $1 AND visitor_id = $2`
+	err = s.pg.Pool.QueryRow(ctx, query, siteUUID, visitorID).Scan(
 		&existingVisitor.ID,
 		&existingVisitor.FirstGCLID,
 		&existingVisitor.FirstFBCLID,
@@ -127,10 +129,10 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 	firstTouchMap := make(map[string]interface{})
 
 	if err == pgx.ErrNoRows {
-		// 2. Novo Visitante: Gravação com atribuição First-Touch
+		// 2. Novo Visitante: Gravação com atribuição First-Touch e suporte a concorrência via ON CONFLICT
 		insertSQL := `
 			INSERT INTO visitors (
-				id, site_id, first_seen_at, last_seen_at,
+				site_id, visitor_id, first_seen_at, last_seen_at,
 				first_landing_page, first_referrer,
 				first_utm_source, first_utm_medium, first_utm_campaign, first_utm_content, first_utm_term,
 				first_gclid, first_fbclid, first_ttclid,
@@ -142,9 +144,14 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 				$10, $11, $12,
 				$13, $14, $15
 			)
+			ON CONFLICT (site_id, visitor_id) DO UPDATE SET
+				last_seen_at = now(),
+				identified_name = COALESCE(NULLIF(EXCLUDED.identified_name, ''), visitors.identified_name),
+				identified_email_hash = COALESCE(NULLIF(EXCLUDED.identified_email_hash, ''), visitors.identified_email_hash),
+				identified_phone_hash = COALESCE(NULLIF(EXCLUDED.identified_phone_hash, ''), visitors.identified_phone_hash)
 		`
 		_, _ = s.pg.Pool.Exec(ctx, insertSQL,
-			visitorUUID, siteUUID,
+			siteUUID, visitorID,
 			ev.Attribution.LandingPage, ev.Attribution.Referrer,
 			ev.Attribution.UTMSource, ev.Attribution.UTMMedium, ev.Attribution.UTMCampaign, ev.Attribution.UTMContent, ev.Attribution.UTMTerm,
 			ev.Attribution.GCLID, ev.Attribution.FBCLID, ev.Attribution.TTCLID,
@@ -161,12 +168,12 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 		updateSQL := `
 			UPDATE visitors 
 			SET last_seen_at = now(),
-			    identified_name = COALESCE(NULLIF($2, ''), identified_name),
-			    identified_email_hash = COALESCE(NULLIF($3, ''), identified_email_hash),
-			    identified_phone_hash = COALESCE(NULLIF($4, ''), identified_phone_hash)
-			WHERE id = $1
+			    identified_name = COALESCE(NULLIF($3, ''), identified_name),
+			    identified_email_hash = COALESCE(NULLIF($4, ''), identified_email_hash),
+			    identified_phone_hash = COALESCE(NULLIF($5, ''), identified_phone_hash)
+			WHERE site_id = $1 AND visitor_id = $2
 		`
-		_, _ = s.pg.Pool.Exec(ctx, updateSQL, visitorUUID, rawName, emailHash, phoneHash)
+		_, _ = s.pg.Pool.Exec(ctx, updateSQL, siteUUID, visitorID, rawName, emailHash, phoneHash)
 
 		if existingVisitor.FirstGCLID != nil {
 			firstTouchMap["gclid"] = *existingVisitor.FirstGCLID
@@ -187,6 +194,12 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 func (s *Service) checkAndRouteDispatch(ctx context.Context, ev *collector.EventPayload, firstTouch map[string]interface{}) error {
 	if ev.IsBot {
 		log.Printf("[Identity] Interceptado: conversão '%s' originada de robô (motivo: %s). Despacho externo abortado para proteger Ads.", ev.EventName, ev.BotReason)
+		return nil
+	}
+
+	// Gatekeeper de Privacidade: valida consentimento de marketing e sinal GPC
+	if !ev.Consent.Marketing || ev.PrivacySignals.GPC {
+		log.Printf("[Identity] Interceptado por compliance: conversão '%s' sem consentimento de marketing (marketing=%v, gpc=%v). Despacho externo cancelado.", ev.EventName, ev.Consent.Marketing, ev.PrivacySignals.GPC)
 		return nil
 	}
 

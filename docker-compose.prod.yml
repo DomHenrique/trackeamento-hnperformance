@@ -76,6 +76,7 @@ services:
       - DEFAULT_CLIENT_NAME=${DEFAULT_CLIENT_NAME:-Minha Organização}
       - DEFAULT_SITE_NAME=${DEFAULT_SITE_NAME:-Meu Site Principal}
       - DEFAULT_SITE_DOMAIN=${DEFAULT_SITE_DOMAIN:-}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=rede_gridd"

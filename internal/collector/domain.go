@@ -12,8 +12,9 @@ import (
 )
 
 type SiteMetadata struct {
-	ID             string
-	AllowedDomains []string
+	ID              string
+	AllowedDomains  []string
+	PrivacySettings *PrivacySettings
 }
 
 // ExtractOriginDomain extrai o domínio limpo da requisição.

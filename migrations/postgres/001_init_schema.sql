@@ -17,12 +17,14 @@ CREATE TABLE IF NOT EXISTS sites (
     name VARCHAR(255) NOT NULL,
     api_key VARCHAR(64) UNIQUE NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT true,
+    privacy_settings JSONB NOT NULL DEFAULT '{"version":"1.0","enforce_gpc":true,"mask_ip":true,"categories_policy":{"necessary":{"requires_consent":false,"mask_ip_mode":"last_octet"},"analytics":{"requires_consent":true,"issue_visitor_cookie":true,"cookie_lifespan_days":365},"marketing":{"requires_consent":true,"persist_attribution_params":true,"allow_third_party_dispatch":true}},"retention_policy_days":{"raw_events_clickhouse":90,"aggregated_events_clickhouse":730,"inactive_visitors_postgres":365}}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_sites_api_key ON sites(api_key);
 CREATE INDEX IF NOT EXISTS idx_sites_client_id ON sites(client_id);
+CREATE INDEX IF NOT EXISTS idx_sites_privacy_settings ON sites USING gin (privacy_settings);
 
 -- Tabela de Configurações de Integração Server-Side
 CREATE TABLE IF NOT EXISTS site_integrations (
@@ -41,8 +43,9 @@ CREATE INDEX IF NOT EXISTS idx_site_integrations_site ON site_integrations(site_
 
 -- Tabela de Visitantes e Atribuição de Primeiro Contato (First-Touch)
 CREATE TABLE IF NOT EXISTS visitors (
-    id UUID PRIMARY KEY, -- Mantém o mesmo UUID do cookie _vid
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    visitor_id VARCHAR(64) NOT NULL,
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     
@@ -64,10 +67,12 @@ CREATE TABLE IF NOT EXISTS visitors (
     identified_phone_hash VARCHAR(64),
     
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_visitors_site_visitor UNIQUE (site_id, visitor_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_visitors_site_last_seen ON visitors(site_id, last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS idx_visitors_site_visitor_id ON visitors(site_id, visitor_id);
 CREATE INDEX IF NOT EXISTS idx_visitors_email_hash ON visitors(identified_email_hash);
 CREATE INDEX IF NOT EXISTS idx_visitors_phone_hash ON visitors(identified_phone_hash);
 CREATE INDEX IF NOT EXISTS idx_visitors_gclid ON visitors(first_gclid);

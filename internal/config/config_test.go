@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net"
 	"strings"
 	"testing"
 )
@@ -136,6 +137,62 @@ func TestGetEnvAsBool(t *testing.T) {
 		if res != c.expected {
 			t.Errorf("getEnvAsBool(%q, %v) = %v; esperado %v", c.val, c.def, res, c.expected)
 		}
+	}
+}
+
+func TestTrustedProxies_ParsingAndEvaluation(t *testing.T) {
+	raw := "127.0.0.1, 10.0.0.0/8, 172.16.0.0/12, ::1"
+	cidrs := ParseCIDRList(raw)
+	if len(cidrs) != 4 {
+		t.Fatalf("Esperava 4 blocos CIDR parseados, obteve %d", len(cidrs))
+	}
+
+	cfg := &Config{
+		TrustedProxiesRaw: raw,
+		TrustedCIDRs:      cidrs,
+	}
+
+	// IPs confiáveis
+	if !cfg.IsTrustedProxy(net.ParseIP("127.0.0.1")) {
+		t.Errorf("127.0.0.1 deve ser reconhecido como confiável")
+	}
+	if !cfg.IsTrustedProxy(net.ParseIP("10.1.2.3")) {
+		t.Errorf("10.1.2.3 deve ser reconhecido como confiável")
+	}
+	if !cfg.IsTrustedProxy(net.ParseIP("172.20.0.5")) {
+		t.Errorf("172.20.0.5 deve ser reconhecido como confiável")
+	}
+	if !cfg.IsTrustedProxy(net.ParseIP("::1")) {
+		t.Errorf("::1 deve ser reconhecido como confiável")
+	}
+
+	// IPs externos não confiáveis
+	if cfg.IsTrustedProxy(net.ParseIP("198.51.100.1")) {
+		t.Errorf("198.51.100.1 NÃO deve ser confiável")
+	}
+	if cfg.IsTrustedProxy(net.ParseIP("8.8.8.8")) {
+		t.Errorf("8.8.8.8 NÃO deve ser confiável")
+	}
+}
+
+func TestTrustedProxies_RejectWildcard(t *testing.T) {
+	cfg := &Config{
+		Env:                "production",
+		AdminPassword:      "Admin_Super_Seguro_Long_Pass_2026!#",
+		PostgresPassword:   "Postgres_Prod_Secret_Db_Pass_2026!#",
+		RedisPassword:      "Redis_Prod_Secret_Stream_Pass_2026!#",
+		ClickHousePassword: "ClickHouse_Prod_Secret_Events_Pass_2026!#",
+		ServerKey:          "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+		HMACPepper:         "z9y8x7w6v5u4t3s2r1q0p1o2n3m4l5k6",
+		TrustedProxiesRaw:  "0.0.0.0/0",
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatalf("Esperava erro ao usar 0.0.0.0/0 em TRUSTED_PROXIES, mas retornou nil")
+	}
+	if !strings.Contains(err.Error(), "0.0.0.0/0") {
+		t.Errorf("Esperava menção a 0.0.0.0/0 no erro, obteve: %v", err)
 	}
 }
 

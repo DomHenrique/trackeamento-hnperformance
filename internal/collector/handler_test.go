@@ -230,6 +230,195 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 			t.Errorf("esperado status %d quando Redis falha, obtido %d", fiber.StatusServiceUnavailable, resp.StatusCode)
 		}
 	})
+
+	// 9. Rejeita visitor_id arbitrário no corpo (prevenção contra Session Fixation / Cookie Poisoning)
+	t.Run("Descarta visitor_id arbitrário enviado no payload e gera novo hn_vis_", func(t *testing.T) {
+		testKey := prefixedid.GenerateSiteKey()
+		h.siteKeys.Store(testKey, &SiteMetadata{
+			ID:             "site_sec_test",
+			AllowedDomains: []string{"example.com"},
+		})
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"site_key":   testKey,
+			"event_name": "page_view",
+			"url":        "https://example.com/home",
+			"user_data": map[string]interface{}{
+				"visitor_id": "malicious_injected_vid_12345",
+			},
+		})
+		req := httptest.NewRequest("POST", "/api/v1/collect", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "https://example.com")
+
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("erro ao executar teste: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusAccepted {
+			t.Fatalf("esperado status %d, obtido %d", fiber.StatusAccepted, resp.StatusCode)
+		}
+
+		setCookie := resp.Header.Get("Set-Cookie")
+		if strings.Contains(setCookie, "malicious_injected_vid_12345") {
+			t.Errorf("VULNERABILIDADE: o servidor aceitou e gravou no cookie o visitor_id forjado no corpo: %s", setCookie)
+		}
+		if !strings.Contains(setCookie, "_vid="+prefixedid.PrefixVisitor) {
+			t.Errorf("servidor deve emitir novo cookie com prefixo %s, obtido: %s", prefixedid.PrefixVisitor, setCookie)
+		}
+	})
+
+	// 10. Descarta cookie _vid malformado
+	t.Run("Descarta cookie _vid malformado e emite novo hn_vis_", func(t *testing.T) {
+		testKey := prefixedid.GenerateSiteKey()
+		h.siteKeys.Store(testKey, &SiteMetadata{
+			ID:             "site_sec_test_2",
+			AllowedDomains: []string{"example.com"},
+		})
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"site_key":   testKey,
+			"event_name": "page_view",
+			"url":        "https://example.com/home",
+		})
+		req := httptest.NewRequest("POST", "/api/v1/collect", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "https://example.com")
+		req.Header.Set("Cookie", "_vid=../../../etc/passwd")
+
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("erro ao executar teste: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusAccepted {
+			t.Fatalf("esperado status %d, obtido %d", fiber.StatusAccepted, resp.StatusCode)
+		}
+
+		setCookie := resp.Header.Get("Set-Cookie")
+		if strings.Contains(setCookie, "../../../etc/passwd") {
+			t.Errorf("servidor não deve emitir cookie com valor malformado: %s", setCookie)
+		}
+		if !strings.Contains(setCookie, "_vid="+prefixedid.PrefixVisitor) {
+			t.Errorf("servidor deve emitir novo cookie com prefixo %s, obtido: %s", prefixedid.PrefixVisitor, setCookie)
+		}
+	})
+
+	// 11. Preserva cookie _vid legítimo
+	t.Run("Preserva cookie _vid legítimo", func(t *testing.T) {
+		testKey := prefixedid.GenerateSiteKey()
+		h.siteKeys.Store(testKey, &SiteMetadata{
+			ID:             "site_sec_test_3",
+			AllowedDomains: []string{"example.com"},
+		})
+
+		validVid := prefixedid.GenerateVisitorID()
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"site_key":   testKey,
+			"event_name": "page_view",
+			"url":        "https://example.com/home",
+		})
+		req := httptest.NewRequest("POST", "/api/v1/collect", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "https://example.com")
+		req.Header.Set("Cookie", "_vid="+validVid)
+
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("erro ao executar teste: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusAccepted {
+			t.Fatalf("esperado status %d, obtido %d", fiber.StatusAccepted, resp.StatusCode)
+		}
+
+		setCookie := resp.Header.Get("Set-Cookie")
+		if !strings.Contains(setCookie, "_vid="+validVid) {
+			t.Errorf("cookie legítimo deve ser preservado. Esperado %s, obtido: %s", validVid, setCookie)
+		}
+	})
+}
+
+func TestResolveClientIP_Security(t *testing.T) {
+	app := fiber.New()
+
+	t.Run("Ignora headers forjados quando TRUSTED_PROXIES está vazio (fail-secure)", func(t *testing.T) {
+		cfg := &config.Config{
+			Env:               "production",
+			TrustedProxiesRaw: "",
+			TrustedCIDRs:      nil,
+		}
+
+		var capturedIP string
+		app.Get("/test-ip-empty", func(c *fiber.Ctx) error {
+			capturedIP = ResolveClientIP(c, cfg)
+			return c.SendStatus(fiber.StatusOK)
+		})
+
+		req := httptest.NewRequest("GET", "/test-ip-empty", nil)
+		req.Header.Set("X-Real-IP", "198.51.100.1")
+		req.Header.Set("CF-Connecting-IP", "203.0.113.199")
+		req.Header.Set("X-Forwarded-For", "192.0.2.1")
+
+		_, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("erro ao executar teste: %v", err)
+		}
+
+		if capturedIP == "198.51.100.1" || capturedIP == "203.0.113.199" || capturedIP == "192.0.2.1" {
+			t.Errorf("FALHA DE SEGURANÇA: IP forjado foi aceito sem proxy confiável configurado: %s", capturedIP)
+		}
+		if capturedIP != "0.0.0.0" && capturedIP != "127.0.0.1" {
+			t.Logf("IP remoto direto capturado corretamente: %s", capturedIP)
+		}
+	})
+
+	t.Run("Aceita headers encaminhados quando conexão vem de proxy confiável configurado", func(t *testing.T) {
+		// No httptest do Go/Fiber, o RemoteAddr padrão é 0.0.0.0
+		cfg := &config.Config{
+			Env:               "production",
+			TrustedProxiesRaw: "0.0.0.0/32, 127.0.0.1/32",
+			TrustedCIDRs:      config.ParseCIDRList("0.0.0.0/32, 127.0.0.1/32"),
+		}
+
+		var capturedIP string
+		app.Get("/test-ip-trusted", func(c *fiber.Ctx) error {
+			capturedIP = ResolveClientIP(c, cfg)
+			return c.SendStatus(fiber.StatusOK)
+		})
+
+		// 1. Testa CF-Connecting-IP com precedência
+		req := httptest.NewRequest("GET", "/test-ip-trusted", nil)
+		req.Header.Set("CF-Connecting-IP", "177.18.19.20")
+		req.Header.Set("X-Real-IP", "10.0.0.1")
+		_, _ = app.Test(req)
+		if capturedIP != "177.18.19.20" {
+			t.Errorf("esperado CF-Connecting-IP '177.18.19.20', obtido: %s", capturedIP)
+		}
+
+		// 2. Testa X-Real-IP como fallback
+		req2 := httptest.NewRequest("GET", "/test-ip-trusted", nil)
+		req2.Header.Set("X-Real-IP", "189.20.21.22")
+		_, _ = app.Test(req2)
+		if capturedIP != "189.20.21.22" {
+			t.Errorf("esperado X-Real-IP '189.20.21.22', obtido: %s", capturedIP)
+		}
+
+		// 3. Testa X-Forwarded-For pegando o primeiro IP legítimo
+		req3 := httptest.NewRequest("GET", "/test-ip-trusted", nil)
+		req3.Header.Set("X-Forwarded-For", "201.50.60.70, 10.0.0.1")
+		_, _ = app.Test(req3)
+		if capturedIP != "201.50.60.70" {
+			t.Errorf("esperado primeiro IP de X-Forwarded-For '201.50.60.70', obtido: %s", capturedIP)
+		}
+
+		// 4. Ignora valores não IP malformados nos headers
+		req4 := httptest.NewRequest("GET", "/test-ip-trusted", nil)
+		req4.Header.Set("X-Real-IP", "../../../etc/passwd")
+		_, _ = app.Test(req4)
+		if capturedIP == "../../../etc/passwd" {
+			t.Errorf("servidor não deve aceitar string que não seja IP válido: %s", capturedIP)
+		}
+	})
 }
 
 func TestHandleDebugSimulateAndClear(t *testing.T) {

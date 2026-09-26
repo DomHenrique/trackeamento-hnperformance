@@ -102,6 +102,47 @@ func IsValidSiteKey(key string) bool {
 	return false
 }
 
+// IsValidVisitorID valida se o identificador obedece ao padrão hn_vis_[a-z0-9]{24} ou UUID v4 legado
+func IsValidVisitorID(id string) bool {
+	clean := SanitizeKey(id)
+	if clean == "" {
+		return false
+	}
+
+	// Padrão canônico da HN: hn_vis_ seguido de exatamente 24 caracteres alfanuméricos minúsculos
+	if strings.HasPrefix(clean, PrefixVisitor) {
+		body := clean[len(PrefixVisitor):]
+		if len(body) != 24 {
+			return false
+		}
+		for _, r := range body {
+			if !strings.ContainsRune(idAlphabet, r) {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Retrocompatibilidade com UUID v4 legado (com ou sem prefixo v_)
+	trimmed := strings.TrimPrefix(clean, "v_")
+	if len(trimmed) == 36 {
+		for i, r := range trimmed {
+			if i == 8 || i == 13 || i == 18 || i == 23 {
+				if r != '-' {
+					return false
+				}
+			} else {
+				if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+					return false
+				}
+			}
+		}
+		return true
+	}
+
+	return false
+}
+
 // ExtractIDType extrai e retorna o prefixo semântico do ID
 func ExtractIDType(id string) string {
 	clean := SanitizeKey(id)

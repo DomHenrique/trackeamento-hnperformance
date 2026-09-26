@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SitePrivacyConfiguration",
+  "description": "Especificação e configuração de privacidade, finalidades e retenção para um site específico (Tenant) no HN Tracking Engine.",
+  "site_id": "00000000-0000-0000-0000-000000000000",
+  "controller_info": {
+    "organization_name": "Empresa Cliente Exemplo Ltda",
+    "cnpj": "00.000.000/0001-00",
+    "dpo_name": "Encarregado de Dados (DPO)",
+    "dpo_email": "privacidade@clienteexemplo.com.br",
+    "privacy_policy_url": "https://clienteexemplo.com.br/politica-de-privacidade"
+  },
+  "purposes_enabled": {
+    "security_and_abuse_prevention": {
+      "enabled": true,
+      "legal_basis": "legitimate_interest",
+      "justification": "Mitigação de bots, proteção contra DDoS e segurança de infraestrutura"
+    },
+    "aggregated_site_analytics": {
+      "enabled": true,
+      "legal_basis": "legitimate_interest",
+      "justification": "Medição de audiência agregada e páginas mais acessadas sem rastreamento individual"
+    },
+    "multi_session_attribution": {
+      "enabled": true,
+      "legal_basis": "consent",
+      "justification": "Reconhecimento de visitantes recorrentes via cookie _vid para análise de jornada"
+    },
+    "ad_campaign_tracking": {
+      "enabled": true,
+      "legal_basis": "consent",
+      "justification": "Mensuração de campanhas pagas com captura de UTMs, GCLID e FBCLID"
+    },
+    "conversion_dispatch_external_ads": {
+      "enabled": true,
+      "legal_basis": "consent",
+      "justification": "Encaminhamento de eventos de conversão (leads/compras) para Meta CAPI e Google Ads"
+    }
+  },
+  "categories_policy": {
+    "necessary": {
+      "requires_consent": false,
+      "collect_client_signals": true,
+      "collect_ip": true,
+      "mask_ip_mode": "last_octet"
+    },
+    "analytics": {
+      "requires_consent": true,
+      "issue_visitor_cookie": true,
+      "cookie_lifespan_days": 365,
+      "respect_gpc_signal": true
+    },
+    "marketing": {
+      "requires_consent": true,
+      "persist_attribution_params": true,
+      "allow_third_party_dispatch": true,
+      "respect_gpc_signal": true
+    }
+  },
+  "browser_preferences": {
+    "respect_sec_gpc": true,
+    "sec_gpc_action": "revoke_marketing",
+    "respect_dnt": true,
+    "dnt_action": "revoke_marketing"
+  },
+  "retention_policy_days": {
+    "raw_events_clickhouse": 90,
+    "aggregated_events_clickhouse": 730,
+    "inactive_visitors_postgres": 365,
+    "consent_audit_logs_postgres": 1825
+  },
+  "updated_at": "2026-09-26T12:00:00Z",
+  "version": "1.0"
+}
