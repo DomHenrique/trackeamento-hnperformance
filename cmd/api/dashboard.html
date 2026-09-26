@@ -1645,6 +1645,179 @@
             justify-content: space-between;
             background: rgba(15, 23, 42, 0.95);
         }
+
+        /* Zero Sites Empty State Banner */
+        .zero-sites-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 3.5rem 1.5rem;
+            width: 100%;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .zero-sites-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.9) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 20px;
+            padding: 3rem 2.5rem;
+            max-width: 680px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 35px rgba(99, 102, 241, 0.12);
+            backdrop-filter: blur(16px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .zero-sites-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #6366f1, #a855f7, transparent);
+        }
+
+        .zero-sites-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.4rem 0.95rem;
+            background: rgba(99, 102, 241, 0.12);
+            border: 1px solid rgba(99, 102, 241, 0.28);
+            border-radius: 20px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #a5b4fc;
+            margin-bottom: 1.5rem;
+        }
+
+        .pulse-dot-indigo {
+            width: 8px;
+            height: 8px;
+            background-color: #6366f1;
+            border-radius: 50%;
+            box-shadow: 0 0 0 rgba(99, 102, 241, 0.7);
+            animation: pulse-indigo 2s infinite;
+        }
+
+        @keyframes pulse-indigo {
+            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+            70% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+
+        .zero-sites-icon-wrapper {
+            margin-bottom: 1.25rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .zero-sites-icon {
+            width: 68px;
+            height: 68px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(59, 130, 246, 0.2));
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+        }
+
+        .zero-sites-title {
+            font-size: 1.55rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.02em;
+        }
+
+        .zero-sites-desc {
+            font-size: 0.95rem;
+            line-height: 1.65;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            max-width: 540px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .zero-sites-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+
+        .btn-zero-create {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 0.85rem 1.65rem;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-zero-create:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.6);
+            background: linear-gradient(135deg, #4f46e5, #4338ca);
+        }
+
+        .btn-zero-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            padding: 0.85rem 1.4rem;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .btn-zero-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .zero-sites-features {
+            display: flex;
+            justify-content: space-around;
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+            padding-top: 1.5rem;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .zero-feature-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.82rem;
+            color: #94a3b8;
+        }
+
+        .zero-feat-icon {
+            font-size: 1rem;
+        }
     </style>
 
 </head>
@@ -1738,7 +1911,50 @@
 
             <!-- TAB 1: VISÃO GERAL -->
             <div id="tab-overview" class="tab-pane active">
-                <div class="kpi-grid">
+
+                <!-- Card de Boas-Vindas quando 0 Sites Cadastrados -->
+                <div id="zero-sites-banner" class="zero-sites-container" style="display: none;">
+                    <div class="zero-sites-card">
+                        <div class="zero-sites-badge">
+                            <span class="pulse-dot-indigo"></span>
+                            <span>Motor de Trackeamento Ativo</span>
+                        </div>
+                        <div class="zero-sites-icon-wrapper">
+                            <div class="zero-sites-icon">🌐</div>
+                        </div>
+                        <h2 class="zero-sites-title">Nenhum Site Cadastrado Ainda</h2>
+                        <p class="zero-sites-desc">
+                            Sua infraestrutura de trackeamento está operacional e pronta para coletar eventos com máxima velocidade.
+                            Cadastre seu primeiro site ou domínio para ativar o monitoramento em tempo real, capturar UTMs e visualizar métricas.
+                        </p>
+                        <div class="zero-sites-actions">
+                            <button type="button" class="btn-zero-create" onclick="openCreateSiteModal()">
+                                <span>➕</span> Cadastrar Primeiro Site
+                            </button>
+                            <button type="button" class="btn-zero-secondary" onclick="openIntegrationsWizard()">
+                                <span>⚡</span> Configurar Envios & CAPI
+                            </button>
+                        </div>
+                        <div class="zero-sites-features">
+                            <div class="zero-feature-item">
+                                <span class="zero-feat-icon">⚡</span>
+                                <span class="zero-feat-text">Ingestão ultrarrápida &lt; 10ms</span>
+                            </div>
+                            <div class="zero-feature-item">
+                                <span class="zero-feat-icon">🛡️</span>
+                                <span class="zero-feat-text">Proteção 1st-Party & Detecção de Bots</span>
+                            </div>
+                            <div class="zero-feature-item">
+                                <span class="zero-feat-icon">🎯</span>
+                                <span class="zero-feat-text">Atribuição Multi-Toque e UTMs</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conteúdo da Visão Geral -->
+                <div id="overview-content">
+                    <div class="kpi-grid">
                     <div class="kpi-card">
                         <div class="kpi-header">
                             <span>VISITANTES ÚNICOS</span>
@@ -1819,6 +2035,7 @@
                         </table>
                     </div>
                 </div>
+                </div> <!-- fecha overview-content -->
             </div>
 
             <!-- TAB 2: PÁGINAS MONITORADAS (ESTILO SEARCH CONSOLE) -->
@@ -2710,15 +2927,66 @@
             }
         }
 
+        function updateZeroSitesState(isZero) {
+            const banner = document.getElementById('zero-sites-banner');
+            const overviewContent = document.getElementById('overview-content');
+            if (banner) {
+                banner.style.display = isZero ? 'flex' : 'none';
+            }
+            if (overviewContent) {
+                overviewContent.style.display = isZero ? 'none' : 'block';
+            }
+            if (isZero) {
+                const kpiVis = document.getElementById('kpi-visitors');
+                if (kpiVis) kpiVis.textContent = '0';
+                const kpiEv = document.getElementById('kpi-events');
+                if (kpiEv) kpiEv.textContent = '0';
+                const kpiConv = document.getElementById('kpi-conversions');
+                if (kpiConv) kpiConv.textContent = '0 conv.';
+                const kpiNow = document.getElementById('kpi-active-now');
+                if (kpiNow) kpiNow.textContent = '0 online';
+
+                const topPages = document.getElementById('overview-top-pages');
+                if (topPages) topPages.innerHTML = '<tr><td colspan="2" style="color: #64748b; text-align: center; padding: 1.5rem;">Nenhum site monitorado</td></tr>';
+                const topSources = document.getElementById('overview-top-sources');
+                if (topSources) topSources.innerHTML = '<tr><td colspan="2" style="color: #64748b; text-align: center; padding: 1.5rem;">Nenhum site monitorado</td></tr>';
+
+                if (typeof trafficChartInstance !== 'undefined' && trafficChartInstance) {
+                    trafficChartInstance.destroy();
+                    trafficChartInstance = null;
+                }
+            }
+        }
+
         async function loadSites(preserveSelection = true) {
             try {
                 const prevValue = preserveSelection ? (document.getElementById('select-site')?.value || '') : '';
                 const res = await fetch('/api/v1/sites');
                 if (!res.ok) return;
                 const sites = await res.json();
-                globalSitesList = sites;
+                globalSitesList = sites || [];
                 const sel = document.getElementById('select-site');
                 sel.innerHTML = '';
+
+                // Se houver 0 sites cadastrados: estado limpo e sem modais forçados
+                if (!sites || sites.length === 0) {
+                    const optEmpty = document.createElement('option');
+                    optEmpty.value = '';
+                    optEmpty.textContent = '🌐 Nenhum Site Cadastrado';
+                    sel.appendChild(optEmpty);
+
+                    const optNew = document.createElement('option');
+                    optNew.value = '__new_site__';
+                    optNew.textContent = '➕ Cadastrar Primeiro Site...';
+                    sel.appendChild(optNew);
+
+                    sel.value = '';
+                    previousSiteSelectValue = '';
+                    updateZeroSitesState(true);
+                    return;
+                }
+
+                updateZeroSitesState(false);
 
                 // 1. Opção Geral
                 const optAll = document.createElement('option');
@@ -2790,6 +3058,12 @@
             if (sel) {
                 previousSiteSelectValue = sel.value;
             }
+
+            if (!globalSitesList || globalSitesList.length === 0) {
+                updateZeroSitesState(true);
+                return;
+            }
+            updateZeroSitesState(false);
 
             const { siteID, domain } = getSelectedSiteAndDomain();
             const range = document.getElementById('select-range').value;

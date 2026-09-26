@@ -58,8 +58,11 @@
         if (currentScript && currentScript.src && currentScript.src.indexOf('/sdk/tracker.js') !== -1) {
             return currentScript.src.replace(/\/sdk\/tracker\.js.*$/, '/api/v1/collect');
         }
-        // Fallback absoluto para produção do motor HN
-        return 'https://trackeamento.hnperformancedigital.com.br/api/v1/collect';
+        // Fallback dinâmico para a origem atual da página ou caminho relativo
+        if (typeof window !== 'undefined' && window.location && window.location.origin) {
+            return window.location.origin + '/api/v1/collect';
+        }
+        return '/api/v1/collect';
     }
 
     var apiEndpoint = resolveApiEndpoint();

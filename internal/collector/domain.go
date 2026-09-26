@@ -284,7 +284,19 @@ func (h *Handler) HandleCreateSite(c *fiber.Ctx) error {
 		_ = h.pg.Pool.QueryRow(c.Context(), "SELECT id::text FROM clients ORDER BY created_at ASC LIMIT 1").Scan(&clientID)
 	}
 	if clientID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "client_id obrigatorio"})
+		// Auto-criação resiliente de organização padrão para o primeiro site cadastrado
+		orgName := "Organização Principal"
+		if name != "" {
+			orgName = name
+		}
+		err := h.pg.Pool.QueryRow(c.Context(), `
+			INSERT INTO clients (name)
+			VALUES ($1)
+			RETURNING id::text
+		`, orgName).Scan(&clientID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("erro ao criar organização inicial: %v", err)})
+		}
 	}
 
 	newSiteKey := prefixedid.GenerateSiteKey()

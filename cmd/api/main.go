@@ -154,10 +154,7 @@ func main() {
 				return false
 			}
 			host := strings.ToLower(u.Hostname())
-			if host == "trackeamento.hnperformancedigital.com.br" {
-				return true
-			}
-			if cfg.TrackingDomain != "" && host == strings.ToLower(cfg.TrackingDomain) {
+			if cfg.TrackingDomain != "" && (host == strings.ToLower(cfg.TrackingDomain) || strings.HasSuffix(host, "."+strings.ToLower(cfg.TrackingDomain))) {
 				return true
 			}
 			if cfg.Env == "development" && (host == "localhost" || host == "127.0.0.1" || strings.HasSuffix(host, ".local")) {
