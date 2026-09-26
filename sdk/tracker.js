@@ -5,25 +5,33 @@
 (function (window, document) {
     'use strict';
 
+    function extractKeyFromUrl(url) {
+        if (!url || typeof url !== 'string') return '';
+        var match = url.match(/[?&](?:site_key|key)=([a-zA-Z0-9_-]+)/);
+        return match ? match[1] : '';
+    }
+
     // 1. Identificação Robusta do Script e Configurações (com suporte nativo ao GTM)
     function resolveSiteKey() {
         if (window.__HN_SITE_KEY__) return String(window.__HN_SITE_KEY__).trim();
-        if (document.currentScript && document.currentScript.getAttribute('data-site-key')) {
-            return document.currentScript.getAttribute('data-site-key').trim();
+        if (document.currentScript) {
+            if (document.currentScript.getAttribute('data-site-key')) {
+                return document.currentScript.getAttribute('data-site-key').trim();
+            }
+            var fromCurrSrc = extractKeyFromUrl(document.currentScript.src);
+            if (fromCurrSrc) return fromCurrSrc;
         }
         var anyElement = document.querySelector('[data-site-key]');
         if (anyElement && anyElement.getAttribute('data-site-key')) {
             return anyElement.getAttribute('data-site-key').trim();
         }
-        // GTM e injeções assíncronas podem armazenar atributos em scripts já existentes no DOM
-        var taggedScripts = document.querySelectorAll('script[data-site-key]');
-        if (taggedScripts && taggedScripts.length > 0) {
-            return taggedScripts[taggedScripts.length - 1].getAttribute('data-site-key').trim();
-        }
         var allScripts = document.getElementsByTagName('script');
         for (var i = allScripts.length - 1; i >= 0; i--) {
-            var k = allScripts[i].getAttribute('data-site-key');
+            var s = allScripts[i];
+            var k = s.getAttribute('data-site-key');
             if (k) return k.trim();
+            var fromSrc = extractKeyFromUrl(s.src || s.getAttribute('data-gtmsrc'));
+            if (fromSrc) return fromSrc;
         }
         return '';
     }

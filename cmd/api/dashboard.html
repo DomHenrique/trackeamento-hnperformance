@@ -2994,8 +2994,11 @@
                                 <span class="doc-code-lang">HTML Personalizado no GTM</span>
                                 <button class="doc-btn-copy" onclick="copyDocsSnippet('snippet-docs-gtm', this)">📋 Copiar Código</button>
                             </div>
-                            <pre><code id="snippet-docs-gtm">&lt;script 
-  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
+                            <pre><code id="snippet-docs-gtm">&lt;script&gt;
+  window.__HN_SITE_KEY__ = "<span class="docs-dynamic-key">hn_site_demo</span>";
+&lt;/script&gt;
+&lt;script 
+  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js?key=<span class="docs-dynamic-key">hn_site_demo</span>" 
   data-site-key="<span class="docs-dynamic-key">hn_site_demo</span>" 
   async&gt;
 &lt;/script&gt;</code></pre>
