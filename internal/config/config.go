@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -49,6 +50,12 @@ type Config struct {
 	DispatcherWorkers    int
 	DispatcherMaxRetries int
 	DispatcherTimeoutSec int
+
+	// Declarative Bootstrap (Optional)
+	SeedDefaultSite   bool
+	DefaultClientName string
+	DefaultSiteName   string
+	DefaultSiteDomain string
 }
 
 func Load() *Config {
@@ -86,33 +93,69 @@ func Load() *Config {
 		DispatcherWorkers:    getEnvAsInt("DISPATCHER_WORKERS", 8),
 		DispatcherMaxRetries: getEnvAsInt("DISPATCHER_MAX_RETRIES", 5),
 		DispatcherTimeoutSec: getEnvAsInt("DISPATCHER_TIMEOUT_SEC", 10),
+
+		SeedDefaultSite:   getEnvAsBool("SEED_DEFAULT_SITE", false),
+		DefaultClientName: getEnv("DEFAULT_CLIENT_NAME", "Minha Organização"),
+		DefaultSiteName:   getEnv("DEFAULT_SITE_NAME", "Meu Site Principal"),
+		DefaultSiteDomain: getEnv("DEFAULT_SITE_DOMAIN", ""),
 	}
 }
 
-// Validate executa verificação defensiva de segurança e emite alertas para senhas padrão
+func isWeakOrPlaceholder(val, defaultVal string, minLen int) (bool, string) {
+	valTrim := strings.TrimSpace(val)
+	if valTrim == "" {
+		return true, "está vazio"
+	}
+	if defaultVal != "" && valTrim == defaultVal {
+		return true, fmt.Sprintf("está utilizando o valor padrão inseguro '%s'", defaultVal)
+	}
+	lower := strings.ToLower(valTrim)
+	if strings.HasPrefix(lower, "change_") || strings.HasPrefix(lower, "generate_") {
+		return true, "está utilizando um placeholder de exemplo que deve ser substituído"
+	}
+	if lower == "admin" || lower == "password" || lower == "123456" || lower == "root" || lower == "test" {
+		return true, "está utilizando uma senha fraca trivial"
+	}
+	if len(valTrim) < minLen {
+		return true, fmt.Sprintf("tem comprimento insuficiente (%d caracteres, mínimo exigido: %d)", len(valTrim), minLen)
+	}
+	return false, ""
+}
+
+// Validate executa verificação defensiva de segurança e emite erro fatal em produção se houver credenciais padrão ou fracas
 func (c *Config) Validate() error {
-	strict := os.Getenv("STRICT_CONFIG_VALIDATION") == "true"
+	isProd := strings.EqualFold(c.Env, "production")
+	strict := isProd || os.Getenv("STRICT_CONFIG_VALIDATION") == "true"
 
-	var warnings []string
-	if c.AdminPassword == "hn_admin_secret_pass_2026" {
-		warnings = append(warnings, "ADMIN_PASSWORD está utilizando a senha padrão. Recomenda-se definir uma senha personalizada.")
-	}
-	if c.PostgresPassword == "postgres_secret_pass" {
-		warnings = append(warnings, "POSTGRES_PASSWORD está utilizando a senha padrão.")
-	}
-	if c.RedisPassword == "redis_secret_pass" {
-		warnings = append(warnings, "REDIS_PASSWORD está utilizando a senha padrão.")
-	}
-	if c.ClickHousePassword == "clickhouse_secret_pass" {
-		warnings = append(warnings, "CLICKHOUSE_PASSWORD está utilizando a senha padrão.")
+	type fieldCheck struct {
+		name       string
+		val        string
+		defaultVal string
+		minLen     int
 	}
 
-	for _, w := range warnings {
-		log.Printf("[SECURITY WARNING] %s", w)
+	checks := []fieldCheck{
+		{"ADMIN_PASSWORD", c.AdminPassword, "hn_admin_secret_pass_2026", 12},
+		{"POSTGRES_PASSWORD", c.PostgresPassword, "postgres_secret_pass", 12},
+		{"REDIS_PASSWORD", c.RedisPassword, "redis_secret_pass", 12},
+		{"CLICKHOUSE_PASSWORD", c.ClickHousePassword, "clickhouse_secret_pass", 12},
+		{"SERVER_API_KEY", c.ServerKey, "hn_server_internal_secret_key", 16},
+		{"HMAC_PEPPER", c.HMACPepper, "hn_pepper_secret_salt_2026", 16},
 	}
 
-	if strict && len(warnings) > 0 {
-		return fmt.Errorf("STRICT_CONFIG_VALIDATION: %d credenciais padrão detectadas em produção", len(warnings))
+	var issues []string
+	for _, chk := range checks {
+		if invalid, reason := isWeakOrPlaceholder(chk.val, chk.defaultVal, chk.minLen); invalid {
+			issues = append(issues, fmt.Sprintf("%s %s", chk.name, reason))
+		}
+	}
+
+	for _, issue := range issues {
+		log.Printf("[SECURITY WARNING] %s", issue)
+	}
+
+	if strict && len(issues) > 0 {
+		return fmt.Errorf("falha na validação de segurança de produção: %s", strings.Join(issues, "; "))
 	}
 
 	return nil
@@ -141,3 +184,12 @@ func getEnvAsInt(key string, defaultVal int) int {
 	}
 	return val
 }
+
+func getEnvAsBool(key string, defaultVal bool) bool {
+	valStr := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if valStr == "" {
+		return defaultVal
+	}
+	return valStr == "true" || valStr == "1" || valStr == "yes"
+}
+

@@ -130,6 +130,11 @@ func (s *Service) HandleLogin(c *fiber.Ctx) error {
 		}
 	}
 
+	return s.RespondAuthenticated(c, user, token)
+}
+
+// RespondAuthenticated emite o cookie de sessão HttpOnly seguro e responde JSON sem expor o token
+func (s *Service) RespondAuthenticated(c *fiber.Ctx, user User, token string) error {
 	c.Cookie(&fiber.Cookie{
 		Name:     SessionCookieName,
 		Value:    token,
@@ -143,7 +148,6 @@ func (s *Service) HandleLogin(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"status": "authenticated",
 		"user":   user,
-		"token":  token,
 	})
 }
 

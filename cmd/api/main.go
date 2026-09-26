@@ -53,6 +53,9 @@ func main() {
 		log.Printf("Aviso: Falha ao conectar no Postgres: %v (seguindo com fallback de chaves)", err)
 	} else {
 		defer pg.Close()
+		if err := pg.BootstrapDeclarativeSite(context.Background(), cfg); err != nil {
+			log.Printf("Aviso: Falha no bootstrap declarativo do Postgres: %v", err)
+		}
 	}
 
 	// 3. Conexão opcional com ClickHouse (métricas analíticas e telemetria de robôs)
