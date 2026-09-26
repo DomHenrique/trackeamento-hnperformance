@@ -11,6 +11,10 @@
         if (document.currentScript && document.currentScript.getAttribute('data-site-key')) {
             return document.currentScript.getAttribute('data-site-key').trim();
         }
+        var anyElement = document.querySelector('[data-site-key]');
+        if (anyElement && anyElement.getAttribute('data-site-key')) {
+            return anyElement.getAttribute('data-site-key').trim();
+        }
         // GTM e injeções assíncronas podem armazenar atributos em scripts já existentes no DOM
         var taggedScripts = document.querySelectorAll('script[data-site-key]');
         if (taggedScripts && taggedScripts.length > 0) {
@@ -43,7 +47,7 @@
         if (currentScript && currentScript.getAttribute('data-endpoint')) {
             return currentScript.getAttribute('data-endpoint').trim();
         }
-        var epScript = document.querySelector('script[data-endpoint]');
+        var epScript = document.querySelector('script[data-endpoint], [data-endpoint]');
         if (epScript && epScript.getAttribute('data-endpoint')) {
             return epScript.getAttribute('data-endpoint').trim();
         }
@@ -58,11 +62,8 @@
         if (currentScript && currentScript.src && currentScript.src.indexOf('/sdk/tracker.js') !== -1) {
             return currentScript.src.replace(/\/sdk\/tracker\.js.*$/, '/api/v1/collect');
         }
-        // Fallback dinâmico para a origem atual da página ou caminho relativo
-        if (typeof window !== 'undefined' && window.location && window.location.origin) {
-            return window.location.origin + '/api/v1/collect';
-        }
-        return '/api/v1/collect';
+        // Fallback seguro: se carregado em site cliente externo, envia sempre para o coletor oficial da HN
+        return 'https://trackeamento.hnperformancedigital.com.br/api/v1/collect';
     }
 
     var apiEndpoint = resolveApiEndpoint();
@@ -303,8 +304,14 @@
     // 5. Função Principal de Disparo de Eventos
     function trackEvent(eventName, userData, customData) {
         if (!siteKey) {
+            siteKey = resolveSiteKey().replace(/^["'`]|["'`]$/g, '');
+        }
+        if (!siteKey) {
             console.warn('[HN Tracker] data-site-key não configurada.');
             return;
+        }
+        if (!apiEndpoint || apiEndpoint === '/api/v1/collect') {
+            apiEndpoint = resolveApiEndpoint();
         }
 
         var eventId = generatePrefixedId('hn_evt_', 24); // Gerado no cliente para deduplicação com Meta Pixel / Google CAPI
