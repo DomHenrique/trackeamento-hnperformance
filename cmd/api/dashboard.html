@@ -1818,6 +1818,288 @@
         .zero-feat-icon {
             font-size: 1rem;
         }
+
+        /* ======================================================== */
+        /* ABA DE DOCUMENTAÇÃO & SDK (IN-DASHBOARD)                 */
+        /* ======================================================== */
+        .doc-section-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+            position: relative;
+        }
+
+        .doc-header-inline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .doc-badge-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 6px;
+            padding: 0.3rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .doc-site-banner {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(59, 130, 246, 0.08));
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .doc-step-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .doc-step-number {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, var(--primary), #3b82f6);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+            flex-shrink: 0;
+        }
+
+        .doc-step-desc {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .doc-tab-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+            overflow-x: auto;
+        }
+
+        .doc-tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            padding: 0.45rem 0.9rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .doc-tab-btn:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .doc-tab-btn.active {
+            color: #fff;
+            background: rgba(99, 102, 241, 0.2);
+            border-color: rgba(99, 102, 241, 0.35);
+            font-weight: 600;
+        }
+
+        .doc-sub-content {
+            display: none;
+        }
+
+        .doc-sub-content.active {
+            display: block;
+        }
+
+        .doc-code-box {
+            background: #070b14;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin: 1rem 0 1.25rem;
+            overflow: hidden;
+        }
+
+        .doc-code-header {
+            background: rgba(15, 23, 42, 0.95);
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        .doc-code-lang {
+            font-family: monospace;
+            font-weight: 600;
+            color: #a5b4fc;
+        }
+
+        .doc-btn-copy {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+            padding: 0.25rem 0.65rem;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .doc-btn-copy:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+
+        .doc-code-box pre {
+            padding: 1.25rem;
+            overflow-x: auto;
+            font-size: 0.83rem;
+            line-height: 1.55;
+            margin: 0;
+            background: transparent;
+        }
+
+        .doc-code-box code {
+            font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
+            color: #e2e8f0;
+        }
+
+        .doc-event-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.25rem;
+            margin: 1.5rem 0;
+        }
+
+        .doc-event-card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.25rem;
+        }
+
+        .doc-event-badge {
+            display: inline-block;
+            font-family: monospace;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.2rem 0.55rem;
+            border-radius: 5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .doc-badge-pv { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .doc-badge-wa { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .doc-badge-lead { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+        .doc-alert-box {
+            background: rgba(245, 158, 11, 0.08);
+            border-left: 4px solid var(--warning);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1.5rem 0;
+            font-size: 0.85rem;
+            color: #fde68a;
+        }
+
+        .doc-alert-box strong { color: #fff; }
+
+        .doc-tester-card {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85));
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            border-radius: 14px;
+            padding: 2rem;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .doc-tester-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .doc-form-group label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 0.35rem;
+            font-weight: 500;
+        }
+
+        .doc-form-control {
+            width: 100%;
+            background: #070b14;
+            border: 1px solid var(--border);
+            color: #fff;
+            padding: 0.55rem 0.85rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .doc-form-control:focus {
+            border-color: var(--primary);
+        }
+
+        .doc-btn-test {
+            background: linear-gradient(135deg, var(--primary), #3b82f6);
+            color: #fff;
+            border: none;
+            padding: 0.65rem 1.4rem;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .doc-btn-test:hover { opacity: 0.9; }
+
+        .doc-tester-result {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            background: #050811;
+            font-family: monospace;
+            font-size: 0.8rem;
+            display: none;
+            line-height: 1.6;
+        }
     </style>
 
 </head>
@@ -1858,7 +2140,7 @@
             <a class="nav-item" onclick="openIntegrationsWizard()">
                 <span>🚀</span> Envios & CAPI (Wizard)
             </a>
-            <a class="nav-item" href="/docs" target="_blank">
+            <a class="nav-item" onclick="switchTab('docs', this)" id="nav-docs">
                 <span>📚</span> Guia de Instalação SDK
             </a>
 
@@ -2573,9 +2855,9 @@
                             <button class="btn-integ-wizard" onclick="openIntegrationsWizard()">
                                 <span>🚀</span> Configurar Envios CAPI (Meta, Google, GA4)
                             </button>
-                            <a href="/docs" target="_blank" class="btn-refresh" style="text-decoration: none; color: #cbd5e1; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1);">
-                                <span>📚</span> Ver Exemplos Avançados no Docs ↗
-                            </a>
+                            <button class="btn-refresh" onclick="switchTab('docs', document.getElementById('nav-docs'))" style="color: #cbd5e1; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1);">
+                                <span>📚</span> Ver Guia Completo do SDK ↗
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -2616,6 +2898,459 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- ABA: DOCUMENTAÇÃO & GUIA DE INSTALAÇÃO DO SDK  -->
+            <!-- ============================================== -->
+            <div id="tab-docs" class="tab-pane">
+                <!-- Cabeçalho Interno do Guia -->
+                <div class="doc-section-card" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.4rem;">
+                                <span class="doc-badge-tag">⚡ SDK v1.0 • Produção</span>
+                                <span style="font-size: 0.8rem; color: #10b981; font-weight: 600;">● First-Party 100% Server-Side</span>
+                            </div>
+                            <h2 style="font-size: 1.7rem; font-weight: 800; color: #fff; margin-bottom: 0.35rem;">Guia de Instalação & SDK de Eventos</h2>
+                            <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
+                                Passo a passo completo de integração nos sites dos clientes, captura de eventos automáticos, disparos manuais JS e deduplicação CAPI.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+                            <button class="btn-refresh" onclick="switchTab('debug', document.getElementById('nav-debug'))" style="background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); color: #a5b4fc;">
+                                <span>⚡</span> Abrir DebugView Ao Vivo
+                            </button>
+                            <button class="btn-integ-wizard" onclick="openIntegrationsWizard()">
+                                <span>🚀</span> Configurar Envios CAPI
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Banner Dinâmico da Chave do Site -->
+                <div class="doc-site-banner">
+                    <div>
+                        <h4 style="font-size: 0.95rem; font-weight: 600; color: #e0e7ff; margin-bottom: 0.2rem;">Chave do Site em Uso (Type-Prefixed ID)</h4>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                            Os códigos e snippets abaixo são sincronizados automaticamente com a chave ativa do site selecionado no menu superior:
+                        </p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                        <input type="text" id="docs-global-site-key" readonly style="background: #0b1120; border: 1px solid var(--border); color: #38bdf8; font-family: monospace; padding: 0.5rem 0.85rem; border-radius: 6px; font-size: 0.85rem; min-width: 270px; outline: none;" value="Carregando chave..." oninput="updateDocsSnippetKeys(this.value)">
+                        <button class="doc-btn-copy" id="btn-copy-docs-key" onclick="copyDocsKey()" style="padding: 0.5rem 0.85rem; font-size: 0.8rem;">📋 Copiar Chave</button>
+                    </div>
+                </div>
+
+                <!-- PASSO 1: INSTALAÇÃO DA TAG -->
+                <div class="doc-section-card">
+                    <div class="doc-step-header">
+                        <div class="doc-step-number">1</div>
+                        <div>
+                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Instalação Básica da Tag no Site</h3>
+                        </div>
+                    </div>
+                    <p class="doc-step-desc">
+                        Adicione a tag do script preferencialmente dentro da tag <code>&lt;head&gt;</code> ou logo antes do fechamento de <code>&lt;/body&gt;</code> do site cliente. O script é ultraleve (&lt; 4KB) e assíncrono (<code>async</code>), sem nenhum impacto no tempo de carregamento da página.
+                    </p>
+
+                    <div class="doc-tab-buttons">
+                        <button class="doc-tab-btn active" onclick="switchDocsSubTab('install', 'html', this)">🌐 HTML / Landing Page</button>
+                        <button class="doc-tab-btn" onclick="switchDocsSubTab('install', 'gtm', this)">📦 Google Tag Manager (GTM)</button>
+                        <button class="doc-tab-btn" onclick="switchDocsSubTab('install', 'wp', this)">⚡ WordPress / Elementor</button>
+                    </div>
+
+                    <!-- SubTab HTML -->
+                    <div id="subtab-docs-install-html" class="doc-sub-content active">
+                        <div class="doc-code-box">
+                            <div class="doc-code-header">
+                                <span class="doc-code-lang">HTML</span>
+                                <button class="doc-btn-copy" onclick="copyDocsSnippet('snippet-docs-html', this)">📋 Copiar Código</button>
+                            </div>
+                            <pre><code id="snippet-docs-html">&lt;!-- HN Performance Server-Side Tracking SDK --&gt;
+&lt;script 
+  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
+  data-site-key="<span class="docs-dynamic-key">hn_site_demo</span>" 
+  async&gt;
+&lt;/script&gt;</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- SubTab GTM -->
+                    <div id="subtab-docs-install-gtm" class="doc-sub-content">
+                        <div class="doc-alert-box" style="margin-top: 0;">
+                            <strong>Como instalar no Google Tag Manager:</strong>
+                            <ol style="margin-left: 1.25rem; margin-top: 0.5rem; line-height: 1.6;">
+                                <li>No painel do GTM, vá em <b>Tags</b> → <b>Nova</b>.</li>
+                                <li>Em <b>Configuração da Tag</b>, selecione <b>HTML Personalizado</b>.</li>
+                                <li>Cole o código abaixo no campo HTML.</li>
+                                <li>Em <b>Acionamento</b>, selecione <b>Initialization - All Pages</b> (ou <b>All Pages</b>).</li>
+                                <li>Clique em <b>Salvar</b> e depois em <b>Publicar</b>.</li>
+                            </ol>
+                        </div>
+                        <div class="doc-code-box">
+                            <div class="doc-code-header">
+                                <span class="doc-code-lang">HTML Personalizado no GTM</span>
+                                <button class="doc-btn-copy" onclick="copyDocsSnippet('snippet-docs-gtm', this)">📋 Copiar Código</button>
+                            </div>
+                            <pre><code id="snippet-docs-gtm">&lt;script 
+  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
+  data-site-key="<span class="docs-dynamic-key">hn_site_demo</span>" 
+  async&gt;
+&lt;/script&gt;</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- SubTab WordPress / Elementor -->
+                    <div id="subtab-docs-install-wp" class="doc-sub-content">
+                        <div class="doc-alert-box" style="margin-top: 0;">
+                            <strong>Opções de instalação no WordPress:</strong>
+                            <ul style="margin-left: 1.25rem; margin-top: 0.5rem; line-height: 1.6;">
+                                <li><b>Elementor Pro:</b> Vá em <i>Elementor</i> → <i>Custom Code</i> → <i>Adicionar Novo</i> → Localização: <code>&lt;head&gt;</code> → Cole o script.</li>
+                                <li><b>Via Plugin Gratuito:</b> Instale o plugin <i>"WPCode (Insert Headers and Footers)"</i> e cole no bloco <b>Header</b>.</li>
+                            </ul>
+                        </div>
+                        <div class="doc-code-box">
+                            <div class="doc-code-header">
+                                <span class="doc-code-lang">Código para o Header</span>
+                                <button class="doc-btn-copy" onclick="copyDocsSnippet('snippet-docs-wp', this)">📋 Copiar Código</button>
+                            </div>
+                            <pre><code id="snippet-docs-wp">&lt;script 
+  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
+  data-site-key="<span class="docs-dynamic-key">hn_site_demo</span>" 
+  async&gt;
+&lt;/script&gt;</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PASSO 2: EVENTOS AUTOMÁTICOS -->
+                <div class="doc-section-card">
+                    <div class="doc-step-header">
+                        <div class="doc-step-number">2</div>
+                        <div>
+                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Eventos Automáticos (Zero Código Adicional)</h3>
+                        </div>
+                    </div>
+                    <p class="doc-step-desc">
+                        Assim que a tag é carregada, o SDK ativa 3 ouvintes globais para capturar os principais momentos da jornada do usuário sem que você precise escrever código JavaScript:
+                    </p>
+
+                    <div class="doc-event-grid">
+                        <div class="doc-event-card">
+                            <span class="doc-event-badge doc-badge-pv">page_view</span>
+                            <h4 style="font-size: 0.9rem; margin-bottom: 0.35rem; color: #fff;">Visualização de Página</h4>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
+                                Disparado no carregamento da URL. Salva e preserva no <code>localStorage</code> todos os parâmetros de anúncio da URL (<code>utm_source</code>, <code>utm_medium</code>, <code>utm_campaign</code>, <code>gclid</code>, <code>fbclid</code>, etc.) em modelo First-Touch resiliente.
+                            </p>
+                        </div>
+
+                        <div class="doc-event-card">
+                            <span class="doc-event-badge doc-badge-wa">whatsapp_click</span>
+                            <h4 style="font-size: 0.9rem; margin-bottom: 0.35rem; color: #fff;">Cliques de WhatsApp</h4>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
+                                Intercepta automaticamente qualquer clique em links <code>wa.me/*</code>, <code>api.whatsapp.com/*</code> e <code>whatsapp.com/*</code>, gravando a URL do WhatsApp e o texto do botão clicado.
+                            </p>
+                        </div>
+
+                        <div class="doc-event-card">
+                            <span class="doc-event-badge doc-badge-lead">lead (Auto-Form)</span>
+                            <h4 style="font-size: 0.9rem; margin-bottom: 0.35rem; color: #fff;">Submissão de Formulários</h4>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
+                                Monitora envios de <code>&lt;form&gt;</code> na página, extrai e normaliza automaticamente campos de e-mail, telefone/celular e nome do lead, enviando via <code>navigator.sendBeacon</code> sem atrasar a navegação.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PASSO 3: DISPAROS MANUAIS JS -->
+                <div class="doc-section-card">
+                    <div class="doc-step-header">
+                        <div class="doc-step-number">3</div>
+                        <div>
+                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Disparos Manuais via JavaScript (<code>window.hnTrack</code>)</h3>
+                        </div>
+                    </div>
+                    <p class="doc-step-desc">
+                        Para funis com modais JS, popups, botões customizados ou checkout de e-commerce, use a função global <code>window.hnTrack(eventName, options)</code>:
+                    </p>
+
+                    <div class="doc-tab-buttons">
+                        <button class="doc-tab-btn active" onclick="switchDocsSubTab('events', 'lead', this)">🎯 Lead Personalizado</button>
+                        <button class="doc-tab-btn" onclick="switchDocsSubTab('events', 'whatsapp', this)">💬 Clique WhatsApp</button>
+                        <button class="doc-tab-btn" onclick="switchDocsSubTab('events', 'purchase', this)">💰 Compra (Purchase)</button>
+                        <button class="doc-tab-btn" onclick="switchDocsSubTab('events', 'checkout', this)">🛒 Iniciar Checkout</button>
+                        <button class="doc-tab-btn" onclick="switchDocsSubTab('events', 'cart', this)">🛍️ Add to Cart</button>
+                        <button class="doc-tab-btn" onclick="switchDocsSubTab('events', 'content', this)">👁️ View Content</button>
+                        <button class="doc-tab-btn" onclick="switchDocsSubTab('events', 'contact', this)">📞 Contato / Tel</button>
+                    </div>
+
+                    <!-- Exemplo 1: Lead -->
+                    <div id="subtab-docs-events-lead" class="doc-sub-content active">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Ideal para formulários via AJAX/Fetch, modais de captura, popups e formulários multi-etapas.
+                        </p>
+                        <div class="doc-code-box">
+                            <div class="doc-code-header">
+                                <span class="doc-code-lang">JavaScript</span>
+                                <button class="doc-btn-copy" onclick="copyDocsSnippet('code-docs-lead', this)">📋 Copiar Código</button>
+                            </div>
+                            <pre><code id="code-docs-lead">window.hnTrack('lead', {
+  user_data: {
+    email: 'carlos.oliveira@empresa.com.br',
+    phone: '5511998887766',
+    name: 'Carlos Oliveira'
+  },
+  custom_data: {
+    form_name: 'Modal Proposta Rápida',
+    produto_interesse: 'Gerador Diesel 50kVA',
+    cidade: 'São Paulo'
+  }
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- Exemplo 2: WhatsApp -->
+                    <div id="subtab-docs-events-whatsapp" class="doc-sub-content">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Para botões flutuantes ou criados via JavaScript dinâmico onde o ouvinte nativo não esteja presente.
+                        </p>
+                        <div class="doc-code-box">
+                            <div class="doc-code-header">
+                                <span class="doc-code-lang">JavaScript</span>
+                                <button class="doc-btn-copy" onclick="copyDocsSnippet('code-docs-wa', this)">📋 Copiar Código</button>
+                            </div>
+                            <pre><code id="code-docs-wa">window.hnTrack('whatsapp_click', {
+  user_data: {
+    phone: '5521999998888' // se disponível
+  },
+  custom_data: {
+    button_name: 'Botão Flutuante Inferior Direito',
+    vendedor_responsavel: 'Equipe Comercial SP',
+    link_url: 'https://wa.me/5511999999999'
+  }
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- Exemplo 3: Purchase -->
+                    <div id="subtab-docs-events-purchase" class="doc-sub-content">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Para páginas de "Obrigado pela Compra" / Confirmação de Pedido em e-commerces, plataformas Hotmart, Eduzz, Kiwify ou checkout próprio.
+                        </p>
+                        <div class="doc-code-box">
+                            <div class="doc-code-header">
+                                <span class="doc-code-lang">JavaScript</span>
+                                <button class="doc-btn-copy" onclick="copyDocsSnippet('code-docs-purchase', this)">📋 Copiar Código</button>
+                            </div>
+                            <pre><code id="code-docs-purchase">window.hnTrack('purchase', {
+  user_data: {
+    email: 'cliente@gmail.com',
+    phone: '5511987654321',
+    name: 'Mariana Costa'
+  },
+  custom_data: {
+    value: 1290.00,
+    currency: 'BRL',
+    order_id: 'PED-998822',
+    contents: [
+      { id: 'GER-50KVA', name: 'Manutenção Preventiva', price: 1290.00, quantity: 1 }
+    ]
+  }
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- Exemplo 4: Initiate Checkout -->
+                    <div id="subtab-docs-events-checkout" class="doc-sub-content">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Disparado quando o visitante clica no botão para ir para a tela de pagamento / checkout.
+                        </p>
+                        <div class="doc-code-box">
+                            <div class="doc-code-header">
+                                <span class="doc-code-lang">JavaScript</span>
+                                <button class="doc-btn-copy" onclick="copyDocsSnippet('code-docs-checkout', this)">📋 Copiar Código</button>
+                            </div>
+                            <pre><code id="code-docs-checkout">window.hnTrack('initiate_checkout', {
+  custom_data: {
+    value: 497.00,
+    currency: 'BRL',
+    num_items: 1,
+    content_name: 'Plano Semestral Performance'
+  }
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- Exemplo 5: Add to Cart -->
+                    <div id="subtab-docs-events-cart" class="doc-sub-content">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Para lojas virtuais ou catálogos no clique em "Adicionar ao Orçamento" ou "Adicionar ao Carrinho".
+                        </p>
+                        <div class="doc-code-box">
+                            <div class="doc-code-header">
+                                <span class="doc-code-lang">JavaScript</span>
+                                <button class="doc-btn-copy" onclick="copyDocsSnippet('code-docs-cart', this)">📋 Copiar Código</button>
+                            </div>
+                            <pre><code id="code-docs-cart">window.hnTrack('add_to_cart', {
+  custom_data: {
+    content_name: 'Gerador Portátil Silenciado 7kVA',
+    content_id: 'GER-SIL-7',
+    value: 4500.00,
+    currency: 'BRL'
+  }
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- Exemplo 6: View Content -->
+                    <div id="subtab-docs-events-content" class="doc-sub-content">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Para rastrear quando o visitante visualiza um produto específico, artigo de blog ou proposta comercial.
+                        </p>
+                        <div class="doc-code-box">
+                            <div class="doc-code-header">
+                                <span class="doc-code-lang">JavaScript</span>
+                                <button class="doc-btn-copy" onclick="copyDocsSnippet('code-docs-content', this)">📋 Copiar Código</button>
+                            </div>
+                            <pre><code id="code-docs-content">window.hnTrack('view_content', {
+  custom_data: {
+    content_name: 'Geradores Industriais Cummins 150kVA',
+    content_category: 'Linha Industrial',
+    content_id: 'CUMMINS-150'
+  }
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- Exemplo 7: Contact -->
+                    <div id="subtab-docs-events-contact" class="doc-sub-content">
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                            Para cliques em links telefônicos (<code>tel:+5511...</code>), links de e-mail (<code>mailto:contato@...</code>) ou clique em agendamento de ligação.
+                        </p>
+                        <div class="doc-code-box">
+                            <div class="doc-code-header">
+                                <span class="doc-code-lang">JavaScript</span>
+                                <button class="doc-btn-copy" onclick="copyDocsSnippet('code-docs-contact', this)">📋 Copiar Código</button>
+                            </div>
+                            <pre><code id="code-docs-contact">window.hnTrack('contact', {
+  channel: 'telefone_fixo',
+  numero_discado: '0800 123 4567',
+  origem_clique: 'Cabecalho Principal'
+});</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PASSO 4: DEDUPLICAÇÃO COM META PIXEL -->
+                <div class="doc-section-card">
+                    <div class="doc-step-header">
+                        <div class="doc-step-number">4</div>
+                        <div>
+                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Deduplicação 100% Perfeita com Meta Pixel & CAPI</h3>
+                        </div>
+                    </div>
+                    <p class="doc-step-desc">
+                        Para garantir que o Meta Ads não duplique conversões quando o cliente tiver o Meta Pixel do navegador e o nosso Tracking Server-side rodando juntos, a função <code>window.hnTrack</code> retorna automaticamente o <code>event_id</code> (UUID v4) gerado no navegador:
+                    </p>
+
+                    <div class="doc-code-box">
+                        <div class="doc-code-header">
+                            <span class="doc-code-lang">Exemplo de Deduplicação (Browser Pixel + HN Engine)</span>
+                            <button class="doc-btn-copy" onclick="copyDocsSnippet('code-docs-dedup', this)">📋 Copiar Código</button>
+                        </div>
+                        <pre><code id="code-docs-dedup">// 1. Dispara no HN Tracker Engine e obtém o eventId único
+var eventId = window.hnTrack('lead', {
+  user_data: { email: 'lead@exemplo.com.br', phone: '5511999998888' }
+});
+
+// 2. Se o Meta Pixel tradicional estiver ativo na página, passe o mesmo eventID:
+if (typeof fbq === 'function' && eventId) {
+  fbq('track', 'Lead', {}, { eventID: eventId });
+}</code></pre>
+                    </div>
+                </div>
+
+                <!-- PASSO 5: INTEGRAÇÃO LINKEDIN & CAPI -->
+                <div class="doc-section-card">
+                    <div class="doc-step-header">
+                        <div class="doc-step-number" style="background: linear-gradient(135deg, #0a66c2, #0077b5);">in</div>
+                        <div>
+                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Passo 5: Envios Server-Side para LinkedIn CAPI (Direct API)</h3>
+                        </div>
+                    </div>
+                    <p class="doc-step-desc">
+                        O Trackeamento HN possui conector nativo para a <b>LinkedIn Conversions API (Direct API)</b>, permitindo o encaminhamento de conversões qualificadas (como <code>lead</code>, <code>purchase</code> e <code>contact</code>) diretamente aos servidores do LinkedIn Marketing Solutions com sanitização e hashing SHA-256 em conformidade com as diretrizes oficiais.
+                    </p>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border);">
+                            <h4 style="color: #38bdf8; margin-bottom: 0.4rem; font-size: 0.92rem;">1. Gerar Access Token</h4>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin: 0;">
+                                No Campaign Manager, acesse <i>Mensurar > Gerenciador de Sinais > Direct API</i> e gere seu token de acesso.
+                            </p>
+                        </div>
+                        <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border);">
+                            <h4 style="color: #38bdf8; margin-bottom: 0.4rem; font-size: 0.92rem;">2. Criar Regra de Conversão</h4>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin: 0;">
+                                Em <i>Rastreamento de conversões</i>, crie uma conversão via <b>Direct API</b> e copie o <b>Conversion Rule ID</b>.
+                            </p>
+                        </div>
+                        <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border);">
+                            <h4 style="color: #38bdf8; margin-bottom: 0.4rem; font-size: 0.92rem;">3. Ativar no Wizard</h4>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin: 0;">
+                                Clique em <b>Envios & CAPI (Wizard)</b> no menu lateral, selecione LinkedIn e salve as credenciais.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PASSO 6: CONSOLE DE TESTE INTERATIVO -->
+                <div class="doc-section-card doc-tester-card">
+                    <div class="doc-step-header">
+                        <div class="doc-step-number" style="background: linear-gradient(135deg, #10b981, #059669);">🧪</div>
+                        <div>
+                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Passo 6: Console de Teste Interativo (Playground)</h3>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                                Envie um evento em tempo real a partir desta tela para testar a comunicação imediata com o coletor em produção:
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="doc-tester-form">
+                        <div class="doc-form-group">
+                            <label>Tipo de Evento</label>
+                            <select id="doc-test-event-name" class="doc-form-control">
+                                <option value="lead">lead (Formulário / Captura)</option>
+                                <option value="whatsapp_click">whatsapp_click (Clique WhatsApp)</option>
+                                <option value="purchase">purchase (Compra Concluída)</option>
+                                <option value="initiate_checkout">initiate_checkout (Início Checkout)</option>
+                                <option value="contact">contact (Contato Geral)</option>
+                            </select>
+                        </div>
+
+                        <div class="doc-form-group">
+                            <label>E-mail de Teste</label>
+                            <input type="email" id="doc-test-email" class="doc-form-control" value="teste.lead@hnperformance.com.br">
+                        </div>
+
+                        <div class="doc-form-group">
+                            <label>Telefone de Teste</label>
+                            <input type="text" id="doc-test-phone" class="doc-form-control" value="5511998887766">
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                        <button class="doc-btn-test" onclick="sendDocsTestEvent()">
+                            <span>🚀</span> Disparar Evento de Teste
+                        </button>
+                        <button class="btn-refresh" onclick="switchTab('debug', document.getElementById('nav-debug'))" style="background: rgba(255,255,255,0.05); color: #cbd5e1;">
+                            <span>⚡</span> Ver no DebugView
+                        </button>
+                    </div>
+
+                    <div id="doc-test-output" class="doc-tester-result"></div>
                 </div>
             </div>
         </div>
@@ -2838,7 +3573,8 @@
                 'traffic': 'Origem do Tráfego & Dispositivos',
                 'funnels': 'Funis & Atribuição Multi-Toque',
                 'debug': '⚡ DebugView • Validação & Depuração de Eventos em Tempo Real',
-                'settings': '⚙️ Configurações do Site • Chaves de API & Snippet de Instalação'
+                'settings': '⚙️ Configurações do Site • Chaves de API & Snippet de Instalação',
+                'docs': '📚 Guia de Instalação do SDK & Eventos'
             };
             document.getElementById('view-title').textContent = titles[tabId] || 'Analytics Hub';
             loadActiveData();
@@ -3061,6 +3797,11 @@
 
             if (!globalSitesList || globalSitesList.length === 0) {
                 updateZeroSitesState(true);
+                if (currentTab === 'docs') {
+                    syncDocsTabKey();
+                } else if (currentTab === 'settings') {
+                    loadSiteSettingsTab();
+                }
                 return;
             }
             updateZeroSitesState(false);
@@ -3085,6 +3826,9 @@
             }
             if (currentTab === 'settings') {
                 await loadSiteSettingsTab();
+            }
+            if (currentTab === 'docs') {
+                await syncDocsTabKey();
             }
         }
 
@@ -5313,6 +6057,149 @@
             }
         }
 
+        // ========================================================
+        // FUNÇÕES DA ABA DOCUMENTAÇÃO & SDK (IN-DASHBOARD)
+        // ========================================================
+        let currentDocsActiveKey = '';
+
+        async function syncDocsTabKey() {
+            const siteId = getActiveSettingsSiteId();
+            const inputEl = document.getElementById('docs-global-site-key');
+            if (!siteId) {
+                currentDocsActiveKey = 'hn_site_demo';
+                if (inputEl) inputEl.value = 'Cadastre ou selecione um site no topo';
+                updateDocsSnippetKeys('hn_site_demo');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/v1/sites/${siteId}/keys`);
+                if (res.ok) {
+                    const keys = await res.json();
+                    const activeKeyObj = keys.find(k => k.status === 'active');
+                    if (activeKeyObj) {
+                        currentDocsActiveKey = activeKeyObj.key;
+                        if (inputEl) inputEl.value = activeKeyObj.key;
+                        updateDocsSnippetKeys(activeKeyObj.key);
+                        return;
+                    }
+                }
+                const found = (globalSitesList || []).find(s => s.id === siteId);
+                const k = (found && found.api_key) ? found.api_key : 'hn_site_' + siteId;
+                currentDocsActiveKey = k;
+                if (inputEl) inputEl.value = k;
+                updateDocsSnippetKeys(k);
+            } catch (err) {
+                console.error("Erro ao sincronizar chave com docs:", err);
+            }
+        }
+
+        function updateDocsSnippetKeys(key) {
+            key = (key || '').trim() || 'hn_site_demo';
+            document.querySelectorAll('.docs-dynamic-key').forEach(el => {
+                el.textContent = key;
+            });
+        }
+
+        function switchDocsSubTab(group, tabName, btn) {
+            const parent = btn.closest('.doc-section-card');
+            if (!parent) return;
+            parent.querySelectorAll('.doc-tab-btn').forEach(b => b.classList.remove('active'));
+            parent.querySelectorAll('.doc-sub-content').forEach(c => c.classList.remove('active'));
+
+            btn.classList.add('active');
+            const target = parent.querySelector(`#subtab-docs-${group}-${tabName}`);
+            if (target) target.classList.add('active');
+        }
+
+        function copyDocsSnippet(elementId, btn) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const text = el.innerText || el.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                if (btn) {
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '✅ Copiado!';
+                    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+                }
+            }).catch(() => {
+                alert('Código copiado!');
+            });
+        }
+
+        function copyDocsKey() {
+            const input = document.getElementById('docs-global-site-key');
+            const btn = document.getElementById('btn-copy-docs-key');
+            if (!input || !input.value) return;
+            navigator.clipboard.writeText(input.value).then(() => {
+                if (btn) {
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '✅ Copiado!';
+                    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+                }
+            }).catch(() => {
+                alert('Chave copiada!');
+            });
+        }
+
+        async function sendDocsTestEvent() {
+            const eventName = document.getElementById('doc-test-event-name').value;
+            const email = document.getElementById('doc-test-email').value;
+            const phone = document.getElementById('doc-test-phone').value;
+            const output = document.getElementById('doc-test-output');
+            const siteKey = currentDocsActiveKey || 'hn_site_demo';
+
+            output.style.display = 'block';
+            output.innerHTML = '<span style="color: #fbbf24;">⚡ Disparando evento para o coletor em produção...</span>';
+
+            const payload = {
+                event_name: eventName,
+                user_data: {
+                    email: email,
+                    phone: phone,
+                    name: 'Lead Teste Playground'
+                },
+                custom_data: {
+                    source: 'playground_dashboard_docs',
+                    origin: window.location.origin
+                },
+                page: {
+                    url: window.location.href,
+                    title: document.title,
+                    referrer: document.referrer || ''
+                }
+            };
+
+            try {
+                const res = await fetch('/api/v1/collect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Site-Key': siteKey
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const resData = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    output.innerHTML = `
+                        <div style="color: #34d399; font-weight: 600; margin-bottom: 0.3rem;">✓ Sucesso! Evento recebido pelo Coletor Go:</div>
+                        <div>• Evento: <b style="color: #fff;">${escapeHTML(eventName)}</b></div>
+                        <div>• Event ID: <code style="color: #38bdf8;">${escapeHTML(resData.event_id || 'gerado')}</code></div>
+                        <div>• Status HTTP: <b style="color: #34d399;">${res.status} OK</b> • Stream Redis: Gravado com sucesso</div>
+                        <div style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.4rem;">
+                            Abra a aba <b>DebugView (Ao Vivo)</b> ou <b>Leads</b> para acompanhar o processamento em tempo real!
+                        </div>
+                    `;
+                } else {
+                    output.innerHTML = `
+                        <div style="color: #f87171; font-weight: 600;">✕ Erro no coletor (${res.status}):</div>
+                        <div style="color: #fca5a5;">${escapeHTML(resData.error || resData.message || 'Chave de site inválida ou não autorizada')}</div>
+                    `;
+                }
+            } catch (err) {
+                output.innerHTML = `<span style="color: #f87171;">Falha na requisição: ${escapeHTML(err.message)}</span>`;
+            }
+        }
 
         // Inicialização Protegida
         async function initDashboard() {
