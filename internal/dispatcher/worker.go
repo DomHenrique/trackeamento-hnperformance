@@ -3,8 +3,13 @@ package dispatcher
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"math"
+	"math/rand"
+	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -89,6 +94,37 @@ func (wp *WorkerPool) Start(ctx context.Context) error {
 
 	consumerName := fmt.Sprintf("disp-consumer-%d", time.Now().Unix())
 
+	// Goroutine periódica de XAutoClaim para recuperar mensagens pendentes no PEL há mais de 60s
+	go func() {
+		claimTicker := time.NewTicker(30 * time.Second)
+		defer claimTicker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-claimTicker.C:
+				claimedMsgs, _, err := wp.redis.AutoClaimPending(ctx, stream, group, consumerName, 60*time.Second, "0-0", 50)
+				if err != nil {
+					if err != redis.Nil && ctx.Err() == nil {
+						log.Printf("[Dispatcher] Erro no XAutoClaim de mensagens pendentes: %v", err)
+					}
+					continue
+				}
+				if len(claimedMsgs) > 0 {
+					log.Printf("[Dispatcher] XAutoClaim reivindicou %d mensagens pendentes do PEL para reprocessamento.", len(claimedMsgs))
+					for _, msg := range claimedMsgs {
+						select {
+						case jobs <- msg:
+						case <-ctx.Done():
+							return
+						}
+					}
+				}
+			}
+		}
+	}()
+
 	// Loop principal distribuidor
 	for {
 		select {
@@ -143,71 +179,131 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 
 	// Busca integrações ativas do site no PostgreSQL
 	integrationsList := wp.loadSiteIntegrations(ctx, ev.SiteID)
+	if len(integrationsList) == 0 {
+		_ = wp.redis.Client.XAck(ctx, stream, group, msg.ID).Err()
+		return
+	}
 
 	var dispatchWG sync.WaitGroup
+	var mu sync.Mutex
+	allSettled := true
 
 	for _, integ := range integrationsList {
 		dispatchWG.Add(1)
 		go func(it SiteIntegrationRecord) {
 			defer dispatchWG.Done()
+
+			integID := it.ID
+			if integID == "" {
+				integID = fmt.Sprintf("%s_%s", ev.SiteID, it.Platform)
+			}
+
+			// 1. Tenta adquirir lease de processamento (TTL de 45 segundos)
+			acquired, alreadySucceeded, attempts, err := wp.redis.AcquireDispatchLease(ctx, integID, ev.EventID, 45*time.Second)
+			if err != nil {
+				log.Printf("[Dispatcher] Erro ao adquirir lease de despacho (%s / %s): %v", integID, ev.EventID, err)
+				mu.Lock()
+				allSettled = false
+				mu.Unlock()
+				return
+			}
+
+			if alreadySucceeded {
+				log.Printf("[Dispatcher] Evento %s já foi despachado com sucesso anteriormente para integração %s. Ignorando reenvio.", ev.EventID, integID)
+				return
+			}
+
+			if !acquired {
+				// Outro worker está processando ou ainda em janela de backoff
+				log.Printf("[Dispatcher] Lease não adquirida para evento %s na integração %s (worker ativo ou aguardando backoff).", ev.EventID, integID)
+				mu.Lock()
+				allSettled = false
+				mu.Unlock()
+				return
+			}
+
 			callCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 
+			var callErr error
 			switch it.Platform {
 			case "meta_capi":
 				pixelID := it.Credentials["pixel_id"]
 				token := it.Credentials["access_token"]
 				testCode := it.Credentials["test_event_code"]
-				if err := wp.metaCAPI.SendEvent(callCtx, pixelID, token, testCode, ev); err != nil {
-					log.Printf("[Dispatcher] Falha Meta CAPI (site %s): %v", ev.SiteID, err)
-				} else {
-					log.Printf("[Dispatcher] SUCESSO Meta CAPI: evento '%s' enviado!", ev.EventName)
-				}
+				callErr = wp.metaCAPI.SendEvent(callCtx, pixelID, token, testCode, ev)
 
 			case "ga4":
 				measurementID := it.Credentials["measurement_id"]
 				apiSecret := it.Credentials["api_secret"]
-				if err := wp.ga4MP.SendEvent(callCtx, measurementID, apiSecret, ev); err != nil {
-					log.Printf("[Dispatcher] Falha GA4 MP (site %s): %v", ev.SiteID, err)
-				} else {
-					log.Printf("[Dispatcher] SUCESSO GA4 MP: evento '%s' enviado!", ev.EventName)
-				}
+				callErr = wp.ga4MP.SendEvent(callCtx, measurementID, apiSecret, ev)
 
 			case "google_ads":
 				endpointURL := it.Credentials["endpoint_url"]
 				token := it.Credentials["api_token"]
-				if err := wp.googleAds.SendConversion(callCtx, endpointURL, token, ev); err != nil {
-					log.Printf("[Dispatcher] Falha Google Ads (site %s): %v", ev.SiteID, err)
-				}
+				callErr = wp.googleAds.SendConversion(callCtx, endpointURL, token, ev)
 
 			case "linkedin_capi":
 				token := it.Credentials["access_token"]
 				ruleID := it.Credentials["conversion_rule_id"]
-				if err := wp.linkedinCAPI.SendEvent(callCtx, token, ruleID, ev); err != nil {
-					log.Printf("[Dispatcher] Falha LinkedIn CAPI (site %s): %v", ev.SiteID, err)
-				} else {
-					log.Printf("[Dispatcher] SUCESSO LinkedIn CAPI: evento '%s' enviado!", ev.EventName)
-				}
+				callErr = wp.linkedinCAPI.SendEvent(callCtx, token, ruleID, ev)
 
 			case "webhook":
 				url := it.Credentials["webhook_url"]
 				secret := it.Credentials["secret_token"]
-				if err := wp.crm.SendWebhook(callCtx, url, secret, ev, dMsg.FirstTouch); err != nil {
-					log.Printf("[Dispatcher] Falha Webhook CRM (site %s): %v", ev.SiteID, err)
-				} else {
-					log.Printf("[Dispatcher] SUCESSO Webhook CRM: lead despachado para %s!", url)
+				callErr = wp.crm.SendWebhook(callCtx, url, secret, ev, dMsg.FirstTouch)
+			}
+
+			if callErr == nil {
+				log.Printf("[Dispatcher] SUCESSO %s: evento '%s' (%s) enviado com êxito!", it.Platform, ev.EventName, ev.EventID)
+				_ = wp.redis.MarkDispatchSuccess(ctx, integID, ev.EventID)
+				return
+			}
+
+			// Houve erro no disparo
+			log.Printf("[Dispatcher] Falha no disparo %s (site %s, evento %s, tentativa %d): %v", it.Platform, ev.SiteID, ev.EventID, attempts, callErr)
+
+			isPermanent := isPermanentError(callErr)
+			if isPermanent || attempts >= 5 {
+				// Erro terminal ou esgotamento de tentativas -> mover para Dead-Letter Queue
+				log.Printf("[Dispatcher] Encaminhando evento %s para Dead-Letter Queue (tentativas=%d, permanente=%v, erro=%v)", ev.EventID, attempts, isPermanent, callErr)
+				_ = wp.redis.MarkDispatchPermanentFailure(ctx, integID, ev.EventID, attempts, callErr.Error())
+				dlqPayload := map[string]interface{}{
+					"integration_id":     integID,
+					"platform":           it.Platform,
+					"event_id":           ev.EventID,
+					"event_name":         ev.EventName,
+					"site_id":            ev.SiteID,
+					"attempts":           attempts,
+					"is_permanent_error": isPermanent,
+					"last_error_message": callErr.Error(),
+					"last_failed_at":     time.Now().UTC().Format(time.RFC3339),
+					"event":              ev,
+					"first_touch":        dMsg.FirstTouch,
 				}
+				_ = wp.redis.PushDeadLetter(ctx, "stream:events:dispatch:dead_letter", dlqPayload)
+			} else {
+				// Erro transitório (< 5 tentativas) -> agendar retry com backoff exponencial e jitter
+				backoff := calculateBackoff(attempts)
+				log.Printf("[Dispatcher] Falha transitória para evento %s na integração %s. Agendando retry #%d em %v", ev.EventID, integID, attempts+1, backoff)
+				_ = wp.redis.MarkDispatchRetry(ctx, integID, ev.EventID, attempts, backoff, callErr.Error())
+				mu.Lock()
+				allSettled = false
+				mu.Unlock()
 			}
 		}(integ)
 	}
 
 	dispatchWG.Wait()
 
-	// Confirma ACK no Redis após todas as integrações serem acionadas
-	_ = wp.redis.Client.XAck(ctx, stream, group, msg.ID).Err()
+	// Só confirma XACK se todos os destinos foram resolvidos (ou sucesso, ou DLQ definitivo)
+	if allSettled {
+		_ = wp.redis.Client.XAck(ctx, stream, group, msg.ID).Err()
+	}
 }
 
 type SiteIntegrationRecord struct {
+	ID          string
 	Platform    string
 	Credentials map[string]string
 }
@@ -221,7 +317,7 @@ func (wp *WorkerPool) loadSiteIntegrations(ctx context.Context, siteIDStr string
 	}
 
 	rows, err := wp.pg.Pool.Query(ctx, `
-		SELECT platform, credentials 
+		SELECT id::text, platform, credentials 
 		FROM site_integrations 
 		WHERE site_id = $1 AND is_active = true
 	`, siteUUID)
@@ -231,12 +327,17 @@ func (wp *WorkerPool) loadSiteIntegrations(ctx context.Context, siteIDStr string
 	defer rows.Close()
 
 	for rows.Next() {
+		var idStr string
 		var platform string
 		var credsJSON []byte
-		if err := rows.Scan(&platform, &credsJSON); err == nil {
+		if err := rows.Scan(&idStr, &platform, &credsJSON); err == nil {
 			var credsMap map[string]string
 			_ = json.Unmarshal(credsJSON, &credsMap)
+			if idStr == "" {
+				idStr = fmt.Sprintf("%s_%s", siteIDStr, platform)
+			}
 			results = append(results, SiteIntegrationRecord{
+				ID:          idStr,
 				Platform:    platform,
 				Credentials: credsMap,
 			})
@@ -244,4 +345,74 @@ func (wp *WorkerPool) loadSiteIntegrations(ctx context.Context, siteIDStr string
 	}
 
 	return results
+}
+
+// isPermanentError classifica se um erro é não transitório (fatal) e não deve ser retentado
+func isPermanentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Context timeout ou cancelamento são transitórios
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return false
+	}
+	// Timeouts de rede são transitórios
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return false
+	}
+
+	errStr := strings.ToLower(err.Error())
+
+	// Palavras-chave indicativas de falhas transitórias
+	if strings.Contains(errStr, "429") ||
+		strings.Contains(errStr, "too many requests") ||
+		strings.Contains(errStr, "rate limit") ||
+		strings.Contains(errStr, "500") ||
+		strings.Contains(errStr, "502") ||
+		strings.Contains(errStr, "503") ||
+		strings.Contains(errStr, "504") ||
+		strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "broken pipe") {
+		return false
+	}
+
+	// Erros HTTP 4xx (exceto 429) são falhas permanentes de configuração/credenciais/parâmetros
+	if strings.Contains(errStr, "400") ||
+		strings.Contains(errStr, "401") ||
+		strings.Contains(errStr, "403") ||
+		strings.Contains(errStr, "404") ||
+		strings.Contains(errStr, "422") ||
+		strings.Contains(errStr, "unauthorized") ||
+		strings.Contains(errStr, "forbidden") ||
+		strings.Contains(errStr, "invalid_client") ||
+		strings.Contains(errStr, "invalid token") ||
+		strings.Contains(errStr, "erro cliente http") {
+		return true
+	}
+
+	return false
+}
+
+// calculateBackoff calcula atraso exponencial com jitter proporcional
+func calculateBackoff(attempt int) time.Duration {
+	if attempt <= 0 {
+		attempt = 1
+	}
+	base := 1 * time.Second
+	factor := math.Pow(2, float64(attempt-1))
+	delay := time.Duration(float64(base) * factor)
+	if delay > 60*time.Second {
+		delay = 60 * time.Second
+	}
+	// Adiciona jitter de até 25%
+	jitterMax := int64(delay / 4)
+	if jitterMax > 0 {
+		jitter := time.Duration(rand.Int63n(jitterMax))
+		delay += jitter
+	}
+	return delay
 }

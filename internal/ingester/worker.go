@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"tracking-engine/internal/collector"
@@ -49,7 +50,7 @@ func (w *Worker) Start(ctx context.Context) error {
 	// Garante que o consumer group existe
 	_ = w.redis.EnsureConsumerGroup(ctx, stream, group)
 
-	log.Printf("==> Ingester iniciado. Escutando stream '%s' (Grupo: %s)...", stream, group)
+	log.Printf("==> Ingester iniciado. Escutando stream '%s' (Grupo: %s, Consumidor: %s)...", stream, group, consumer)
 
 	ticker := time.NewTicker(time.Duration(w.cfg.IngesterFlushSec) * time.Second)
 	defer ticker.Stop()
@@ -71,13 +72,64 @@ func (w *Worker) Start(ctx context.Context) error {
 		}
 	}()
 
+	// Goroutine periódica de XAutoClaim para recuperar mensagens órfãs no PEL há mais de 60s
+	go func() {
+		claimTicker := time.NewTicker(30 * time.Second)
+		defer claimTicker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-claimTicker.C:
+				claimedMsgs, _, err := w.redis.AutoClaimPending(ctx, stream, group, consumer, 60*time.Second, "0-0", 100)
+				if err != nil {
+					if err != redis.Nil && ctx.Err() == nil {
+						log.Printf("[Ingester] Erro no XAutoClaim de eventos pendentes: %v", err)
+					}
+					continue
+				}
+				if len(claimedMsgs) > 0 {
+					log.Printf("[Ingester] XAutoClaim reivindicou %d eventos pendentes do PEL.", len(claimedMsgs))
+					w.mu.Lock()
+					for _, msg := range claimedMsgs {
+						payloadRaw, ok := msg.Values["payload"].(string)
+						if !ok {
+							if b, ok2 := msg.Values["payload"].([]byte); ok2 {
+								payloadRaw = string(b)
+							}
+						}
+
+						var ev collector.EventPayload
+						if err := json.Unmarshal([]byte(payloadRaw), &ev); err != nil {
+							_ = w.redis.Client.XAck(ctx, stream, group, msg.ID).Err()
+							continue
+						}
+
+						w.batch = append(w.batch, &ev)
+						w.msgIDs = append(w.msgIDs, msg.ID)
+					}
+
+					if len(w.batch) >= w.cfg.IngesterBatchSize {
+						log.Printf("[Ingester] Batch atingiu limite (%d) após XAutoClaim. Executando flush...", len(w.batch))
+						w.flushLocked(context.Background())
+					}
+					w.mu.Unlock()
+				}
+			}
+		}
+	}()
+
 	// Loop principal de leitura do Redis
 	for {
 		select {
 		case <-ctx.Done():
 			w.mu.Lock()
 			if len(w.batch) > 0 {
-				w.flushLocked(context.Background())
+				log.Printf("[Ingester] Desligamento gracioso: persistindo %d eventos pendentes no ClickHouse...", len(w.batch))
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				w.flushLocked(shutdownCtx)
+				cancel()
 			}
 			w.mu.Unlock()
 			return nil
@@ -108,7 +160,7 @@ func (w *Worker) Start(ctx context.Context) error {
 
 					var ev collector.EventPayload
 					if err := json.Unmarshal([]byte(payloadRaw), &ev); err != nil {
-						// Ignora payload corrompido e confirma mensagem
+						// Ignora payload corrompido e confirma mensagem para não travar a fila
 						_ = w.redis.Client.XAck(ctx, stream, group, msg.ID).Err()
 						continue
 					}
@@ -116,14 +168,6 @@ func (w *Worker) Start(ctx context.Context) error {
 					w.mu.Lock()
 					w.batch = append(w.batch, &ev)
 					w.msgIDs = append(w.msgIDs, msg.ID)
-
-					if w.identity != nil {
-						go func(evItem collector.EventPayload) {
-							identCtx, identCancel := context.WithTimeout(context.Background(), 5*time.Second)
-							defer identCancel()
-							_ = w.identity.ReconcileAndRoute(identCtx, &evItem)
-						}(ev)
-					}
 
 					if len(w.batch) >= w.cfg.IngesterBatchSize {
 						log.Printf("[Ingester] Limite de lote atingido (%d eventos). Executando flush...", len(w.batch))
@@ -136,7 +180,8 @@ func (w *Worker) Start(ctx context.Context) error {
 	}
 }
 
-// flushLocked executa a inserção em lote no ClickHouse (DEVE ser chamado sob w.mu.Lock())
+// flushLocked executa a inserção em lote com sequenciamento estrito (ClickHouse -> Identity/Dispatch -> Redis XACK)
+// IMPORTANTE: Deve ser chamado sob w.mu.Lock()
 func (w *Worker) flushLocked(ctx context.Context) {
 	if len(w.batch) == 0 {
 		return
@@ -145,28 +190,37 @@ func (w *Worker) flushLocked(ctx context.Context) {
 	eventsToInsert := w.batch
 	idsToAck := w.msgIDs
 
-	// Reseta os buffers imediatamente para liberar novas mensagens
+	// Reseta os buffers imediatamente
 	w.batch = make([]*collector.EventPayload, 0, w.cfg.IngesterBatchSize)
 	w.msgIDs = make([]string, 0, w.cfg.IngesterBatchSize)
 	w.lastFlushAt = time.Now()
 
-	go func(events []*collector.EventPayload, msgIDs []string) {
-		flushCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
+	flushCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
 
-		err := w.insertBatchClickHouse(flushCtx, events)
-		if err != nil {
-			log.Printf("[Ingester] ERRO ao inserir batch de %d eventos no ClickHouse: %v", len(events), err)
-			// Não confirma ACK no Redis para que as mensagens permaneçam na fila
-			return
-		}
+	// 1. Grava lote no ClickHouse de forma síncrona
+	err := w.insertBatchClickHouse(flushCtx, eventsToInsert)
+	if err != nil {
+		log.Printf("[Ingester] ERRO ao inserir batch de %d eventos no ClickHouse: %v", len(eventsToInsert), err)
+		// NÃO confirma ACK no Redis para que as mensagens permaneçam na fila para retry/reclaim
+		return
+	}
 
-		// Confirmação de ACK em lote no Redis
-		if len(msgIDs) > 0 {
-			_ = w.redis.Client.XAck(flushCtx, w.cfg.RedisStreamRaw, w.cfg.RedisConsumerGroup, msgIDs...).Err()
+	// 2. Com a persistência analítica garantida no ClickHouse, reconcilia identidade e gera tarefas de despacho
+	if w.identity != nil {
+		for _, ev := range eventsToInsert {
+			identCtx, identCancel := context.WithTimeout(flushCtx, 3*time.Second)
+			_ = w.identity.ReconcileAndRoute(identCtx, ev)
+			identCancel()
 		}
-		log.Printf("[Ingester] SUCESSO: %d eventos persistidos no ClickHouse com ACK!", len(events))
-	}(eventsToInsert, idsToAck)
+	}
+
+	// 3. Somente após ClickHouse gravado e despachos gerados, confirma XACK em lote no Redis
+	if len(idsToAck) > 0 {
+		_ = w.redis.Client.XAck(flushCtx, w.cfg.RedisStreamRaw, w.cfg.RedisConsumerGroup, idsToAck...).Err()
+	}
+
+	log.Printf("[Ingester] SUCESSO: %d eventos persistidos no ClickHouse e confirmados com XACK!", len(eventsToInsert))
 }
 
 func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.EventPayload) error {

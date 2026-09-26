@@ -1,14 +1,13 @@
-CREATE DATABASE IF NOT EXISTS tracking_events;
+-- 003_replacing_merge_tree.sql: Garante que a tabela use ReplacingMergeTree e ordene por event_id
+-- Em clusters já iniciados, se a tabela já existir como ReplacingMergeTree este script é no-op seguro.
 
-CREATE TABLE IF NOT EXISTS tracking_events.events (
+CREATE TABLE IF NOT EXISTS tracking_events.events_v2 (
     event_id UUID,
     site_id UUID,
     visitor_id UUID,
     session_id UUID,
     event_name LowCardinality(String),
     event_time DateTime64(3, 'UTC'),
-    
-    -- URLs e Atribuição
     landing_page String,
     page_url String,
     referrer String,
@@ -22,13 +21,9 @@ CREATE TABLE IF NOT EXISTS tracking_events.events (
     wbraid String,
     fbclid String,
     ttclid String,
-    
-    -- Metadados de Rede e Dispositivo
     ip_address String,
     user_agent String,
     device_type LowCardinality(String),
-    
-    -- Carga útil personalizada do evento (valores, moeda, etc.)
     custom_data_json String,
     is_bot UInt8 DEFAULT 0,
     bot_reason LowCardinality(String) DEFAULT '',

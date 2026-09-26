@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"tracking-engine/internal/config"
 	"tracking-engine/internal/prefixedid"
+	"tracking-engine/internal/storage"
 )
 
 func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
@@ -77,8 +78,18 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("erro ao executar teste: %v", err)
 		}
-		if resp.StatusCode != fiber.StatusNoContent {
-			t.Errorf("esperado status %d, obtido %d", fiber.StatusNoContent, resp.StatusCode)
+		if resp.StatusCode != fiber.StatusAccepted {
+			t.Errorf("esperado status %d, obtido %d", fiber.StatusAccepted, resp.StatusCode)
+		}
+
+		// Valida retorno JSON com status e event_id
+		var resBody map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&resBody)
+		if resBody["status"] != "accepted" {
+			t.Errorf("esperado status 'accepted', obtido %v", resBody["status"])
+		}
+		if evID, ok := resBody["event_id"].(string); !ok || !strings.HasPrefix(evID, prefixedid.PrefixEvent) {
+			t.Errorf("esperado event_id com prefixo %s, obtido %v", prefixedid.PrefixEvent, resBody["event_id"])
 		}
 
 		// Valida que o cookie _vid foi emitido com prefixo hn_vis_
@@ -109,8 +120,8 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("erro ao executar teste: %v", err)
 		}
-		if resp.StatusCode != fiber.StatusNoContent {
-			t.Errorf("esperado status %d para chave legada, obtido %d", fiber.StatusNoContent, resp.StatusCode)
+		if resp.StatusCode != fiber.StatusAccepted {
+			t.Errorf("esperado status %d para chave legada, obtido %d", fiber.StatusAccepted, resp.StatusCode)
 		}
 	})
 
@@ -139,8 +150,8 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("erro ao executar teste: %v", err)
 		}
-		if resp.StatusCode != fiber.StatusNoContent {
-			t.Errorf("esperado status %d para evento de debug, obtido %d", fiber.StatusNoContent, resp.StatusCode)
+		if resp.StatusCode != fiber.StatusAccepted {
+			t.Errorf("esperado status %d para evento de debug, obtido %d", fiber.StatusAccepted, resp.StatusCode)
 		}
 	})
 
@@ -165,8 +176,58 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("erro ao executar teste: %v", err)
 		}
-		if resp.StatusCode != fiber.StatusNoContent {
-			t.Errorf("esperado status %d para evento com ?hn_debug=true, obtido %d", fiber.StatusNoContent, resp.StatusCode)
+		if resp.StatusCode != fiber.StatusAccepted {
+			t.Errorf("esperado status %d para evento com ?hn_debug=true, obtido %d", fiber.StatusAccepted, resp.StatusCode)
+		}
+	})
+
+	// 7. Rejeição de payload excessivamente grande (> 64KB)
+	t.Run("Rejeita payload maior que 64KB com 413", func(t *testing.T) {
+		hugeBytes := make([]byte, 65*1024)
+		req := httptest.NewRequest("POST", "/api/v1/collect", bytes.NewReader(hugeBytes))
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("erro ao executar teste: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusRequestEntityTooLarge {
+			t.Errorf("esperado status %d para payload grande, obtido %d", fiber.StatusRequestEntityTooLarge, resp.StatusCode)
+		}
+	})
+
+	// 8. Falha de serviço quando Redis está indisponível em modo produção
+	t.Run("Retorna 503 se Redis falha ao enfileirar em produção", func(t *testing.T) {
+		prodCfg := &config.Config{Env: "production", RedisAddr: "127.0.0.1:54321"}
+		badRedis, _ := storage.NewRedis(prodCfg)
+		prodHandler := &Handler{
+			cfg:   prodCfg,
+			redis: badRedis,
+		}
+		testKey := prefixedid.GenerateSiteKey()
+		prodHandler.siteKeys.Store(testKey, &SiteMetadata{
+			ID:             "site_prod_fail",
+			AllowedDomains: []string{"example.com"},
+		})
+
+		prodApp := fiber.New()
+		prodApp.Post("/api/v1/collect", prodHandler.HandleCollect)
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"site_key":   testKey,
+			"event_name": "page_view",
+			"url":        "https://example.com/home",
+		})
+		req := httptest.NewRequest("POST", "/api/v1/collect", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "https://example.com")
+
+		resp, err := prodApp.Test(req)
+		if err != nil {
+			t.Fatalf("erro ao executar teste: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusServiceUnavailable {
+			t.Errorf("esperado status %d quando Redis falha, obtido %d", fiber.StatusServiceUnavailable, resp.StatusCode)
 		}
 	})
 }
@@ -344,8 +405,8 @@ func TestHandleCollect_AutomaticEvents(t *testing.T) {
 			if err != nil {
 				t.Fatalf("falha ao enviar evento %s: %v", tc.eventName, err)
 			}
-			if resp.StatusCode != fiber.StatusNoContent {
-				t.Errorf("evento %s: esperado status %d, obtido %d", tc.eventName, fiber.StatusNoContent, resp.StatusCode)
+			if resp.StatusCode != fiber.StatusAccepted {
+				t.Errorf("evento %s: esperado status %d, obtido %d", tc.eventName, fiber.StatusAccepted, resp.StatusCode)
 			}
 		})
 	}

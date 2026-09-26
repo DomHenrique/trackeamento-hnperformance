@@ -43,6 +43,12 @@ func NewHandler(cfg *config.Config, rdb *storage.RedisClient, pg *storage.Postgr
 
 // HandleCollect recebe e processa a requisição de coleta em tempo sub-milissegundo
 func (h *Handler) HandleCollect(c *fiber.Ctx) error {
+	if len(c.Body()) > 64*1024 {
+		return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{
+			"error": "payload excede o limite máximo permitido (64KB)",
+		})
+	}
+
 	var req EventRequest
 	if err := c.BodyParser(&req); err != nil {
 		// Fallback para requisições vazias ou mal formatadas
@@ -217,31 +223,55 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	// - Se for evento de produção, enfileira para o ClickHouse E TAMBÉM transmite para o canal do DebugView
 	//   com a marcação origin_mode="production", permitindo depuração em tempo real mesmo sem a flag ?hn_debug.
 	data, err := json.Marshal(payload)
-	if err == nil {
-		if isDebug {
-			go func(pData []byte, sID string) {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				if h.redis != nil {
-					_ = h.redis.PublishDebugEvent(ctx, sID, pData)
-					_ = h.redis.PushDebugBuffer(ctx, sID, pData)
-				}
-			}(data, siteID)
-		} else {
-			go func(pData []byte, sID string) {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				if h.redis != nil {
-					_ = h.redis.PushRawEvent(ctx, pData)
-					_ = h.redis.PublishDebugEvent(ctx, sID, pData)
-					_ = h.redis.PushDebugBuffer(ctx, sID, pData)
-				}
-			}(data, siteID)
-		}
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "falha ao serializar evento",
+		})
 	}
 
-	// Responde 204 No Content imediatamente
-	return c.SendStatus(fiber.StatusNoContent)
+	if isDebug {
+		go func(pData []byte, sID string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if h.redis != nil {
+				_ = h.redis.PublishDebugEvent(ctx, sID, pData)
+				_ = h.redis.PushDebugBuffer(ctx, sID, pData)
+			}
+		}(data, siteID)
+	} else {
+		// Ingestão síncrona no stream principal com timeout estrito de 400ms
+		if h.redis != nil {
+			pushCtx, pushCancel := context.WithTimeout(c.Context(), 400*time.Millisecond)
+			defer pushCancel()
+
+			if err := h.redis.PushRawEvent(pushCtx, data); err != nil {
+				return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+					"error": "falha ao persistir evento no Redis Stream",
+				})
+			}
+		} else if h.cfg == nil || h.cfg.Env != "test" {
+			// Em produção e staging, ausência de cliente Redis impede aceitação do evento
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"error": "serviço de enfileiramento indisponível",
+			})
+		}
+
+		// Emissões auxiliares para o DebugView continuam em background
+		go func(pData []byte, sID string) {
+			bgCtx, bgCancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer bgCancel()
+			if h.redis != nil {
+				_ = h.redis.PublishDebugEvent(bgCtx, sID, pData)
+				_ = h.redis.PushDebugBuffer(bgCtx, sID, pData)
+			}
+		}(data, siteID)
+	}
+
+	// Responde 202 Accepted com confirmação explícita e identificador único
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		"status":   "accepted",
+		"event_id": eventID,
+	})
 }
 
 func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMetadata, bool) {
