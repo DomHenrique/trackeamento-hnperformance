@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -243,10 +242,19 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 	}
 
 	for _, ev := range events {
-		eventUUID, _ := uuid.Parse(ev.EventID)
+		eventUUID, errEv := uuid.Parse(ev.EventID)
+		if errEv != nil {
+			eventUUID = uuid.NewSHA1(uuid.NameSpaceDNS, []byte(ev.EventID))
+		}
 		siteUUID, _ := uuid.Parse(ev.SiteID)
-		visitorUUID, _ := uuid.Parse(strings.TrimPrefix(ev.VisitorID, "v_"))
-		sessionUUID, _ := uuid.Parse(strings.TrimPrefix(ev.SessionID, "s_"))
+		visitorUUID, errVis := uuid.Parse(ev.VisitorID)
+		if errVis != nil {
+			visitorUUID = uuid.NewSHA1(uuid.NameSpaceDNS, []byte(ev.VisitorID))
+		}
+		sessionUUID, errSess := uuid.Parse(ev.SessionID)
+		if errSess != nil {
+			sessionUUID = uuid.NewSHA1(uuid.NameSpaceDNS, []byte(ev.SessionID))
+		}
 
 		customJSON, _ := json.Marshal(ev.CustomData)
 
