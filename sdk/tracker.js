@@ -551,23 +551,126 @@
             }
         }
 
-        // Se encontrou dados de lead no formulário, dispara o evento lead
+        // Se encontrou dados de lead no formulário, dispara o evento form_submit / lead
         if (userData.email || userData.phone || userData.name) {
-            trackEvent('lead', userData, {
-                form_id: form.id || form.name || 'form_lead',
-                form_action: form.action || ''
+            var domFormId = form.id || form.name || 'form_lead';
+            var dedupKey = (userData.email || userData.phone || userData.name) + '_' + domFormId;
+            if (shouldDeduplicateForm(dedupKey)) return;
+
+            trackEvent('form_submit', userData, {
+                form_id: domFormId,
+                form_action: form.action || '',
+                trigger_source: 'dom_submit'
             });
         }
     }, true);
 
+    // D) Deduplicação e Auto-Interceptação de Eventos do Google Tag Manager (dataLayer)
+    var lastCapturedForm = { time: 0, key: '' };
+    function shouldDeduplicateForm(key) {
+        var now = Date.now();
+        if (lastCapturedForm.key === key && (now - lastCapturedForm.time) < 3000) {
+            return true;
+        }
+        lastCapturedForm = { time: now, key: key };
+        return false;
+    }
+
+    function inspectDataLayerItem(item) {
+        if (!item || typeof item !== 'object') return;
+        var evt = (item.event || '').toLowerCase();
+        if (!evt) return;
+
+        var isFormEvent = evt === 'form_submit' || 
+                           evt === 'form_submission' || 
+                           evt === 'lead' || 
+                           evt === 'generate_lead' || 
+                           evt === 'envio de formulário' || 
+                           evt === 'envio de formulario' ||
+                           evt === 'contato' || 
+                           evt === 'contact';
+
+        if (isFormEvent) {
+            var email = item.email || item.mail || item.dlv_email || item.user_email || '';
+            var phone = item.telefone || item.phone || item.tel || item.celular || item.whatsapp || item.dlv_telefone || '';
+            var name = item.nome || item.name || item.first_name || item.dlv_nome || '';
+
+            if (item.user_data && typeof item.user_data === 'object') {
+                email = email || item.user_data.email || '';
+                phone = phone || item.user_data.phone || item.user_data.telefone || '';
+                name = name || item.user_data.name || item.user_data.nome || '';
+            }
+
+            var formId = item.form_id || item.formId || item.id || 'gtm_datalayer_form';
+            var dedupKey = (email || phone || name) + '_' + formId;
+            if (shouldDeduplicateForm(dedupKey)) {
+                debugLog('Deduplicação: ignorando disparo duplicado de formulário dataLayer em < 3s');
+                return;
+            }
+
+            var userData = {};
+            if (email) userData.email = String(email).trim();
+            if (phone) userData.phone = String(phone).trim();
+            if (name) userData.name = String(name).trim();
+
+            var customData = {
+                form_id: formId,
+                page_url: item.page_url || window.location.href,
+                page_title: item.page_title || document.title,
+                trigger_source: 'datalayer_' + evt
+            };
+
+            debugLog('Capturado evento de formulário via dataLayer:', evt, userData, customData);
+            trackEvent('form_submit', userData, customData);
+        }
+    }
+
+    function setupDataLayerListener() {
+        if (typeof window === 'undefined') return;
+
+        function hook(dl) {
+            if (!dl || dl.__hn_hooked) return;
+            dl.__hn_hooked = true;
+
+            // Inspeciona itens já enfileirados
+            for (var i = 0; i < dl.length; i++) {
+                inspectDataLayerItem(dl[i]);
+            }
+
+            var origPush = dl.push;
+            dl.push = function () {
+                var res = origPush.apply(dl, arguments);
+                for (var j = 0; j < arguments.length; j++) {
+                    try {
+                        inspectDataLayerItem(arguments[j]);
+                    } catch (e) {
+                        debugLog('Erro ao inspecionar push do dataLayer:', e);
+                    }
+                }
+                return res;
+            };
+        }
+
+        window.dataLayer = window.dataLayer || [];
+        hook(window.dataLayer);
+    }
+
+    setupDataLayerListener();
+
     // 7. API Pública Global (Eventos e Consentimento)
-    window.hnTrack = function (actionOrName, options) {
+    window.hnTrack = function (actionOrName, options, extraData) {
         if (actionOrName === 'consent') {
             updateConsent(options);
             return;
         }
         options = options || {};
-        return trackEvent(actionOrName, options.user_data, options.custom_data);
+        var uData = options.user_data;
+        var cData = options.custom_data;
+        if (!uData && !cData) {
+            uData = options;
+            cData = extraData || {};
+        }
+        return trackEvent(actionOrName, uData || {}, cData || {});
     };
 
 })(window, document);
