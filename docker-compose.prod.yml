@@ -42,9 +42,7 @@ services:
       - tracking_internal
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
+    image: tracking-engine-api:production
     container_name: tracking_api
     restart: unless-stopped
     depends_on:
@@ -88,9 +86,7 @@ services:
       - rede_gridd
 
   ingester:
-    build:
-      context: .
-      dockerfile: Dockerfile.ingester
+    image: tracking-engine-ingester:production
     container_name: tracking_ingester
     restart: unless-stopped
     depends_on:
@@ -119,9 +115,7 @@ services:
       - tracking_internal
 
   dispatcher:
-    build:
-      context: .
-      dockerfile: Dockerfile.dispatcher
+    image: tracking-engine-dispatcher:production
     container_name: tracking_dispatcher
     restart: unless-stopped
     depends_on:
