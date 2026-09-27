@@ -148,11 +148,9 @@
         return prefix + result;
     }
 
-    // 3. Gestão de Sessão (hn_ses_...) e Detecção de Primeira Visita (GA4 Lifecycle)
+    // 3. Gestão de Sessão (hn_ses_...) em sessionStorage volátil (Cookieless)
     var SESSION_KEY = '_hn_sid';
-    var FIRST_VISIT_KEY = '_hn_first_visit';
     var isNewSession = false;
-    var isFirstVisit = false;
     var sessionId = null;
 
     try {
@@ -166,13 +164,6 @@
         sessionId = generatePrefixedId('hn_ses_', 24);
         isNewSession = true;
     }
-
-    try {
-        if (!localStorage.getItem(FIRST_VISIT_KEY)) {
-            isFirstVisit = true;
-            localStorage.setItem(FIRST_VISIT_KEY, String(Date.now()));
-        }
-    } catch (e) {}
 
     // 4. Gestão de Governança de Privacidade, Consentimento e Sinais do Navegador (GPC)
     var CONSENT_STORAGE_KEY = '_hn_consent';
@@ -299,11 +290,21 @@
             window.__nightmare
         );
 
+        var lang = nav.language || nav.userLanguage || '';
+        var tz = '';
+        try {
+            tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        } catch (e) {}
+
         return {
             webdriver: isWebdriver,
             headless: isHeadless,
             screen_w: scr.width || 0,
             screen_h: scr.height || 0,
+            screen_res: (scr.width && scr.height) ? (scr.width + 'x' + scr.height) : '',
+            color_depth: scr.colorDepth || 0,
+            lang: lang,
+            tz: tz,
             time_to_interact_ms: firstInteractionTime ? (firstInteractionTime - pageLoadTime) : 0,
             time_on_page_ms: Math.max(0, now - pageLoadTime)
         };
@@ -326,8 +327,9 @@
         userData = userData || {};
         customData = customData || {};
 
-        // A identidade do visitante (visitor_id) é gerida com autoridade exclusiva pelo servidor via cookie HTTP de 1ª parte (_vid).
-        // Remove qualquer visitor_id arbitrário enviado pelo cliente para impedir Session Fixation e respeitar a limpeza de cookies pelo usuário.
+        // Arquitetura Puramente Cookieless:
+        // A identidade do visitante (visitor_id) é calculada deterministicamente no servidor via HMAC-SHA256 (sinais de rede + hardware + salt diário).
+        // Nenhum cookie de visitante (_vid) é lido, gravado ou transmitido pelo SDK no navegador.
         if (userData && userData.visitor_id) {
             delete userData.visitor_id;
         }
@@ -404,11 +406,6 @@
 
     // A) Ciclo de Vida da Sessão e PageView
     function onReady() {
-        if (isFirstVisit) {
-            trackEvent('first_visit', {}, {
-                first_visit_time: localStorage.getItem(FIRST_VISIT_KEY) || String(Date.now())
-            });
-        }
         if (isNewSession) {
             trackEvent('session_start', {}, {
                 session_id: sessionId
@@ -527,41 +524,185 @@
         }
     }, true);
 
-    // C) Submissão de Formulários de Contato / Lead
+    // C) Submissão de Formulários de Contato / Lead com Ciclo de Vida e Blocklist
+    var lastSubmission = { submission_id: '', form_id: '', time: 0 };
+
+    function generateSubmissionId() {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            try {
+                return crypto.randomUUID();
+            } catch (e) {}
+        }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            var r = (Math.random() * 16) | 0;
+            var v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    // 1. Hard Blocklist de Campos Sensíveis (avaliada antes de qualquer acesso a .value)
+    function isFieldBlocked(el) {
+        if (!el) return true;
+        var tag = (el.tagName || '').toUpperCase();
+        if (tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'OBJECT' || tag === 'EMBED') {
+            return true;
+        }
+
+        var type = (el.type || '').toLowerCase();
+        if (type === 'password' || type === 'file' || type === 'hidden' || type === 'submit' || type === 'reset' || type === 'button') {
+            return true;
+        }
+
+        var auto = (el.getAttribute('autocomplete') || el.autocomplete || '').toLowerCase();
+        if (auto.indexOf('cc-') !== -1 || auto.indexOf('credit') !== -1 || auto.indexOf('card') !== -1 || auto.indexOf('cvc') !== -1 || auto.indexOf('cvv') !== -1) {
+            return true;
+        }
+
+        var nameId = ((el.name || '') + ' ' + (el.id || '')).toLowerCase();
+        if (nameId.indexOf('token') !== -1 || nameId.indexOf('nonce') !== -1 || nameId.indexOf('csrf') !== -1 || nameId.indexOf('captcha') !== -1 || nameId.indexOf('recaptcha') !== -1) {
+            return true;
+        }
+
+        return false;
+    }
+
+    // 2. Mapeamento Explícito e Heurística Semântica em Cascata
+    function classifyField(el) {
+        if (!el) return { role: null, source: '' };
+
+        // 2.1 Mapeamento Explícito: data-hn-field (prioridade máxima se não bloqueado)
+        var explicitAttr = (el.getAttribute('data-hn-field') || '').toLowerCase().trim();
+        if (explicitAttr === 'email' || explicitAttr === 'phone' || explicitAttr === 'name') {
+            return { role: explicitAttr, source: 'explicit' };
+        }
+
+        // 2.2 Heurística: autocomplete
+        var auto = (el.getAttribute('autocomplete') || el.autocomplete || '').toLowerCase().trim();
+        if (auto) {
+            if (auto === 'email' || auto.indexOf('email') !== -1) {
+                return { role: 'email', source: 'autocomplete' };
+            }
+            if (auto === 'tel' || auto.indexOf('tel') !== -1 || auto.indexOf('phone') !== -1) {
+                return { role: 'phone', source: 'autocomplete' };
+            }
+            if (auto === 'name' || auto === 'given-name' || auto === 'family-name' || auto.indexOf('name') !== -1) {
+                return { role: 'name', source: 'autocomplete' };
+            }
+        }
+
+        // 2.3 Heurística: type
+        var type = (el.type || '').toLowerCase().trim();
+        if (type === 'email') {
+            return { role: 'email', source: 'type' };
+        }
+        if (type === 'tel') {
+            return { role: 'phone', source: 'type' };
+        }
+
+        // 2.4 Heurística: placeholder
+        var placeholder = (el.getAttribute('placeholder') || el.placeholder || '').toLowerCase().trim();
+        if (placeholder) {
+            if (placeholder.indexOf('email') !== -1 || placeholder.indexOf('e-mail') !== -1 || placeholder.indexOf('correo') !== -1) {
+                return { role: 'email', source: 'placeholder' };
+            }
+            if (placeholder.indexOf('telefone') !== -1 || placeholder.indexOf('phone') !== -1 || placeholder.indexOf('tel') !== -1 || placeholder.indexOf('celular') !== -1 || placeholder.indexOf('whats') !== -1) {
+                return { role: 'phone', source: 'placeholder' };
+            }
+            if (placeholder.indexOf('nome') !== -1 || placeholder.indexOf('name') !== -1 || placeholder.indexOf('first_name') !== -1) {
+                return { role: 'name', source: 'placeholder' };
+            }
+        }
+
+        // 2.5 Heurística: aria-label
+        var ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase().trim();
+        if (ariaLabel) {
+            if (ariaLabel.indexOf('email') !== -1 || ariaLabel.indexOf('e-mail') !== -1 || ariaLabel.indexOf('correo') !== -1) {
+                return { role: 'email', source: 'aria-label' };
+            }
+            if (ariaLabel.indexOf('telefone') !== -1 || ariaLabel.indexOf('phone') !== -1 || ariaLabel.indexOf('tel') !== -1 || ariaLabel.indexOf('celular') !== -1 || ariaLabel.indexOf('whats') !== -1) {
+                return { role: 'phone', source: 'aria-label' };
+            }
+            if (ariaLabel.indexOf('nome') !== -1 || ariaLabel.indexOf('name') !== -1 || ariaLabel.indexOf('first_name') !== -1) {
+                return { role: 'name', source: 'aria-label' };
+            }
+        }
+
+        // 2.6 Heurística Legada: name / id
+        var nameId = ((el.name || '') + ' ' + (el.id || '')).toLowerCase().trim();
+        if (nameId) {
+            if (nameId.indexOf('email') !== -1 || nameId.indexOf('e-mail') !== -1 || nameId.indexOf('correo') !== -1) {
+                return { role: 'email', source: 'name-id-heuristic' };
+            }
+            if (nameId.indexOf('phone') !== -1 || nameId.indexOf('telefone') !== -1 || nameId.indexOf('tel') !== -1 || nameId.indexOf('cel') !== -1 || nameId.indexOf('whats') !== -1) {
+                return { role: 'phone', source: 'name-id-heuristic' };
+            }
+            if (nameId.indexOf('nome') !== -1 || nameId.indexOf('name') !== -1 || nameId.indexOf('first_name') !== -1) {
+                return { role: 'name', source: 'name-id-heuristic' };
+            }
+        }
+
+        return { role: null, source: '' };
+    }
+
     document.addEventListener('submit', function (e) {
         var form = e.target;
         if (!form || form.tagName !== 'FORM') return;
 
+        var submissionId = generateSubmissionId();
         var userData = {};
+        var fieldSources = {};
         var elements = form.elements;
 
         for (var i = 0; i < elements.length; i++) {
             var el = elements[i];
-            var name = (el.name || el.id || '').toLowerCase();
+            
+            // Hard Blocklist avaliada ANTES de qualquer leitura de .value
+            if (isFieldBlocked(el)) continue;
+
+            var classification = classifyField(el);
+            if (!classification.role) continue;
+
             var val = (el.value || '').trim();
+            if (!val) continue;
 
-            if (!val || el.type === 'password' || el.type === 'hidden') continue;
-
-            if (name.indexOf('email') !== -1 && !userData.email) {
-                userData.email = val;
-            } else if ((name.indexOf('phone') !== -1 || name.indexOf('tel') !== -1 || name.indexOf('cel') !== -1 || name.indexOf('whats') !== -1) && !userData.phone) {
-                userData.phone = val;
-            } else if ((name.indexOf('nome') !== -1 || name.indexOf('name') !== -1) && !userData.name) {
-                userData.name = val;
+            if (!userData[classification.role]) {
+                userData[classification.role] = val;
+                fieldSources[classification.role] = classification.source;
             }
         }
 
-        // Se encontrou dados de lead no formulário, dispara o evento form_submit / lead
+        // Se encontrou dados de contato no formulário, dispara ciclo de vida
         if (userData.email || userData.phone || userData.name) {
-            var domFormId = form.id || form.name || 'form_lead';
+            var domFormId = form.id || form.name || form.getAttribute('data-form-id') || 'form_lead';
             var dedupKey = (userData.email || userData.phone || userData.name) + '_' + domFormId;
             if (shouldDeduplicateForm(dedupKey)) return;
 
+            lastSubmission = {
+                submission_id: submissionId,
+                form_id: domFormId,
+                time: Date.now(),
+                has_error: false
+            };
+
+            // 1. Estado form_attempt (event_name consistente 'form_submit', estágio 'form_attempt')
             trackEvent('form_submit', userData, {
+                submission_id: submissionId,
+                form_lifecycle_state: 'form_attempt',
+                field_source: JSON.stringify(fieldSources),
                 form_id: domFormId,
                 form_action: form.action || '',
                 trigger_source: 'dom_submit'
             });
+
+            // 2. Estado form_client_validated (se passou na validação nativa do navegador - sem re-envio de PII)
+            if (typeof form.checkValidity === 'function' && form.checkValidity()) {
+                trackEvent('form_submit', {}, {
+                    submission_id: submissionId,
+                    form_lifecycle_state: 'form_client_validated',
+                    form_id: domFormId,
+                    trigger_source: 'dom_validation'
+                });
+            }
         }
     }, true);
 
@@ -581,6 +722,58 @@
         var evt = (item.event || '').toLowerCase();
         if (!evt) return;
 
+        // D.1) Detecção de Erro do Builder ou Falha AJAX (impede que eventos de erro disparem conversão de sucesso)
+        var isErrorEvent = evt === 'bricks/form/submit/error' ||
+                           evt === 'bricks/form/error' ||
+                           evt === 'elementor/form/submit/error' ||
+                           evt === 'elementor/form/error' ||
+                           evt === 'wpforms_error' ||
+                           evt === 'fluentform_submission_error' ||
+                           evt === 'wpcf7mailfailed' ||
+                           evt === 'wpcf7invalid' ||
+                           evt === 'wpcf7spam' ||
+                           evt === 'form_error' ||
+                           evt === 'form_submit_error';
+
+        if (isErrorEvent) {
+            debugLog('Builder reportou falha/erro na submissão do formulário:', evt);
+            if (lastSubmission) {
+                lastSubmission.has_error = true;
+            }
+            return;
+        }
+
+        // D.2) Detecção de Confirmação de Sucesso de Builders (Bricks, Elementor, WPForms)
+        var isSuccessEvent = evt === 'bricks/form/submit/success' ||
+                             evt === 'elementor/form/submit/success' ||
+                             evt === 'wpforms_completed' ||
+                             evt === 'fluentform_submission_success' ||
+                             evt === 'wpcf7mailsent' ||
+                             evt === 'form_success' ||
+                             evt === 'form_submit_success';
+
+        if (isSuccessEvent) {
+            var nowTime = Date.now();
+            // Se a submissão anterior foi marcada com erro, não gera sucesso falso
+            if (lastSubmission && lastSubmission.has_error && !item.submission_id) {
+                debugLog('Ignorando evento de sucesso pois a submissão foi previamente marcada com erro.');
+                return;
+            }
+
+            var successSubId = item.submission_id || ((nowTime - lastSubmission.time < 30000) ? lastSubmission.submission_id : '') || generateSubmissionId();
+            var successFormId = item.form_id || item.formId || lastSubmission.form_id || 'builder_success_form';
+
+            debugLog('Capturado evento de sucesso do servidor via dataLayer:', evt, successSubId);
+            trackEvent('form_submit', {}, {
+                submission_id: successSubId,
+                form_lifecycle_state: 'form_submit_success',
+                form_id: successFormId,
+                trigger_source: 'builder_event_' + evt
+            });
+            return;
+        }
+
+        // D.3) Captura de Submissão de Formulário via dataLayer
         var isFormEvent = evt === 'form_submit' || 
                            evt === 'form_submission' || 
                            evt === 'lead' || 
@@ -608,12 +801,24 @@
                 return;
             }
 
+            var submissionId = item.submission_id || generateSubmissionId();
             var userData = {};
-            if (email) userData.email = String(email).trim();
-            if (phone) userData.phone = String(phone).trim();
-            if (name) userData.name = String(name).trim();
+            var fieldSources = {};
+            if (email) { userData.email = String(email).trim(); fieldSources.email = 'datalayer'; }
+            if (phone) { userData.phone = String(phone).trim(); fieldSources.phone = 'datalayer'; }
+            if (name) { userData.name = String(name).trim(); fieldSources.name = 'datalayer'; }
+
+            lastSubmission = {
+                submission_id: submissionId,
+                form_id: formId,
+                time: Date.now(),
+                has_error: false
+            };
 
             var customData = {
+                submission_id: submissionId,
+                form_lifecycle_state: 'form_attempt',
+                field_source: JSON.stringify(fieldSources),
                 form_id: formId,
                 page_url: item.page_url || window.location.href,
                 page_title: item.page_title || document.title,
@@ -662,6 +867,20 @@
         if (actionOrName === 'consent') {
             updateConsent(options);
             return;
+        }
+        if (actionOrName === 'formSuccess') {
+            if (lastSubmission && lastSubmission.has_error && (!options || !options.submission_id)) {
+                debugLog('[HN Tracker] formSuccess ignorado: submissão anterior foi sinalizada com erro.');
+                return;
+            }
+            var subId = (options && options.submission_id) || ((Date.now() - lastSubmission.time < 30000) ? lastSubmission.submission_id : '') || generateSubmissionId();
+            var fId = (options && options.form_id) || lastSubmission.form_id || 'manual_success';
+            return trackEvent('form_submit', {}, {
+                submission_id: subId,
+                form_lifecycle_state: 'form_submit_success',
+                form_id: fId,
+                trigger_source: 'api_form_success'
+            });
         }
         options = options || {};
         var uData = options.user_data;

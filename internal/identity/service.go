@@ -113,6 +113,58 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 	emailHash := HashHMACSHA256(rawEmail, s.pepper)
 	phoneHash := HashHMACSHA256(rawPhone, s.pepper)
 
+	// Detecção e Reconciliação Cross-Midnight por session_id (costura contínua de jornada na virada do salt)
+	if ev.SessionID != "" && s.redis != nil && s.redis.Client != nil {
+		sessionKey := fmt.Sprintf("tracking:active_session:%s:%s", siteUUID.String(), ev.SessionID)
+		prevVid, errRedis := s.redis.Client.Get(ctx, sessionKey).Result()
+		if errRedis == nil && prevVid != "" && prevVid != visitorID {
+			var prevVisitor struct {
+				LandingPage *string
+				UTMSource   *string
+				UTMCampaign *string
+				GCLID       *string
+				FBCLID      *string
+				Name        *string
+				EmailHash   *string
+				PhoneHash   *string
+			}
+			prevQuery := `SELECT first_landing_page, first_utm_source, first_utm_campaign, 
+			                     first_gclid, first_fbclid, identified_name, identified_email_hash, identified_phone_hash 
+			              FROM visitors WHERE site_id = $1 AND visitor_id = $2`
+			if scanErr := s.pg.Pool.QueryRow(ctx, prevQuery, siteUUID, prevVid).Scan(
+				&prevVisitor.LandingPage, &prevVisitor.UTMSource, &prevVisitor.UTMCampaign,
+				&prevVisitor.GCLID, &prevVisitor.FBCLID, &prevVisitor.Name,
+				&prevVisitor.EmailHash, &prevVisitor.PhoneHash,
+			); scanErr == nil {
+				if ev.Attribution.LandingPage == "" && prevVisitor.LandingPage != nil {
+					ev.Attribution.LandingPage = *prevVisitor.LandingPage
+				}
+				if ev.Attribution.UTMSource == "" && prevVisitor.UTMSource != nil {
+					ev.Attribution.UTMSource = *prevVisitor.UTMSource
+				}
+				if ev.Attribution.UTMCampaign == "" && prevVisitor.UTMCampaign != nil {
+					ev.Attribution.UTMCampaign = *prevVisitor.UTMCampaign
+				}
+				if ev.Attribution.GCLID == "" && prevVisitor.GCLID != nil {
+					ev.Attribution.GCLID = *prevVisitor.GCLID
+				}
+				if ev.Attribution.FBCLID == "" && prevVisitor.FBCLID != nil {
+					ev.Attribution.FBCLID = *prevVisitor.FBCLID
+				}
+				if rawName == "" && prevVisitor.Name != nil {
+					rawName = *prevVisitor.Name
+				}
+				if emailHash == "" && prevVisitor.EmailHash != nil {
+					emailHash = *prevVisitor.EmailHash
+				}
+				if phoneHash == "" && prevVisitor.PhoneHash != nil {
+					phoneHash = *prevVisitor.PhoneHash
+				}
+			}
+		}
+		_ = s.redis.Client.Set(ctx, sessionKey, visitorID, 24*time.Hour).Err()
+	}
+
 	// 1. Verifica se visitante já existe para este site específico
 	var existingVisitor struct {
 		ID             uuid.UUID
@@ -212,7 +264,18 @@ func (s *Service) checkAndRouteDispatch(ctx context.Context, ev *collector.Event
 	}
 
 	name := strings.ToLower(ev.EventName)
-	isConversion := name == "lead" || name == "purchase" || name == "whatsapp_click" || name == "form_submit" || name == "contact"
+	isConversion := false
+
+	if name == "form_submit" {
+		// Apenas despacha conversão para destinos externos (Meta CAPI, Google Ads, CRM)
+		// se a submissão tiver comprovação de sucesso (form_submit_success).
+		// Tentativas parciais (form_attempt) e validações locais (form_client_validated) não são despachadas para evitar falsos positivos de conversão.
+		if ev.FormLifecycleState == "form_submit_success" || ev.FormLifecycleState == "" {
+			isConversion = true
+		}
+	} else if name == "lead" || name == "purchase" || name == "whatsapp_click" || name == "contact" {
+		isConversion = true
+	}
 
 	if !isConversion {
 		return nil

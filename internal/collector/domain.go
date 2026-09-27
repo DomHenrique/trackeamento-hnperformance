@@ -2,7 +2,9 @@ package collector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -227,6 +229,8 @@ type SiteItem struct {
 	Name           string   `json:"name"`
 	Domain         string   `json:"domain"`
 	AllowedDomains []string `json:"allowed_domains"`
+	CnameSubdomain string   `json:"cname_subdomain,omitempty"`
+	CnameVerified  bool     `json:"cname_verified"`
 }
 
 // HandleListSites retorna a lista de sites ativos para o dropdown da UI (sem expor credenciais/api_key)
@@ -237,11 +241,13 @@ func (h *Handler) HandleListSites(c *fiber.Ctx) error {
 
 	rows, err := h.pg.Pool.Query(c.Context(), `
 		SELECT s.id::text, s.name, s.domain,
-		       COALESCE(ARRAY_AGG(d.domain) FILTER (WHERE d.domain IS NOT NULL AND d.is_active = true), '{}') AS allowed_domains
+		       COALESCE(ARRAY_AGG(d.domain) FILTER (WHERE d.domain IS NOT NULL AND d.is_active = true), '{}') AS allowed_domains,
+		       COALESCE(s.cname_subdomain, '') AS cname_subdomain,
+		       COALESCE(s.cname_verified, false) AS cname_verified
 		FROM sites s
 		LEFT JOIN site_allowed_domains d ON d.site_id = s.id
 		WHERE s.is_active = true
-		GROUP BY s.id, s.name, s.domain
+		GROUP BY s.id, s.name, s.domain, s.cname_subdomain, s.cname_verified
 		ORDER BY s.name ASC
 	`)
 	if err != nil {
@@ -252,7 +258,7 @@ func (h *Handler) HandleListSites(c *fiber.Ctx) error {
 	sites := make([]SiteItem, 0)
 	for rows.Next() {
 		var s SiteItem
-		if err := rows.Scan(&s.ID, &s.Name, &s.Domain, &s.AllowedDomains); err == nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Domain, &s.AllowedDomains, &s.CnameSubdomain, &s.CnameVerified); err == nil {
 			sites = append(sites, s)
 		}
 	}
@@ -516,3 +522,192 @@ func (h *Handler) HandleApproveDomain(c *fiber.Ctx) error {
 		"domain":  domain,
 	})
 }
+
+// resolveSiteByHost resolve os metadados do tenant pelo cabeçalho Host (subdomínio CNAME First-Party Gateway)
+func (h *Handler) resolveSiteByHost(ctx context.Context, host string) (*SiteMetadata, bool) {
+	clean := cleanHost(host)
+	if clean == "" {
+		return nil, false
+	}
+
+	// 1. Tenta memória
+	if val, ok := h.siteKeys.Load("host:" + clean); ok {
+		meta := val.(*SiteMetadata)
+		return meta, meta != nil && meta.ID != ""
+	}
+
+	// 2. Tenta PostgreSQL se disponível
+	if h.pg != nil && h.pg.Pool != nil {
+		var siteID string
+		var isActive bool
+		var rawPrivacy []byte
+
+		err := h.pg.Pool.QueryRow(ctx, `
+			SELECT id::text, is_active, COALESCE(privacy_settings, '{}'::jsonb)
+			FROM sites
+			WHERE LOWER(cname_subdomain) = $1
+		`, clean).Scan(&siteID, &isActive, &rawPrivacy)
+
+		if err == nil && isActive {
+			domains := []string{}
+			rows, errRows := h.pg.Pool.Query(ctx, `
+				SELECT DISTINCT LOWER(TRIM(d)) FROM (
+					SELECT domain AS d FROM sites WHERE id = $1
+					UNION
+					SELECT domain AS d FROM site_allowed_domains WHERE site_id = $1 AND is_active = true
+					UNION
+					SELECT cname_subdomain AS d FROM sites WHERE id = $1 AND cname_subdomain IS NOT NULL
+				) sub WHERE d IS NOT NULL AND d != ''
+			`, siteID)
+			if errRows == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var d string
+					if errScan := rows.Scan(&d); errScan == nil && d != "" {
+						domains = append(domains, d)
+					}
+				}
+			}
+
+			privacy := DefaultPrivacySettings()
+			if len(rawPrivacy) > 2 {
+				_ = json.Unmarshal(rawPrivacy, privacy)
+			}
+
+			meta := &SiteMetadata{
+				ID:              siteID,
+				AllowedDomains:  domains,
+				PrivacySettings: privacy,
+			}
+			h.siteKeys.Store("host:"+clean, meta)
+			return meta, true
+		}
+	}
+
+	return nil, false
+}
+
+// HandleCheckCnameAuthorized é consultado pelo Caddy (on_demand_tls ask) para autorizar emissão dinâmica de SSL
+func (h *Handler) HandleCheckCnameAuthorized(c *fiber.Ctx) error {
+	domain := cleanHost(c.Query("domain"))
+	if domain == "" {
+		return c.Status(fiber.StatusBadRequest).SendString("dominio ausente")
+	}
+
+	if h.pg == nil || h.pg.Pool == nil {
+		return c.Status(fiber.StatusOK).SendString("ok")
+	}
+
+	var exists bool
+	err := h.pg.Pool.QueryRow(c.Context(), `
+		SELECT EXISTS(
+			SELECT 1 FROM sites WHERE LOWER(cname_subdomain) = $1 AND is_active = true
+		)
+	`, domain).Scan(&exists)
+
+	if err == nil && exists {
+		return c.Status(fiber.StatusOK).SendString("ok")
+	}
+
+	return c.Status(fiber.StatusForbidden).SendString("nao autorizado")
+}
+
+// HandleVerifyCname verifica se o apontamento CNAME DNS do cliente está ativo e aponta para a VPS
+func (h *Handler) HandleVerifyCname(c *fiber.Ctx) error {
+	var req struct {
+		SiteID    string `json:"site_id"`
+		Subdomain string `json:"subdomain"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "dados invalidos"})
+	}
+
+	siteID := strings.TrimSpace(req.SiteID)
+	subdomain := cleanHost(req.Subdomain)
+	if siteID == "" || subdomain == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "site_id e subdomain sao obrigatorios"})
+	}
+
+	// 1. Resolução DNS real
+	cnameTarget, errDNS := net.LookupCNAME(subdomain)
+	var resolvedIPs []string
+	if errDNS == nil {
+		resolvedIPs, _ = net.LookupHost(subdomain)
+	}
+
+	dnsOk := (errDNS == nil && cnameTarget != "") || len(resolvedIPs) > 0
+
+	if h.pg != nil && h.pg.Pool != nil {
+		_, errUpdate := h.pg.Pool.Exec(c.Context(), `
+			UPDATE sites 
+			SET cname_subdomain = $1,
+			    cname_verified = $2,
+			    cname_verified_at = CASE WHEN $2 THEN now() ELSE NULL END
+			WHERE id = $3
+		`, subdomain, dnsOk, siteID)
+		if errUpdate != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("erro ao atualizar site: %v", errUpdate)})
+		}
+
+		h.InvalidateSiteCache(siteID)
+		h.siteKeys.Delete("host:" + subdomain)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"subdomain":    subdomain,
+		"cname_target": strings.TrimSuffix(cnameTarget, "."),
+		"verified":     dnsOk,
+		"ips":          resolvedIPs,
+		"message": func() string {
+			if dnsOk {
+				return "Apontamento DNS verificado com sucesso!"
+			}
+			return "CNAME ainda não propagado. Aguarde alguns minutos ou verifique a entrada DNS."
+		}(),
+	})
+}
+
+// HandleSetCname define ou remove o subdomínio CNAME para o site
+func (h *Handler) HandleSetCname(c *fiber.Ctx) error {
+	var req struct {
+		SiteID    string `json:"site_id"`
+		Subdomain string `json:"subdomain"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "dados invalidos"})
+	}
+
+	siteID := strings.TrimSpace(req.SiteID)
+	subdomain := cleanHost(req.Subdomain)
+	if siteID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "site_id e obrigatorio"})
+	}
+
+	if h.pg == nil || h.pg.Pool == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "banco indisponivel"})
+	}
+
+	var err error
+	if subdomain == "" {
+		_, err = h.pg.Pool.Exec(c.Context(), "UPDATE sites SET cname_subdomain = NULL, cname_verified = false, cname_verified_at = NULL WHERE id = $1", siteID)
+	} else {
+		_, err = h.pg.Pool.Exec(c.Context(), "UPDATE sites SET cname_subdomain = $1, cname_verified = false WHERE id = $2", subdomain, siteID)
+	}
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	h.InvalidateSiteCache(siteID)
+	if subdomain != "" {
+		h.siteKeys.Delete("host:" + subdomain)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"site_id":   siteID,
+		"subdomain": subdomain,
+		"status":    "saved",
+	})
+}
+
+

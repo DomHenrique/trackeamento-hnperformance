@@ -92,10 +92,10 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 			t.Errorf("esperado event_id com prefixo %s, obtido %v", prefixedid.PrefixEvent, resBody["event_id"])
 		}
 
-		// Valida que o cookie _vid foi emitido com prefixo hn_vis_
+		// Valida que no modo Cookieless NENHUM cookie _vid é emitido via Set-Cookie
 		setCookie := resp.Header.Get("Set-Cookie")
-		if !strings.Contains(setCookie, "_vid="+prefixedid.PrefixVisitor) {
-			t.Errorf("cookie _vid deve ter prefixo %s, cabeçalho obtido: %s", prefixedid.PrefixVisitor, setCookie)
+		if strings.Contains(setCookie, "_vid=") {
+			t.Errorf("coletor cookieless não deve emitir cookie _vid, cabeçalho obtido: %s", setCookie)
 		}
 	})
 
@@ -222,7 +222,7 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Origin", "https://example.com")
 
-		resp, err := prodApp.Test(req)
+		resp, err := prodApp.Test(req, 5000)
 		if err != nil {
 			t.Fatalf("erro ao executar teste: %v", err)
 		}
@@ -260,16 +260,13 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 		}
 
 		setCookie := resp.Header.Get("Set-Cookie")
-		if strings.Contains(setCookie, "malicious_injected_vid_12345") {
-			t.Errorf("VULNERABILIDADE: o servidor aceitou e gravou no cookie o visitor_id forjado no corpo: %s", setCookie)
-		}
-		if !strings.Contains(setCookie, "_vid="+prefixedid.PrefixVisitor) {
-			t.Errorf("servidor deve emitir novo cookie com prefixo %s, obtido: %s", prefixedid.PrefixVisitor, setCookie)
+		if strings.Contains(setCookie, "malicious_injected_vid_12345") || strings.Contains(setCookie, "_vid=") {
+			t.Errorf("servidor não deve emitir cookie _vid no modo cookieless: %s", setCookie)
 		}
 	})
 
-	// 10. Descarta cookie _vid malformado
-	t.Run("Descarta cookie _vid malformado e emite novo hn_vis_", func(t *testing.T) {
+	// 10. Descarta cookie _vid malformado e não emite Set-Cookie
+	t.Run("Descarta cookie _vid malformado e opera cookieless", func(t *testing.T) {
 		testKey := prefixedid.GenerateSiteKey()
 		h.siteKeys.Store(testKey, &SiteMetadata{
 			ID:             "site_sec_test_2",
@@ -295,23 +292,18 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 		}
 
 		setCookie := resp.Header.Get("Set-Cookie")
-		if strings.Contains(setCookie, "../../../etc/passwd") {
-			t.Errorf("servidor não deve emitir cookie com valor malformado: %s", setCookie)
-		}
-		if !strings.Contains(setCookie, "_vid="+prefixedid.PrefixVisitor) {
-			t.Errorf("servidor deve emitir novo cookie com prefixo %s, obtido: %s", prefixedid.PrefixVisitor, setCookie)
+		if strings.Contains(setCookie, "_vid=") {
+			t.Errorf("servidor não deve emitir cookie no modo cookieless: %s", setCookie)
 		}
 	})
 
-	// 11. Preserva cookie _vid legítimo
-	t.Run("Preserva cookie _vid legítimo", func(t *testing.T) {
+	// 11. Operação 100% Cookieless sem emissão de Set-Cookie
+	t.Run("Operação 100% Cookieless sem Set-Cookie", func(t *testing.T) {
 		testKey := prefixedid.GenerateSiteKey()
 		h.siteKeys.Store(testKey, &SiteMetadata{
 			ID:             "site_sec_test_3",
 			AllowedDomains: []string{"example.com"},
 		})
-
-		validVid := prefixedid.GenerateVisitorID()
 
 		body, _ := json.Marshal(map[string]interface{}{
 			"site_key":   testKey,
@@ -321,7 +313,6 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/v1/collect", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Origin", "https://example.com")
-		req.Header.Set("Cookie", "_vid="+validVid)
 
 		resp, err := app.Test(req)
 		if err != nil {
@@ -332,8 +323,8 @@ func TestHandleCollect_KeyValidationAndIDs(t *testing.T) {
 		}
 
 		setCookie := resp.Header.Get("Set-Cookie")
-		if !strings.Contains(setCookie, "_vid="+validVid) {
-			t.Errorf("cookie legítimo deve ser preservado. Esperado %s, obtido: %s", validVid, setCookie)
+		if strings.Contains(setCookie, "_vid=") {
+			t.Errorf("servidor não deve emitir cookie _vid: %s", setCookie)
 		}
 	})
 }

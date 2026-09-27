@@ -206,3 +206,35 @@ func TestPurgeVisitorData_Validations(t *testing.T) {
 	}
 }
 
+func TestReconcileAndRoute_CrossMidnightSessionStitching(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil, nil, "test_pepper")
+
+	// Evento antes da meia-noite
+	ev1 := &collector.EventPayload{
+		SiteID:    "00000000-0000-0000-0000-000000000001",
+		VisitorID: "hn_vis_saltday1_1234567890",
+		SessionID: "hn_ses_continuous_session1",
+		EventName: "page_view",
+		Consent:   collector.ConsentState{Analytics: true, Marketing: true},
+	}
+	err1 := svc.ReconcileAndRoute(ctx, ev1)
+	if err1 != nil {
+		t.Fatalf("erro ao processar evento 1: %v", err1)
+	}
+
+	// Evento logo após a meia-noite (mesma session_id, mas novo visitor_id gerado com novo salt)
+	ev2 := &collector.EventPayload{
+		SiteID:    "00000000-0000-0000-0000-000000000001",
+		VisitorID: "hn_vis_saltday2_9876543210",
+		SessionID: "hn_ses_continuous_session1",
+		EventName: "page_view",
+		Consent:   collector.ConsentState{Analytics: true, Marketing: true},
+	}
+	err2 := svc.ReconcileAndRoute(ctx, ev2)
+	if err2 != nil {
+		t.Fatalf("erro ao processar evento 2: %v", err2)
+	}
+}
+
+

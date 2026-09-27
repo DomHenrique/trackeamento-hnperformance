@@ -26,6 +26,7 @@ type GoogleAdsConversion struct {
 	WBRAID           string                 `json:"wbraid,omitempty"`
 	HashedEmail      string                 `json:"hashed_email,omitempty"`
 	HashedPhone      string                 `json:"hashed_phone,omitempty"`
+	ExternalID       string                 `json:"external_id,omitempty"`
 	Value            float64                `json:"conversion_value,omitempty"`
 	Currency         string                 `json:"currency_code,omitempty"`
 	CustomData       map[string]interface{} `json:"custom_data,omitempty"`
@@ -47,6 +48,11 @@ func (g *GoogleAds) SendConversion(ctx context.Context, endpointURL string, apiK
 		}
 	}
 
+	extID := ev.SessionID
+	if extID == "" {
+		extID = ev.VisitorID
+	}
+
 	conv := GoogleAdsConversion{
 		ConversionAction: ev.EventName,
 		ConversionTime:   ev.EventTime.Format("2006-01-02 15:04:05-07:00"),
@@ -55,6 +61,7 @@ func (g *GoogleAds) SendConversion(ctx context.Context, endpointURL string, apiK
 		WBRAID:           ev.Attribution.WBRAID,
 		HashedEmail:      hashedEmail,
 		HashedPhone:      hashedPhone,
+		ExternalID:       extID,
 		Currency:         "BRL",
 		CustomData:       ev.CustomData,
 	}

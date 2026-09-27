@@ -127,7 +127,7 @@ func main() {
 		},
 		AllowCredentials: true,
 		AllowMethods:     "GET,POST,OPTIONS",
-		AllowHeaders:     "Origin,Content-Type,Accept,X-Site-Key,X-Server-Key,X-Requested-With",
+		AllowHeaders:     "Origin,Content-Type,Accept,X-Site-Key,X-Server-Key,X-Requested-With,Sec-GPC",
 	})
 	setPublicHeaders := func(c *fiber.Ctx) error {
 		origin := c.Get("Origin")
@@ -243,6 +243,9 @@ func main() {
 	app.Post("/api/v1/domains", authMiddleware, handler.HandleAddDomain)
 	app.Delete("/api/v1/domains/:id", authMiddleware, handler.HandleDeleteDomain)
 	app.Post("/api/v1/domains/approve", authMiddleware, handler.HandleApproveDomain)
+	app.Post("/api/v1/domains/verify-cname", authMiddleware, handler.HandleVerifyCname)
+	app.Post("/api/v1/domains/set-cname", authMiddleware, handler.HandleSetCname)
+	app.Get("/api/v1/domains/check-cname-authorized", handler.HandleCheckCnameAuthorized)
 
 	// Endpoints Analíticos (Requer Autenticação)
 	app.Get("/api/v1/analytics/overview", authMiddleware, handler.HandleAnalyticsOverview)

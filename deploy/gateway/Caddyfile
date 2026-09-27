@@ -1,0 +1,30 @@
+{
+    # Global On-Demand TLS: emite e renova certificados SSL automaticamente (Let's Encrypt / ZeroSSL)
+    # apenas para subdomínios previamente autorizados pelo backend da HN Performance
+    on_demand_tls {
+        ask http://tracking_api:8080/api/v1/domains/check-cname-authorized
+        interval 2m
+        burst 10
+    }
+}
+
+# Ingress Gateway para todos os subdomínios First-Party de clientes (ex: track.spspower.com.br)
+:443 {
+    tls {
+        on_demand
+    }
+
+    # Proxy para o container Go da API de Coleta
+    reverse_proxy tracking_api:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+    }
+}
+
+# Redirecionamento automático HTTP -> HTTPS para tráfego de coleta
+:80 {
+    redir https://{host}{uri} permanent
+}

@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -293,3 +295,33 @@ func (r *RedisClient) AutoClaimPending(ctx context.Context, stream, group, consu
 	}).Result()
 	return res, nextStart, err
 }
+
+// GetOrCreateDailySalt obtém ou cria atomicamente o salt criptográfico para a data especificada (YYYY-MM-DD) com TTL de 48h
+func (r *RedisClient) GetOrCreateDailySalt(ctx context.Context, dateStr string) (string, error) {
+	if r.Client == nil {
+		return "fallback_salt_32bytes_crypto_safe_hn_2026", nil
+	}
+
+	key := fmt.Sprintf("tracking:daily_salt:%s", dateStr)
+	val, err := r.Client.Get(ctx, key).Result()
+	if err == nil && val != "" {
+		return val, nil
+	}
+
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("falha ao gerar salt criptografico: %w", err)
+	}
+	newSalt := hex.EncodeToString(b)
+
+	set, err := r.Client.SetNX(ctx, key, newSalt, 48*time.Hour).Result()
+	if err != nil {
+		return "", err
+	}
+	if !set {
+		return r.Client.Get(ctx, key).Result()
+	}
+
+	return newSalt, nil
+}
+

@@ -36,6 +36,7 @@ type MetaUserData struct {
 	ClientUserAgent string   `json:"client_user_agent,omitempty"`
 	FBP             string   `json:"fbp,omitempty"`
 	FBC             string   `json:"fbc,omitempty"`
+	ExternalID      []string `json:"external_id,omitempty"`
 }
 
 type MetaPayload struct {
@@ -52,6 +53,14 @@ func (m *MetaCAPI) SendEvent(ctx context.Context, pixelID, accessToken, testCode
 	userData := MetaUserData{
 		ClientIPAddress: ev.IPAddress,
 		ClientUserAgent: ev.UserAgent,
+	}
+
+	extID := ev.SessionID
+	if extID == "" {
+		extID = ev.VisitorID
+	}
+	if extID != "" {
+		userData.ExternalID = []string{identity.HashSHA256(extID)}
 	}
 
 	if ev.UserData != nil {

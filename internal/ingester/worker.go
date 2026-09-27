@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -234,7 +235,8 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 			utm_source, utm_medium, utm_campaign, utm_content, utm_term,
 			gclid, gbraid, wbraid, fbclid, ttclid,
 			ip_address, user_agent, device_type,
-			custom_data_json, is_bot, bot_reason, created_at
+			custom_data_json, is_bot, bot_reason, created_at,
+			submission_id, form_lifecycle_state, field_source
 		)
 	`)
 	if err != nil {
@@ -256,12 +258,54 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 			sessionUUID = uuid.NewSHA1(uuid.NameSpaceDNS, []byte(ev.SessionID))
 		}
 
-		customJSON, _ := json.Marshal(ev.CustomData)
-
 		var isBotVal uint8
 		if ev.IsBot {
 			isBotVal = 1
 		}
+
+		submissionID := ev.SubmissionID
+		formLifecycleState := ev.FormLifecycleState
+		fieldSource := ev.FieldSource
+
+		// Sanitização estrita de privacidade: assegura que dados de contato nunca vazem para o ClickHouse
+		sanitizedCustom := make(map[string]interface{})
+		if ev.CustomData != nil {
+			for k, v := range ev.CustomData {
+				lowerK := strings.ToLower(k)
+				if strings.Contains(lowerK, "email") ||
+					strings.Contains(lowerK, "phone") ||
+					strings.Contains(lowerK, "telefone") ||
+					strings.Contains(lowerK, "celular") ||
+					strings.Contains(lowerK, "whats") ||
+					strings.Contains(lowerK, "nome") ||
+					strings.Contains(lowerK, "name") ||
+					strings.Contains(lowerK, "password") ||
+					strings.Contains(lowerK, "cpf") ||
+					strings.Contains(lowerK, "token") ||
+					strings.Contains(lowerK, "card") {
+					continue
+				}
+				sanitizedCustom[k] = v
+			}
+
+			if submissionID == "" {
+				if s, ok := ev.CustomData["submission_id"].(string); ok {
+					submissionID = s
+				}
+			}
+			if formLifecycleState == "" {
+				if s, ok := ev.CustomData["form_lifecycle_state"].(string); ok {
+					formLifecycleState = s
+				}
+			}
+			if fieldSource == "" {
+				if s, ok := ev.CustomData["field_source"].(string); ok {
+					fieldSource = s
+				}
+			}
+		}
+
+		customJSON, _ := json.Marshal(sanitizedCustom)
 
 		err := batch.Append(
 			eventUUID,
@@ -290,6 +334,9 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 			isBotVal,
 			ev.BotReason,
 			ev.CreatedAt,
+			submissionID,
+			formLifecycleState,
+			fieldSource,
 		)
 		if err != nil {
 			log.Printf("Aviso: falha ao anexar evento no batch ClickHouse: %v", err)

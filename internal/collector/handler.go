@@ -26,19 +26,21 @@ const (
 )
 
 type Handler struct {
-	cfg      *config.Config
-	redis    *storage.RedisClient
-	pg       *storage.PostgresDB
-	ch       *storage.ClickHouseDB
-	siteKeys sync.Map // Cache em memória para validação ultra-rápida de site_key
+	cfg         *config.Config
+	redis       *storage.RedisClient
+	pg          *storage.PostgresDB
+	ch          *storage.ClickHouseDB
+	identityMgr *VisitorIdentityManager
+	siteKeys    sync.Map // Cache em memória para validação ultra-rápida de site_key
 }
 
 func NewHandler(cfg *config.Config, rdb *storage.RedisClient, pg *storage.PostgresDB, ch *storage.ClickHouseDB) *Handler {
 	return &Handler{
-		cfg:   cfg,
-		redis: rdb,
-		pg:    pg,
-		ch:    ch,
+		cfg:         cfg,
+		redis:       rdb,
+		pg:          pg,
+		ch:          ch,
+		identityMgr: NewVisitorIdentityManager(rdb),
 	}
 }
 
@@ -67,18 +69,28 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		siteKey = prefixedid.SanitizeKey(c.Get("X-Site-Key"))
 	}
 
-	if siteKey == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "site_key ausente",
-		})
-	}
+	var siteMeta *SiteMetadata
+	var valid bool
 
-	// Validação da site_key com cache
-	siteMeta, valid := h.validateSiteKey(c.Context(), siteKey)
-	if !valid {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "site_key invalida ou inativa",
-		})
+	if siteKey != "" {
+		siteMeta, valid = h.validateSiteKey(c.Context(), siteKey)
+		if !valid {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "site_key invalida ou inativa",
+			})
+		}
+	} else {
+		// Fallback para First-Party Ingress Gateway: Resolução por cabeçalho Host
+		host := c.Hostname()
+		if fwdHost := c.Get("X-Forwarded-Host"); fwdHost != "" {
+			host = fwdHost
+		}
+		siteMeta, valid = h.resolveSiteByHost(c.Context(), host)
+		if !valid || siteMeta == nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "site_key ausente e host nao cadastrado no gateway",
+			})
+		}
 	}
 	siteID := siteMeta.ID
 
@@ -117,53 +129,29 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		consent.Marketing = false
 	}
 
-	// 2. Gerenciamento do Cookie 1st-Party _vid (Condicionado a consentimento e política)
-	allowsCookie := consent.Analytics && (analyticsPolicy.IssueVisitorCookie || !analyticsPolicy.RequiresConsent)
-
-	rawCookieVid := strings.TrimSpace(c.Cookies(VisitorCookieName))
-	var visitorID string
-	isNewVisitor := false
-
-	if rawCookieVid != "" && prefixedid.IsValidVisitorID(rawCookieVid) {
-		visitorID = rawCookieVid
-	} else if allowsCookie {
-		// Se ausente, inválido ou corrompido, gera nova identidade canônica no servidor.
-		// Identificadores arbitrários em req.UserData["visitor_id"] são expressamente desconsiderados
-		// para evitar Session Fixation e Cookie Poisoning.
-		visitorID = prefixedid.GenerateVisitorID()
-		isNewVisitor = true
-	} else {
-		// Sem autorização para cookie analítico: visitante opera sem persistência de identidade
-		visitorID = ""
-	}
-
-	if req.UserData != nil && visitorID != "" {
-		req.UserData["visitor_id"] = visitorID
-	}
-
-	// Emite o cookie apenas se a política e o consentimento permitirem
-	if allowsCookie && visitorID != "" {
-		c.Cookie(&fiber.Cookie{
-			Name:     VisitorCookieName,
-			Value:    visitorID,
-			MaxAge:   OneYearSeconds,
-			Path:     "/",
-			SameSite: "Lax",
-			Secure:   h.cfg.Env == "production",
-			HTTPOnly: false, // Permite acesso pelo SDK JavaScript se necessário
-		})
-	}
-
-	// 3. Extração de IP Real Confiável (com validação de TRUSTED_PROXIES e mascaramento de privacidade)
+	// 2. Extração de IP Real Confiável (com validação de TRUSTED_PROXIES e mascaramento de privacidade)
 	rawIP := ResolveClientIP(c, h.cfg)
 	ip := rawIP
 	if privacy.MaskIP {
 		ip = MaskIP(rawIP)
 	}
 
-	// 4. User-Agent e Tipo de Dispositivo
+	// 3. User-Agent e Tipo de Dispositivo
 	ua := c.Get("User-Agent")
 	deviceType := detectDeviceType(ua)
+
+	// 4. Resolução Determinística Server-Side do Visitor ID (Cookieless)
+	// Elimina totalmente leitura, geração e emissão do cookie _vid via Set-Cookie.
+	if h.identityMgr == nil {
+		h.identityMgr = NewVisitorIdentityManager(h.redis)
+	}
+	visitorID := h.identityMgr.ResolveVisitorID(c.Context(), time.Now(), siteID, ip, ua, req.ClientSignals)
+	isNewVisitor := false
+
+	if req.UserData == nil {
+		req.UserData = make(map[string]interface{})
+	}
+	req.UserData["visitor_id"] = visitorID
 
 	// 5. Session ID
 	sessionID := req.SessionID
@@ -234,28 +222,52 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		originMode = "debug"
 	}
 
+	submissionID := req.SubmissionID
+	formLifecycleState := req.FormLifecycleState
+	fieldSource := req.FieldSource
+	if req.CustomData != nil {
+		if submissionID == "" {
+			if s, ok := req.CustomData["submission_id"].(string); ok {
+				submissionID = s
+			}
+		}
+		if formLifecycleState == "" {
+			if s, ok := req.CustomData["form_lifecycle_state"].(string); ok {
+				formLifecycleState = s
+			}
+		}
+		if fieldSource == "" {
+			if s, ok := req.CustomData["field_source"].(string); ok {
+				fieldSource = s
+			}
+		}
+	}
+
 	payload := EventPayload{
-		EventID:        eventID,
-		SiteID:         siteID,
-		SiteKey:        siteKey,
-		VisitorID:      visitorID,
-		SessionID:      sessionID,
-		EventName:      eventName,
-		EventTime:      time.Now().UTC(),
-		IPAddress:      ip,
-		UserAgent:      ua,
-		DeviceType:     deviceType,
-		Attribution:    attrParams,
-		UserData:       req.UserData,
-		CustomData:     req.CustomData,
-		ClientSignals:  req.ClientSignals,
-		Consent:        consent,
-		PrivacySignals: PrivacySignals{GPC: isGPC, DNT: isDNT},
-		IsBot:          isBot,
-		BotReason:      botReason,
-		IsDebug:        isDebug,
-		OriginMode:     originMode,
-		CreatedAt:      time.Now().UTC(),
+		EventID:            eventID,
+		SiteID:             siteID,
+		SiteKey:            siteKey,
+		VisitorID:          visitorID,
+		SessionID:          sessionID,
+		EventName:          eventName,
+		EventTime:          time.Now().UTC(),
+		IPAddress:          ip,
+		UserAgent:          ua,
+		DeviceType:         deviceType,
+		Attribution:        attrParams,
+		UserData:           req.UserData,
+		CustomData:         req.CustomData,
+		SubmissionID:       submissionID,
+		FormLifecycleState: formLifecycleState,
+		FieldSource:        fieldSource,
+		ClientSignals:      req.ClientSignals,
+		Consent:            consent,
+		PrivacySignals:     PrivacySignals{GPC: isGPC, DNT: isDNT},
+		IsBot:              isBot,
+		BotReason:          botReason,
+		IsDebug:            isDebug,
+		OriginMode:         originMode,
+		CreatedAt:          time.Now().UTC(),
 	}
 
 	if isNewVisitor {
@@ -277,6 +289,14 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		})
 	}
 
+	// Prepara payload com PII estritamente mascarada para o canal de DebugView
+	// Garante que logs de depuração em tempo real nunca exibam emails, telefones ou nomes em claro
+	debugPayload := payload
+	if payload.UserData != nil {
+		debugPayload.UserData = maskUserData(payload.UserData)
+	}
+	debugData, _ := json.Marshal(debugPayload)
+
 	if isDebug {
 		go func(pData []byte, sID string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -285,7 +305,7 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 				_ = h.redis.PublishDebugEvent(ctx, sID, pData)
 				_ = h.redis.PushDebugBuffer(ctx, sID, pData)
 			}
-		}(data, siteID)
+		}(debugData, siteID)
 	} else {
 		// Ingestão síncrona no stream principal com timeout estrito de 400ms
 		if h.redis != nil {
@@ -304,7 +324,7 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 			})
 		}
 
-		// Emissões auxiliares para o DebugView continuam em background
+		// Emissões auxiliares para o DebugView continuam em background com PII mascarada
 		go func(pData []byte, sID string) {
 			bgCtx, bgCancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer bgCancel()
@@ -312,7 +332,7 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 				_ = h.redis.PublishDebugEvent(bgCtx, sID, pData)
 				_ = h.redis.PushDebugBuffer(bgCtx, sID, pData)
 			}
-		}(data, siteID)
+		}(debugData, siteID)
 	}
 
 	// Responde 202 Accepted com confirmação explícita e identificador único
@@ -421,6 +441,51 @@ func detectDeviceType(ua string) string {
 		return "mobile"
 	}
 	return "desktop"
+}
+
+// maskUserData mascara dados pessoais sensíveis para exibição segura no DebugView e logs
+func maskUserData(ud map[string]interface{}) map[string]interface{} {
+	if ud == nil {
+		return nil
+	}
+	masked := make(map[string]interface{})
+	for k, v := range ud {
+		str, ok := v.(string)
+		if !ok || len(str) == 0 {
+			masked[k] = v
+			continue
+		}
+		lowerK := strings.ToLower(k)
+		if strings.Contains(lowerK, "email") {
+			parts := strings.Split(str, "@")
+			if len(parts) == 2 && len(parts[0]) > 2 {
+				masked[k] = parts[0][:2] + "***@" + parts[1]
+			} else {
+				masked[k] = "***@***"
+			}
+		} else if strings.Contains(lowerK, "phone") || strings.Contains(lowerK, "tel") || strings.Contains(lowerK, "cel") || strings.Contains(lowerK, "whats") {
+			if len(str) > 4 {
+				masked[k] = str[:2] + "*****" + str[len(str)-2:]
+			} else {
+				masked[k] = "***"
+			}
+		} else if strings.Contains(lowerK, "name") || strings.Contains(lowerK, "nome") {
+			words := strings.Fields(str)
+			maskedWords := make([]string, len(words))
+			for i, w := range words {
+				runes := []rune(w)
+				if len(runes) > 1 {
+					maskedWords[i] = string(runes[0]) + "***"
+				} else {
+					maskedWords[i] = w
+				}
+			}
+			masked[k] = strings.Join(maskedWords, " ")
+		} else {
+			masked[k] = v
+		}
+	}
+	return masked
 }
 
 func isConversionEvent(eventName string) bool {
