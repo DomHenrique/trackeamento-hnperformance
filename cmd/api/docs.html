@@ -7,9 +7,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+        (function() {
+            try {
+                if (localStorage.getItem('hn_sidebar_collapsed') === '1') {
+                    document.documentElement.classList.add('sidebar-collapsed');
+                }
+            } catch(e) {}
+        })();
+    </script>
     <style>
         :root {
             --bg-base: #090d16;
+            --bg-surface: #0f172a;
             --bg-card: rgba(15, 23, 42, 0.75);
             --border: rgba(255, 255, 255, 0.08);
             --border-hover: rgba(99, 102, 241, 0.4);
@@ -19,7 +29,11 @@
             --primary-hover: #4f46e5;
             --success: #10b981;
             --warning: #f59e0b;
+            --danger: #ef4444;
             --code-bg: #0b1120;
+            --sidebar-width: 260px;
+            --sidebar-collapsed-width: 68px;
+            --sidebar-transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         * {
@@ -32,14 +46,397 @@
         body {
             background-color: var(--bg-base);
             color: var(--text-main);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
             line-height: 1.6;
+        }
+
+        /* Barra Lateral Unificada (Sidebar) */
+        aside.sidebar {
+            width: var(--sidebar-width);
+            background: #0d1322;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            transition: var(--sidebar-transition);
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        .sidebar-brand {
+            padding: 1.15rem 1rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 70px;
+            gap: 0.5rem;
+        }
+
+        .brand-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 0;
+        }
+
+        .sidebar-brand .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .sidebar-brand .logo-icon:hover {
+            transform: scale(1.05);
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            white-space: nowrap;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar-brand h1 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #fff;
+            line-height: 1.2;
+        }
+
+        .sidebar-brand .badge-pro {
+            font-size: 0.65rem;
+            padding: 0.12rem 0.4rem;
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 4px;
+            font-weight: 600;
+            width: fit-content;
+            margin-top: 0.15rem;
+        }
+
+        .btn-collapse-sidebar {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: 6px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .btn-collapse-sidebar:hover {
+            background: rgba(99, 102, 241, 0.2);
+            color: #fff;
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+
+        .sidebar-menu {
+            flex: 1;
+            padding: 1rem 0.65rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .menu-header {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748b;
+            padding: 0.5rem 0.75rem 0.25rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 0.85rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: 1px solid transparent;
+            position: relative;
+        }
+
+        .nav-item .nav-icon {
+            font-size: 1.15rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 22px;
+        }
+
+        .nav-item .nav-label {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .nav-item:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .nav-item.active {
+            color: #fff;
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.3);
+            font-weight: 600;
+        }
+
+        .sidebar-footer {
+            padding: 0.9rem 1rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            min-height: 56px;
+        }
+
+        .user-status-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .status-indicator {
+            color: var(--success);
+            font-size: 0.9rem;
+        }
+
+        .btn-logout {
+            color: var(--danger);
+            text-decoration: none;
+            font-size: 0.75rem;
+            padding: 0.3rem 0.5rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            cursor: pointer;
+        }
+
+        .btn-logout:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+        }
+
+        .logout-icon {
+            display: none;
+        }
+
+        /* Conteúdo Principal & Top Header */
+        main.main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            transition: var(--sidebar-transition);
+            width: calc(100% - var(--sidebar-width));
+            background: var(--bg-base);
             padding-bottom: 4rem;
+        }
+
+        header.top-header {
+            height: 70px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+        }
+
+        .top-left {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+        }
+
+        .btn-sidebar-trigger {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: 8px;
+            width: 34px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .btn-sidebar-trigger:hover {
+            background: rgba(99, 102, 241, 0.2);
+            color: #fff;
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+
+        .top-left h2 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: #fff;
+        }
+
+        /* ESTADO RECOLHIDO (COLLAPSED) */
+        html.sidebar-collapsed aside.sidebar,
+        body.sidebar-collapsed aside.sidebar {
+            width: var(--sidebar-collapsed-width);
+        }
+
+        html.sidebar-collapsed main.main-content,
+        body.sidebar-collapsed main.main-content {
+            margin-left: var(--sidebar-collapsed-width);
+            width: calc(100% - var(--sidebar-collapsed-width));
+        }
+
+        html.sidebar-collapsed .sidebar-brand,
+        body.sidebar-collapsed .sidebar-brand {
+            justify-content: center;
+            padding: 1.15rem 0.25rem;
+        }
+
+        html.sidebar-collapsed .brand-text,
+        body.sidebar-collapsed .brand-text {
+            display: none !important;
+            opacity: 0;
+        }
+
+        html.sidebar-collapsed .btn-collapse-sidebar,
+        body.sidebar-collapsed .btn-collapse-sidebar {
+            display: none !important;
+        }
+
+        html.sidebar-collapsed .menu-header,
+        body.sidebar-collapsed .menu-header {
+            height: 1px;
+            background: var(--border);
+            padding: 0;
+            margin: 0.65rem 0.4rem;
+            font-size: 0;
+            overflow: hidden;
+        }
+
+        html.sidebar-collapsed .nav-item,
+        body.sidebar-collapsed .nav-item {
+            justify-content: center;
+            padding: 0.7rem 0;
+            position: relative;
+        }
+
+        html.sidebar-collapsed .nav-item .nav-label,
+        body.sidebar-collapsed .nav-item .nav-label {
+            display: none;
+        }
+
+        html.sidebar-collapsed .nav-item .nav-icon,
+        body.sidebar-collapsed .nav-item .nav-icon {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+
+        /* Tooltip flutuante */
+        html.sidebar-collapsed .nav-item::after,
+        body.sidebar-collapsed .nav-item::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(100% + 10px);
+            top: 50%;
+            transform: translateY(-50%) translateX(-4px);
+            background: #1e293b;
+            color: #fff;
+            padding: 0.45rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.15s ease-out;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            z-index: 1000;
+        }
+
+        html.sidebar-collapsed .nav-item:hover::after,
+        body.sidebar-collapsed .nav-item:hover::after {
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }
+
+        html.sidebar-collapsed .sidebar-footer,
+        body.sidebar-collapsed .sidebar-footer {
+            padding: 0.75rem 0.25rem;
+            justify-content: center;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        html.sidebar-collapsed .user-name,
+        body.sidebar-collapsed .user-name,
+        html.sidebar-collapsed .logout-text,
+        body.sidebar-collapsed .logout-text {
+            display: none;
+        }
+
+        html.sidebar-collapsed .logout-icon,
+        body.sidebar-collapsed .logout-icon {
+            display: block;
         }
 
         .container {
             max-width: 1080px;
             margin: 0 auto;
             padding: 2.5rem 1.5rem;
+            width: 100%;
         }
 
         /* Header */
@@ -418,24 +815,109 @@
     </style>
 </head>
 <body>
-
-    <div class="container">
-        <!-- Header -->
-        <header class="doc-header">
-            <div class="doc-header-left">
-                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.4rem;">
-                    <span class="badge-tag">⚡ SDK v1.0 • Produção</span>
-                    <span style="font-size: 0.8rem; color: #10b981;">● First-Party 100% Server-Side</span>
+    <!-- Barra Lateral Unificada -->
+    <aside class="sidebar" id="app-sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-left" onclick="toggleSidebar()" style="cursor: pointer;" title="Alternar barra lateral">
+                <div class="logo-icon">HN</div>
+                <div class="brand-text">
+                    <h1>HN TRACKING</h1>
+                    <span class="badge-pro">Analytics 360</span>
                 </div>
-                <h1>Guia de Instalação & SDK de Eventos</h1>
-                <p>Passo a passo completo de integração nos sites dos clientes, exemplos de eventos e deduplicação.</p>
+            </div>
+            <button id="btn-toggle-sidebar" class="btn-collapse-sidebar" onclick="toggleSidebar()" title="Recolher barra lateral (Ctrl + B)" aria-label="Recolher barra lateral">
+                <svg class="icon-collapse" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+        </div>
+
+        <nav class="sidebar-menu">
+            <div class="menu-header">Métricas & Relatórios</div>
+            <a class="nav-item" href="/dashboard?tab=overview" data-tooltip="Visão Geral">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Visão Geral</span>
+            </a>
+            <a class="nav-item" href="/dashboard?tab=pages" data-tooltip="Páginas Monitoradas">
+                <span class="nav-icon">📄</span>
+                <span class="nav-label">Páginas Monitoradas</span>
+            </a>
+            <a class="nav-item" href="/dashboard?tab=leads" data-tooltip="Leads & Conversões">
+                <span class="nav-icon">🎯</span>
+                <span class="nav-label">Leads & Conversões</span>
+            </a>
+            <a class="nav-item" href="/dashboard?tab=traffic" data-tooltip="Origem & Campanhas">
+                <span class="nav-icon">🌐</span>
+                <span class="nav-label">Origem & Campanhas</span>
+            </a>
+            <a class="nav-item" href="/dashboard?tab=funnels" data-tooltip="Funis & Atribuição">
+                <span class="nav-icon">🛤️</span>
+                <span class="nav-label">Funis & Atribuição</span>
+            </a>
+            <a class="nav-item" href="/dashboard?tab=debug" data-tooltip="DebugView (Ao Vivo)">
+                <span class="nav-icon">⚡</span>
+                <span class="nav-label">DebugView (Ao Vivo)</span>
+            </a>
+
+            <div class="menu-header" style="margin-top: 1rem;">Documentação & Setup</div>
+            <a class="nav-item" href="/dashboard?tab=capi" data-tooltip="Envios & CAPI (Wizard)">
+                <span class="nav-icon">🚀</span>
+                <span class="nav-label">Envios & CAPI (Wizard)</span>
+            </a>
+            <a class="nav-item active" href="/docs" data-tooltip="Guia de Instalação SDK">
+                <span class="nav-icon">📚</span>
+                <span class="nav-label">Guia de Instalação SDK</span>
+            </a>
+
+            <div class="menu-header" style="margin-top: 1rem;">Administração & Setup</div>
+            <a class="nav-item" href="/dashboard?tab=settings" data-tooltip="Configurações do Site">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">Configurações do Site</span>
+            </a>
+            <a class="nav-item" href="/" data-tooltip="Gestão de Domínios">
+                <span class="nav-icon">🌐</span>
+                <span class="nav-label">Gestão de Domínios</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="user-status-wrapper" data-tooltip="Acesso Desenvolvedor">
+                <span class="status-indicator">●</span>
+                <span id="user-display" class="user-name">Desenvolvedor</span>
+            </div>
+            <a href="javascript:void(0)" onclick="handleLogout()" class="btn-logout" data-tooltip="Encerrar Sessão">
+                <span class="logout-text">Sair</span>
+                <svg class="logout-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Conteúdo Principal -->
+    <main class="main-content">
+        <!-- Top Header Superior -->
+        <header class="top-header">
+            <div class="top-left">
+                <button id="btn-toggle-sidebar-top" class="btn-sidebar-trigger" onclick="toggleSidebar()" title="Recolher / Expandir barra lateral (Ctrl + B)" aria-label="Alternar barra lateral">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+                <h2>Guia de Instalação & SDK de Eventos</h2>
             </div>
             <div>
-                <a href="/dashboard" class="btn-nav">
+                <a href="/dashboard" class="btn-nav" style="text-decoration: none;">
                     <span>📊</span> Acessar Dashboard 360
                 </a>
             </div>
         </header>
+
+        <div class="container">
 
         <!-- Banner de Configuração Dinâmica da Chave -->
         <div class="site-banner">
@@ -881,11 +1363,46 @@ if (typeof fbq === 'function' && eventId) {
         </div>
 
     </div>
+    </main>
 
     <!-- Carrega o próprio SDK para alimentar o tester interativo -->
     <script src="/sdk/tracker.js" data-site-key="hn_live_key_998877665544332211"></script>
 
     <script>
+        // Mecanismo de Recolher/Expandir Barra Lateral
+        function toggleSidebar() {
+            const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+            if (isCollapsed) {
+                document.documentElement.classList.add('sidebar-collapsed');
+            } else {
+                document.documentElement.classList.remove('sidebar-collapsed');
+            }
+            try {
+                localStorage.setItem('hn_sidebar_collapsed', isCollapsed ? '1' : '0');
+            } catch (e) {}
+        }
+
+        // Atalhos de Teclado (Ctrl+B ou Alt+S)
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+                e.preventDefault();
+                toggleSidebar();
+            } else if (e.altKey && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                toggleSidebar();
+            }
+        });
+
+        // Logout Seguro Real
+        async function handleLogout() {
+            try {
+                await fetch('/api/v1/auth/logout', { method: 'POST' });
+            } catch (e) {
+                console.error("Erro no logout:", e);
+            }
+            window.location.href = '/';
+        }
+
         function updateSnippetKeys(key) {
             key = key.trim() || 'hn_site_9k8m2x7v1b3n4p6q8r0s';
             document.querySelectorAll('.dynamic-key').forEach(el => {
@@ -982,6 +1499,15 @@ if (typeof fbq === 'function' && eventId) {
                             input.value = targetSite.api_key;
                             updateSnippetKeys(targetSite.api_key);
                         }
+                    }
+                }
+
+                const authRes = await fetch('/api/v1/auth/me');
+                if (authRes.ok) {
+                    const authData = await authRes.json();
+                    if (authData.authenticated && authData.user) {
+                        const uEl = document.getElementById('user-display');
+                        if (uEl) uEl.textContent = authData.user.username || authData.user.email || 'Operador';
                     }
                 }
             } catch (_) {}

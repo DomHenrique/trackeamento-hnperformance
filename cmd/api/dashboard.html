@@ -8,6 +8,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        (function() {
+            try {
+                if (localStorage.getItem('hn_sidebar_collapsed') === '1') {
+                    document.documentElement.classList.add('sidebar-collapsed');
+                }
+            } catch(e) {}
+        })();
+    </script>
     <style>
         :root {
             --bg-base: #090d16;
@@ -23,6 +32,8 @@
             --warning: #f59e0b;
             --danger: #ef4444;
             --sidebar-width: 260px;
+            --sidebar-collapsed-width: 68px;
+            --sidebar-transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         * {
@@ -52,19 +63,31 @@
             bottom: 0;
             left: 0;
             z-index: 100;
+            transition: var(--sidebar-transition);
+            overflow-x: hidden;
+            overflow-y: auto;
         }
 
         .sidebar-brand {
-            padding: 1.5rem 1.25rem;
+            padding: 1.15rem 1rem;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            min-height: 70px;
+            gap: 0.5rem;
+        }
+
+        .brand-left {
+            display: flex;
+            align-items: center;
             gap: 0.75rem;
+            min-width: 0;
         }
 
         .sidebar-brand .logo-icon {
-            width: 34px;
-            height: 34px;
+            width: 36px;
+            height: 36px;
             background: linear-gradient(135deg, #6366f1, #3b82f6);
             border-radius: 8px;
             display: flex;
@@ -73,6 +96,21 @@
             font-weight: 700;
             color: #fff;
             box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .sidebar-brand .logo-icon:hover {
+            transform: scale(1.05);
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            white-space: nowrap;
+            transition: opacity 0.2s ease;
         }
 
         .sidebar-brand h1 {
@@ -80,24 +118,48 @@
             font-weight: 700;
             letter-spacing: -0.02em;
             color: #fff;
+            line-height: 1.2;
         }
 
         .sidebar-brand .badge-pro {
             font-size: 0.65rem;
-            padding: 0.15rem 0.4rem;
+            padding: 0.12rem 0.4rem;
             background: rgba(16, 185, 129, 0.15);
             color: var(--success);
             border: 1px solid rgba(16, 185, 129, 0.3);
             border-radius: 4px;
             font-weight: 600;
+            width: fit-content;
+            margin-top: 0.15rem;
+        }
+
+        .btn-collapse-sidebar {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: 6px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .btn-collapse-sidebar:hover {
+            background: rgba(99, 102, 241, 0.2);
+            color: #fff;
+            border-color: rgba(99, 102, 241, 0.4);
         }
 
         .sidebar-menu {
             flex: 1;
-            padding: 1.25rem 0.75rem;
+            padding: 1rem 0.65rem;
             display: flex;
             flex-direction: column;
-            gap: 0.35rem;
+            gap: 0.3rem;
         }
 
         .menu-header {
@@ -107,6 +169,7 @@
             color: #64748b;
             padding: 0.5rem 0.75rem 0.25rem;
             font-weight: 600;
+            transition: all 0.2s;
         }
 
         .nav-item {
@@ -122,6 +185,22 @@
             transition: all 0.2s;
             cursor: pointer;
             border: 1px solid transparent;
+            position: relative;
+        }
+
+        .nav-item .nav-icon {
+            font-size: 1.15rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 22px;
+        }
+
+        .nav-item .nav-label {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .nav-item:hover {
@@ -137,13 +216,52 @@
         }
 
         .sidebar-footer {
-            padding: 1rem 1.25rem;
+            padding: 0.9rem 1rem;
             border-top: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
             font-size: 0.8rem;
             color: var(--text-muted);
+            min-height: 56px;
+        }
+
+        .user-status-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .status-indicator {
+            color: var(--success);
+            font-size: 0.9rem;
+        }
+
+        .btn-logout {
+            color: var(--danger);
+            text-decoration: none;
+            font-size: 0.75rem;
+            padding: 0.3rem 0.5rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            cursor: pointer;
+        }
+
+        .btn-logout:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+        }
+
+        .logout-icon {
+            display: none;
         }
 
         /* Conteúdo Principal */
@@ -153,6 +271,8 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            transition: var(--sidebar-transition);
+            width: calc(100% - var(--sidebar-width));
         }
 
         /* Header Superior */
@@ -167,13 +287,146 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 2rem;
+            padding: 0 1.5rem;
+        }
+
+        .top-left {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+        }
+
+        .btn-sidebar-trigger {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: 8px;
+            width: 34px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .btn-sidebar-trigger:hover {
+            background: rgba(99, 102, 241, 0.2);
+            color: #fff;
+            border-color: rgba(99, 102, 241, 0.4);
         }
 
         .top-left h2 {
             font-size: 1.15rem;
             font-weight: 600;
             letter-spacing: -0.01em;
+        }
+
+        /* ESTADO RECOLHIDO (COLLAPSED) */
+        html.sidebar-collapsed aside.sidebar,
+        body.sidebar-collapsed aside.sidebar {
+            width: var(--sidebar-collapsed-width);
+        }
+
+        html.sidebar-collapsed main.main-content,
+        body.sidebar-collapsed main.main-content {
+            margin-left: var(--sidebar-collapsed-width);
+            width: calc(100% - var(--sidebar-collapsed-width));
+        }
+
+        html.sidebar-collapsed .sidebar-brand,
+        body.sidebar-collapsed .sidebar-brand {
+            justify-content: center;
+            padding: 1.15rem 0.25rem;
+        }
+
+        html.sidebar-collapsed .brand-text,
+        body.sidebar-collapsed .brand-text {
+            display: none !important;
+            opacity: 0;
+        }
+
+        html.sidebar-collapsed .btn-collapse-sidebar,
+        body.sidebar-collapsed .btn-collapse-sidebar {
+            display: none !important;
+        }
+
+        html.sidebar-collapsed .menu-header,
+        body.sidebar-collapsed .menu-header {
+            height: 1px;
+            background: var(--border);
+            padding: 0;
+            margin: 0.65rem 0.4rem;
+            font-size: 0;
+            overflow: hidden;
+        }
+
+        html.sidebar-collapsed .nav-item,
+        body.sidebar-collapsed .nav-item {
+            justify-content: center;
+            padding: 0.7rem 0;
+            position: relative;
+        }
+
+        html.sidebar-collapsed .nav-item .nav-label,
+        body.sidebar-collapsed .nav-item .nav-label {
+            display: none;
+        }
+
+        html.sidebar-collapsed .nav-item .nav-icon,
+        body.sidebar-collapsed .nav-item .nav-icon {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+
+        /* Tooltip flutuante ao passar mouse no modo recolhido */
+        html.sidebar-collapsed .nav-item::after,
+        body.sidebar-collapsed .nav-item::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(100% + 10px);
+            top: 50%;
+            transform: translateY(-50%) translateX(-4px);
+            background: #1e293b;
+            color: #fff;
+            padding: 0.45rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.15s ease-out;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            z-index: 1000;
+        }
+
+        html.sidebar-collapsed .nav-item:hover::after,
+        body.sidebar-collapsed .nav-item:hover::after {
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }
+
+        html.sidebar-collapsed .sidebar-footer,
+        body.sidebar-collapsed .sidebar-footer {
+            padding: 0.75rem 0.25rem;
+            justify-content: center;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        html.sidebar-collapsed .user-name,
+        body.sidebar-collapsed .user-name,
+        html.sidebar-collapsed .logout-text,
+        body.sidebar-collapsed .logout-text {
+            display: none;
+        }
+
+        html.sidebar-collapsed .logout-icon,
+        body.sidebar-collapsed .logout-icon {
+            display: block;
         }
 
         .top-right {
@@ -2106,56 +2359,83 @@
 <body>
 
     <!-- Barra Lateral -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="app-sidebar">
         <div class="sidebar-brand">
-            <div class="logo-icon">HN</div>
-            <div>
-                <h1>HN TRACKING</h1>
-                <span class="badge-pro">Analytics 360</span>
+            <div class="brand-left" onclick="toggleSidebar()" style="cursor: pointer;" title="Alternar barra lateral">
+                <div class="logo-icon">HN</div>
+                <div class="brand-text">
+                    <h1>HN TRACKING</h1>
+                    <span class="badge-pro">Analytics 360</span>
+                </div>
             </div>
+            <button id="btn-toggle-sidebar" class="btn-collapse-sidebar" onclick="toggleSidebar()" title="Recolher barra lateral (Ctrl + B)" aria-label="Recolher barra lateral">
+                <svg class="icon-collapse" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
         </div>
 
         <nav class="sidebar-menu">
             <div class="menu-header">Métricas & Relatórios</div>
-            <a class="nav-item active" onclick="switchTab('overview', this)">
-                <span>📊</span> Visão Geral
+            <a class="nav-item active" onclick="switchTab('overview', this)" data-tooltip="Visão Geral">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Visão Geral</span>
             </a>
-            <a class="nav-item" onclick="switchTab('pages', this)">
-                <span>📄</span> Páginas Monitoradas
+            <a class="nav-item" onclick="switchTab('pages', this)" data-tooltip="Páginas Monitoradas">
+                <span class="nav-icon">📄</span>
+                <span class="nav-label">Páginas Monitoradas</span>
             </a>
-            <a class="nav-item" onclick="switchTab('leads', this)">
-                <span>🎯</span> Leads & Conversões
+            <a class="nav-item" onclick="switchTab('leads', this)" data-tooltip="Leads & Conversões">
+                <span class="nav-icon">🎯</span>
+                <span class="nav-label">Leads & Conversões</span>
             </a>
-            <a class="nav-item" onclick="switchTab('traffic', this)">
-                <span>🌐</span> Origem & Campanhas
+            <a class="nav-item" onclick="switchTab('traffic', this)" data-tooltip="Origem & Campanhas">
+                <span class="nav-icon">🌐</span>
+                <span class="nav-label">Origem & Campanhas</span>
             </a>
-            <a class="nav-item" onclick="switchTab('funnels', this)">
-                <span>🛤️</span> Funis & Atribuição
+            <a class="nav-item" onclick="switchTab('funnels', this)" data-tooltip="Funis & Atribuição">
+                <span class="nav-icon">🛤️</span>
+                <span class="nav-label">Funis & Atribuição</span>
             </a>
-            <a class="nav-item" onclick="switchTab('debug', this)" id="nav-debug">
-                <span>⚡</span> DebugView (Ao Vivo)
+            <a class="nav-item" onclick="switchTab('debug', this)" id="nav-debug" data-tooltip="DebugView (Ao Vivo)">
+                <span class="nav-icon">⚡</span>
+                <span class="nav-label">DebugView (Ao Vivo)</span>
             </a>
 
             <div class="menu-header" style="margin-top: 1rem;">Documentação & Setup</div>
-            <a class="nav-item" onclick="openIntegrationsWizard()">
-                <span>🚀</span> Envios & CAPI (Wizard)
+            <a class="nav-item" onclick="openIntegrationsWizard()" data-tooltip="Envios & CAPI (Wizard)">
+                <span class="nav-icon">🚀</span>
+                <span class="nav-label">Envios & CAPI (Wizard)</span>
             </a>
-            <a class="nav-item" onclick="switchTab('docs', this)" id="nav-docs">
-                <span>📚</span> Guia de Instalação SDK
+            <a class="nav-item" onclick="switchTab('docs', this)" id="nav-docs" data-tooltip="Guia de Instalação SDK">
+                <span class="nav-icon">📚</span>
+                <span class="nav-label">Guia de Instalação SDK</span>
             </a>
 
             <div class="menu-header" style="margin-top: 1rem;">Administração & Setup</div>
-            <a class="nav-item" onclick="switchTab('settings', this)" id="nav-settings">
-                <span>⚙️</span> Configurações do Site
+            <a class="nav-item" onclick="switchTab('settings', this)" id="nav-settings" data-tooltip="Configurações do Site">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">Configurações do Site</span>
             </a>
-            <a class="nav-item" href="/">
-                <span>🌐</span> Gestão de Domínios
+            <a class="nav-item" onclick="switchTab('domains', this)" id="nav-domains" data-tooltip="Gestão de Domínios">
+                <span class="nav-icon">🌐</span>
+                <span class="nav-label">Gestão de Domínios</span>
             </a>
         </nav>
 
         <div class="sidebar-footer">
-            <span id="user-display">● admin</span>
-            <a href="/" style="color: var(--danger); text-decoration: none; font-size: 0.75rem;">Sair</a>
+            <div class="user-status-wrapper" data-tooltip="Operador Autenticado">
+                <span class="status-indicator">●</span>
+                <span id="user-display" class="user-name">admin</span>
+            </div>
+            <a href="javascript:void(0)" onclick="handleLogout()" class="btn-logout" data-tooltip="Encerrar Sessão">
+                <span class="logout-text">Sair</span>
+                <svg class="logout-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </a>
         </div>
     </aside>
 
@@ -2164,6 +2444,13 @@
         <!-- Top Header -->
         <header class="top-header">
             <div class="top-left">
+                <button id="btn-toggle-sidebar-top" class="btn-sidebar-trigger" onclick="toggleSidebar()" title="Recolher / Expandir barra lateral (Ctrl + B)" aria-label="Alternar barra lateral">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
                 <h2 id="view-title">Visão Geral de Desempenho</h2>
             </div>
             <div class="top-right">
@@ -3353,7 +3640,159 @@ if (typeof fbq === 'function' && eventId) {
                         </button>
                     </div>
 
-                    <div id="doc-test-output" class="doc-tester-result"></div>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- TAB 9: GESTÃO DE DOMÍNIOS & INFRAESTRUTURA     -->
+            <!-- ============================================== -->
+            <div id="tab-domains" class="tab-pane">
+                <!-- Banner Superior da Aba -->
+                <div class="doc-section-card" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.4rem;">
+                                <span class="doc-badge-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">
+                                    🛡️ Segurança Ativa
+                                </span>
+                                <span style="font-size: 0.8rem; color: #38bdf8; font-weight: 600;">● Proteção Server-Side First-Party</span>
+                            </div>
+                            <h2 style="font-size: 1.6rem; font-weight: 800; color: #fff; margin-bottom: 0.35rem;">Gestão de Domínios Autorizados & Auditoria</h2>
+                            <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0;">
+                                Controle a whitelist de origens permitidas para envio de eventos analíticos, aprove origens detectadas em tempo real e monitore bloqueio de bots.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 0.75rem; align-items: center;">
+                            <a href="/" class="btn-refresh" style="background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.35); color: #93c5fd; text-decoration: none;">
+                                <span>⚡</span> Abrir Painel da Engine ↗
+                            </a>
+                            <button class="btn-refresh" onclick="loadDomainsTab()">
+                                <span>🔄</span> Recarregar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status dos Microsserviços da Infraestrutura -->
+                <div class="grid-4" style="margin-bottom: 1.5rem;">
+                    <div class="kpi-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.85rem; font-weight: 600; color: #f1f5f9;">⚡ Coletor (Go Fiber)</span>
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></span>
+                        </div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+                            Ingestão em memória sub-milissegundo com emissão de cookie first-party <code>_vid</code>.
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.85rem; font-weight: 600; color: #f1f5f9;">📬 Redis Streams</span>
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></span>
+                        </div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+                            Buffer assíncrono e resiliente para absorção de picos e sessões de visitantes.
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.85rem; font-weight: 600; color: #f1f5f9;">📊 ClickHouse OLAP</span>
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></span>
+                        </div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+                            Banco analítico colunar de alta velocidade para bilhões de eventos brutos.
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.85rem; font-weight: 600; color: #f1f5f9;">🧬 Grafo de Identidade</span>
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></span>
+                        </div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+                            PostgreSQL unificando perfil, HMAC-SHA256 e first-touch UTMs/GCLID.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grid Principal: Domínios Autorizados vs Auditoria e Robôs -->
+                <div class="grid-2" style="margin-bottom: 1.5rem;">
+                    <!-- Card 1: Domínios Autorizados (Whitelist) -->
+                    <div class="table-card">
+                        <div class="table-card-header" style="flex-wrap: wrap; gap: 0.5rem;">
+                            <div>
+                                <h3>🌐 Domínios Autorizados (Whitelist)</h3>
+                                <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                    Apenas requisições originadas destes domínios são processadas pelo coletor.
+                                </p>
+                            </div>
+                            <span id="dash-domains-count-badge" class="badge-pro" style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">
+                                0 Domínios
+                            </span>
+                        </div>
+
+                        <div style="padding: 1.25rem 1.5rem;">
+                            <!-- Formulário de Adicionar Novo Domínio -->
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem;">
+                                <input type="text" id="dash-input-new-domain" class="form-input-integ" placeholder="Ex: seudominio.com.br ou lp.cliente.com" style="flex: 1;" onkeydown="if(event.key==='Enter') handleAddDomainFromDashboard()">
+                                <button class="btn-integ-wizard" onclick="handleAddDomainFromDashboard()" style="white-space: nowrap;">
+                                    <span>➕</span> Adicionar
+                                </button>
+                            </div>
+
+                            <!-- Lista de Domínios do Site -->
+                            <div id="dash-domains-list-container" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 420px; overflow-y: auto;">
+                                <p style="color: var(--text-muted); font-size: 0.85rem;">Carregando domínios...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Auditoria de Segurança & Robôs -->
+                    <div class="table-card">
+                        <div class="table-card-header" style="flex-wrap: wrap; gap: 0.5rem;">
+                            <div>
+                                <h3>🛡️ Auditoria de Segurança & Robôs</h3>
+                                <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                    Tentativas de acesso fora da whitelist e bloqueio automático de scrapers/bots.
+                                </p>
+                            </div>
+                            <span id="dash-alerts-count-badge" class="badge-pro" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
+                                Auditoria Ativa
+                            </span>
+                        </div>
+
+                        <div style="padding: 1.25rem 1.5rem;">
+                            <!-- Box de Filtro de Robôs (Stealth Tagging) -->
+                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px; padding: 0.9rem 1.1rem; margin-bottom: 1.25rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <span style="font-size: 0.85rem; font-weight: 600; color: #93c5fd;">🤖 Filtro de Robôs (Stealth Tagging)</span>
+                                    <span class="badge-pro" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.68rem;">ClickHouse Live</span>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem;">
+                                    <div>
+                                        <div style="font-size: 0.72rem; color: #94a3b8;">Total Robôs Interceptados</div>
+                                        <div id="dash-stat-total-bots" style="font-size: 1.35rem; font-weight: 800; color: #f8fafc;">0</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 0.72rem; color: #34d399;">Conversões Protegidas</div>
+                                        <div id="dash-stat-protected-conv" style="font-size: 1.35rem; font-weight: 800; color: #34d399;">0 conv.</div>
+                                    </div>
+                                </div>
+                                <div id="dash-bot-reasons-container" style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                                    <span style="font-size: 0.75rem; color: #64748b;">Nenhum robô detectado até o momento.</span>
+                                </div>
+                            </div>
+
+                            <!-- Tentativas de Origens Fora da Whitelist -->
+                            <div style="font-size: 0.82rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.6rem;">
+                                Tentativas de Origens Não Autorizadas:
+                            </div>
+                            <div id="dash-alerts-container" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 250px; overflow-y: auto;">
+                                <p style="color: var(--text-muted); font-size: 0.85rem;">Verificando origens bloqueadas...</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3556,6 +3995,40 @@ if (typeof fbq === 'function' && eventId) {
         let trafficChartInstance = null;
         let deviceChartInstance = null;
 
+        // Mecanismo de Recolher/Expandir Barra Lateral
+        function toggleSidebar() {
+            const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+            if (isCollapsed) {
+                document.documentElement.classList.add('sidebar-collapsed');
+            } else {
+                document.documentElement.classList.remove('sidebar-collapsed');
+            }
+            try {
+                localStorage.setItem('hn_sidebar_collapsed', isCollapsed ? '1' : '0');
+            } catch (e) {}
+        }
+
+        // Atalhos de Teclado (Ctrl+B ou Alt+S)
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+                e.preventDefault();
+                toggleSidebar();
+            } else if (e.altKey && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                toggleSidebar();
+            }
+        });
+
+        // Logout Seguro Real
+        async function handleLogout() {
+            try {
+                await fetch('/api/v1/auth/logout', { method: 'POST' });
+            } catch (e) {
+                console.error("Erro no logout:", e);
+            }
+            window.location.href = '/';
+        }
+
         function escapeHTML(str) {
             if (str === null || str === undefined) return '';
             return String(str)
@@ -3569,10 +4042,15 @@ if (typeof fbq === 'function' && eventId) {
         function switchTab(tabId, el) {
             currentTab = tabId;
             document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            document.querySelectorAll('.sidebar-menu .nav-item').forEach(i => i.classList.remove('active'));
             
             const targetPane = document.getElementById('tab-' + tabId);
             if (targetPane) targetPane.classList.add('active');
+
+            if (!el) {
+                el = document.getElementById('nav-' + tabId) || 
+                     document.querySelector(`.sidebar-menu .nav-item[onclick*="'${tabId}'"]`);
+            }
             if (el) el.classList.add('active');
 
             const titles = {
@@ -3583,10 +4061,216 @@ if (typeof fbq === 'function' && eventId) {
                 'funnels': 'Funis & Atribuição Multi-Toque',
                 'debug': '⚡ DebugView • Validação & Depuração de Eventos em Tempo Real',
                 'settings': '⚙️ Configurações do Site • Chaves de API & Snippet de Instalação',
-                'docs': '📚 Guia de Instalação do SDK & Eventos'
+                'docs': '📚 Guia de Instalação do SDK & Eventos',
+                'domains': '🌐 Gestão de Domínios Autorizados & Auditoria'
             };
-            document.getElementById('view-title').textContent = titles[tabId] || 'Analytics Hub';
+            const titleEl = document.getElementById('view-title');
+            if (titleEl) titleEl.textContent = titles[tabId] || 'Analytics Hub';
+
+            try {
+                history.replaceState(null, '', '?tab=' + tabId);
+            } catch (e) {}
+
             loadActiveData();
+        }
+
+        // Funções da Aba de Gestão de Domínios
+        async function loadDomainsTab(specificSiteID) {
+            const { siteID } = getSelectedSiteAndDomain();
+            const activeSite = specificSiteID || siteID;
+            const container = document.getElementById('dash-domains-list-container');
+            const countBadge = document.getElementById('dash-domains-count-badge');
+            if (!container) return;
+
+            if (!activeSite) {
+                container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">Selecione um site específico no topo para gerenciar domínios autorizados.</p>';
+                if (countBadge) countBadge.textContent = 'Todos os Sites';
+                loadDashSecurityAlerts();
+                loadDashBotStats();
+                return;
+            }
+
+            container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">Carregando domínios autorizados...</p>';
+
+            try {
+                const res = await fetch(`/api/v1/domains?site_id=${encodeURIComponent(activeSite)}`);
+                if (!res.ok) throw new Error('Falha ao listar domínios');
+                const domains = await res.json();
+
+                if (!domains || domains.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">Nenhum domínio cadastrado ainda para este site.</p>';
+                    if (countBadge) countBadge.textContent = '0 Domínios';
+                } else {
+                    if (countBadge) countBadge.textContent = `${domains.length} Domínio${domains.length > 1 ? 's' : ''}`;
+                    container.innerHTML = domains.map(d => `
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border); border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
+                                <span style="color: #38bdf8; font-size: 0.95rem;">🌐</span>
+                                <span style="font-family: monospace; font-size: 0.85rem; color: #f8fafc; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                                    ${escapeHTML(d.domain)}
+                                </span>
+                                ${d.is_primary ? '<span class="badge-pro" style="font-size: 0.62rem; padding: 0.1rem 0.35rem;">Principal</span>' : ''}
+                            </div>
+                            <div>
+                                ${!d.is_primary ? `
+                                    <button class="btn-sm-action" onclick="handleDeleteDomainFromDashboard('${escapeJS(d.id)}')" style="color: #f87171; border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1); padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Remover domínio">
+                                        ✕ Remover
+                                    </button>
+                                ` : '<span style="font-size: 0.72rem; color: var(--text-muted);">Fixo</span>'}
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                container.innerHTML = `<p style="color: #f87171; font-size: 0.85rem;">Erro ao carregar domínios: ${escapeHTML(err.message)}</p>`;
+            }
+
+            loadDashSecurityAlerts(activeSite);
+            loadDashBotStats();
+        }
+
+        async function handleAddDomainFromDashboard() {
+            const { siteID } = getSelectedSiteAndDomain();
+            const input = document.getElementById('dash-input-new-domain');
+            if (!input) return;
+            const domain = input.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+
+            if (!siteID) {
+                alert('Por favor, selecione um site específico no topo antes de adicionar um domínio.');
+                return;
+            }
+            if (!domain) {
+                alert('Informe um domínio válido (ex: cliente.com.br).');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/v1/domains', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: siteID, domain })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    input.value = '';
+                    await loadDomainsTab();
+                } else {
+                    alert('Erro ao cadastrar domínio: ' + (data.error || 'Falha na requisição'));
+                }
+            } catch (err) {
+                alert('Erro de conexão ao adicionar domínio: ' + err.message);
+            }
+        }
+
+        async function handleDeleteDomainFromDashboard(domainID) {
+            if (!confirm('Tem certeza que deseja remover este domínio da whitelist? Requisições originadas dele serão bloqueadas.')) return;
+            try {
+                const res = await fetch(`/api/v1/domains/${domainID}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await loadDomainsTab();
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    alert('Erro ao excluir domínio: ' + (data.error || 'Falha na requisição'));
+                }
+            } catch (err) {
+                alert('Erro de conexão ao excluir domínio: ' + err.message);
+            }
+        }
+
+        async function loadDashSecurityAlerts(siteID) {
+            const container = document.getElementById('dash-alerts-container');
+            const badge = document.getElementById('dash-alerts-count-badge');
+            if (!container) return;
+
+            try {
+                const url = siteID ? `/api/v1/alerts?site_id=${encodeURIComponent(siteID)}` : '/api/v1/alerts';
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('Falha ao listar alertas');
+                const alerts = await res.json();
+
+                if (!alerts || alerts.length === 0) {
+                    container.innerHTML = '<p style="color: #34d399; font-size: 0.85rem;">✓ Nenhuma tentativa fora da whitelist registrada recentemente. Sistema 100% seguro!</p>';
+                    if (badge) {
+                        badge.textContent = '0 Alertas';
+                        badge.style.color = '#34d399';
+                        badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                    }
+                } else {
+                    if (badge) {
+                        badge.textContent = `${alerts.length} Bloqueio${alerts.length > 1 ? 's' : ''}`;
+                        badge.style.color = '#f87171';
+                        badge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    }
+                    container.innerHTML = alerts.map(a => `
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.85rem; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px;">
+                            <div style="min-width: 0;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <span style="font-family: monospace; font-size: 0.85rem; color: #fca5a5; font-weight: 700;">
+                                        ${escapeHTML(a.unauthorized_domain)}
+                                    </span>
+                                    <span style="font-size: 0.68rem; background: rgba(239, 68, 68, 0.2); color: #fca5a5; padding: 0.1rem 0.35rem; border-radius: 4px;">
+                                        ${a.attempt_count}x barrado
+                                    </span>
+                                </div>
+                                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem;">
+                                    Site: ${escapeHTML(a.site_name || a.site_id)} • IP: ${escapeHTML(a.last_ip || 'N/A')}
+                                </div>
+                            </div>
+                            <div>
+                                <button class="btn-sm-action" onclick="handleApproveDomainFromDashboard('${escapeJS(a.site_id)}', '${escapeJS(a.unauthorized_domain)}')" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.35); font-size: 0.75rem; padding: 0.3rem 0.6rem;">
+                                    ✓ Aprovar
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                container.innerHTML = `<p style="color: #f87171; font-size: 0.82rem;">Erro ao ler telemetria de segurança: ${escapeHTML(err.message)}</p>`;
+            }
+        }
+
+        async function handleApproveDomainFromDashboard(siteID, domain) {
+            if (!confirm(`Deseja aprovar o domínio "${domain}" e adicioná-lo à whitelist deste site?`)) return;
+            try {
+                const res = await fetch('/api/v1/domains/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: siteID, domain })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(`Domínio "${domain}" aprovado com sucesso!`);
+                    await loadDomainsTab();
+                } else {
+                    alert('Erro ao aprovar domínio: ' + (data.error || 'Falha na requisição'));
+                }
+            } catch (err) {
+                alert('Erro de conexão ao aprovar: ' + err.message);
+            }
+        }
+
+        async function loadDashBotStats() {
+            try {
+                const res = await fetch('/api/v1/security/bot-stats');
+                if (!res.ok) return;
+                const stats = await res.json();
+                const totalEl = document.getElementById('dash-stat-total-bots');
+                const protEl = document.getElementById('dash-stat-protected-conv');
+                const reasonsEl = document.getElementById('dash-bot-reasons-container');
+
+                if (totalEl) totalEl.textContent = stats.total_bots_intercepted || '0';
+                if (protEl) protEl.textContent = `${stats.protected_conversions || 0} conv.`;
+
+                if (reasonsEl && stats.reasons && stats.reasons.length > 0) {
+                    reasonsEl.innerHTML = stats.reasons.map(r => `
+                        <span style="font-size: 0.72rem; padding: 0.15rem 0.45rem; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 4px; color: #93c5fd;">
+                            ${escapeHTML(r.reason)}: <b>${r.count}</b>
+                        </span>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error("Erro ao carregar estatísticas de robôs:", e);
+            }
         }
 
         let globalSitesList = [];
@@ -3838,6 +4522,9 @@ if (typeof fbq === 'function' && eventId) {
             }
             if (currentTab === 'docs') {
                 await syncDocsTabKey();
+            }
+            if (currentTab === 'domains') {
+                await loadDomainsTab();
             }
         }
 
@@ -6241,7 +6928,7 @@ if (typeof fbq === 'function' && eventId) {
             }
         }
 
-        // Inicialização Protegida
+        // Inicialização Protegida & Roteamento de Abas via URL
         async function initDashboard() {
             try {
                 const res = await fetch('/api/v1/auth/me');
@@ -6254,10 +6941,30 @@ if (typeof fbq === 'function' && eventId) {
                     window.location.href = '/';
                     return;
                 }
+
+                // Preenche o nome do usuário no footer da sidebar
+                if (data.user && data.user.email) {
+                    const uEl = document.getElementById('user-display');
+                    if (uEl) uEl.textContent = data.user.email;
+                }
+
                 await loadSites();
-                loadActiveData();
+
+                // Suporte a navegação direta por parâmetro ?tab=xxx
+                const urlParams = new URLSearchParams(window.location.search);
+                const requestedTab = urlParams.get('tab');
+                if (requestedTab === 'capi') {
+                    openIntegrationsWizard();
+                    loadActiveData();
+                } else if (requestedTab && document.getElementById('tab-' + requestedTab)) {
+                    switchTab(requestedTab);
+                } else {
+                    loadActiveData();
+                }
+
                 setInterval(loadActiveData, 30000);
             } catch (e) {
+                console.error("Erro na inicialização:", e);
                 window.location.href = '/';
             }
         }
