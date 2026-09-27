@@ -55,53 +55,56 @@ Como você possui acesso ao DNS deste novo cliente:
 
 ---
 
-## 3. Deploy da Nova Aplicação na VPS
+## 3. Deploy Automatizado da Nova Aplicação na VPS (Com Detecção Automática de Portas)
+
+Para evitar qualquer conflito caso você tenha **2, 3 ou dezenas de clientes instalados no mesmo servidor**, criamos o provisionador automático `scripts/novo_cliente.sh`.
+
+Ele:
+1. Varre o servidor e encontra a próxima porta livre para PostgreSQL (15432...), Redis (16379...) e ClickHouse (18123... / 19000...).
+2. Analisa arquivos `.env.*` já existentes na pasta para garantir que mesmo instâncias temporariamente paradas não sofram colisão de portas.
+3. Gera senhas e chaves criptográficas fortes exclusivas para o cliente.
+4. Gera o arquivo `.env.<cliente>` pronto e validado.
 
 ### Passo 3.1: Conectar na VPS
 ```bash
 ssh -i ~/.gemini/id_rsa.1731418096 root@vps.griddmkt360.com.br
 ```
 
-### Passo 3.2: Criar Diretório Isolado para o Cliente
+### Passo 3.2: Provisionar Novo Cliente (Exemplo com 1 comando)
+No diretório do projeto na VPS:
 ```bash
-mkdir -p /opt/tracking/clientes/cliente_x
-cd /opt/tracking/clientes/cliente_x
+./scripts/novo_cliente.sh cliente2 track.cliente2.com.br
 ```
 
-### Passo 3.3: Copiar o Docker Compose e Configurar o `.env`
-Copie o arquivo `docker-compose.client.yml` e o `.env.client.example` do repositório para o diretório do cliente:
+Saída de exemplo:
+```text
+🔍 Analisando portas disponíveis no servidor para 'cliente2'...
+  ✅ PostgreSQL:       Porta 15432 (livre)
+  ✅ Redis:            Porta 16379 (livre)
+  ✅ ClickHouse HTTP:  Porta 18123 (livre)
+  ✅ ClickHouse TCP:   Porta 19000 (livre)
+
+🎉 Arquivo gerado com sucesso: .env.cliente2
+```
+
+Se você rodar novamente para um 3º ou 4º cliente:
 ```bash
-# Criar o arquivo de variáveis do cliente:
-cp .env.client.example .env.cliente_x
-nano .env.cliente_x
+./scripts/novo_cliente.sh cliente3 track.cliente3.com.br
 ```
+O script detecta automaticamente que as portas anteriores estão reservadas e avança para `15433`, `16380`, `18124`, `19001`!
 
-Configure os campos essenciais:
-```ini
-CLIENT_SLUG=cliente_x
-TAG=v1.0.0
-TRACKING_DOMAIN=track.sitecliente.com.br
-ACME_EMAIL=seu-email@dominio.com
-
-# Credenciais do painel
-ADMIN_USER=admin
-ADMIN_PASSWORD=senha_forte_do_cliente_min_16_chars
-
-# Senhas dos bancos isolados
-REDIS_PASSWORD=senha_forte_redis
-POSTGRES_PASSWORD=senha_forte_postgres
-CLICKHOUSE_PASSWORD=senha_forte_clickhouse
-```
-
-### Passo 3.4: Subir a Stack
+### Passo 3.3: Subir a Stack
+Você pode subir com o comando impresso pelo script:
 ```bash
-docker compose -p cliente_x -f docker-compose.client.yml --env-file .env.cliente_x up -d
+docker compose -p cliente2 -f docker-compose.client.yml --env-file .env.cliente2 up -d
 ```
+*(Ou passar a flag `--up` diretamente no script: `./scripts/novo_cliente.sh cliente2 track.cliente2.com.br --up`)*.
 
-### Passo 3.5: Verificar Status e Logs
+### Passo 3.4: Verificar Status e Logs
 ```bash
-docker compose -p cliente_x -f docker-compose.client.yml ps
-docker compose -p cliente_x -f docker-compose.client.yml logs -f api
+docker compose -p cliente2 -f docker-compose.client.yml ps
+docker compose -p cliente2 -f docker-compose.client.yml logs -f api
 ```
 
-O Traefik detectará automaticamente o container `cliente_x-api`, gerará o certificado SSL para `track.sitecliente.com.br` e iniciará o roteamento seguro.
+O Traefik detectará automaticamente o container `cliente2-api`, gerará o certificado SSL para `track.cliente2.com.br` e iniciará o roteamento seguro.
+
