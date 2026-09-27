@@ -1,0 +1,129 @@
+version: '3.8'
+
+# ==============================================================================
+# Docker Compose para Instância Isolada de Novo Cliente
+# Imagem base do Docker Hub: domhenrique/hn-tracking:${TAG:-latest}
+# ==============================================================================
+# Instruções:
+# 1. Copie .env.client.example para .env.<cliente>
+# 2. Defina CLIENT_SLUG, TRACKING_DOMAIN, senhas e portas personalizadas
+# 3. Inicie com: docker compose -p ${CLIENT_SLUG} -f docker-compose.client.yml --env-file .env.${CLIENT_SLUG} up -d
+# ==============================================================================
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    container_name: ${CLIENT_SLUG:-cliente}-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis_secret_pass}"]
+    ports:
+      # Portas no host opcionais e configuráveis para evitar conflito com a SPS Power (6379)
+      - "${REDIS_HOST_PORT:-16379}:6379"
+    volumes:
+      - "./data/${CLIENT_SLUG:-cliente}/redis:/data"
+    networks:
+      - client-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ${CLIENT_SLUG:-cliente}-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tracking_db}
+      POSTGRES_USER: ${POSTGRES_USER:-tracking_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_secret_pass}
+    ports:
+      # Conflito evitado: SPS Power usa 5432, o novo cliente usa 15432
+      - "${POSTGRES_HOST_PORT:-15432}:5432"
+    volumes:
+      - "./data/${CLIENT_SLUG:-cliente}/postgres:/var/lib/postgresql/data"
+      - "./migrations/postgres:/docker-entrypoint-initdb.d"
+    networks:
+      - client-net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    container_name: ${CLIENT_SLUG:-cliente}-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-tracking_events}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_secret_pass}
+    ports:
+      # Conflito evitado: SPS Power usa 8123/9000, novo cliente usa 18123/19000
+      - "${CLICKHOUSE_HTTP_HOST_PORT:-18123}:8123"
+      - "${CLICKHOUSE_NATIVE_HOST_PORT:-19000}:9000"
+    volumes:
+      - "./data/${CLIENT_SLUG:-cliente}/clickhouse:/var/lib/clickhouse"
+      - "./migrations/clickhouse:/docker-entrypoint-initdb.d"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    networks:
+      - client-net
+
+  api:
+    image: domhenrique/hn-tracking:${TAG:-latest}
+    container_name: ${CLIENT_SLUG:-cliente}-api
+    restart: unless-stopped
+    command: ["api"]
+    env_file:
+      - ${CLIENT_ENV_FILE:-.env}
+    environment:
+      - REDIS_HOST=${CLIENT_SLUG:-cliente}-redis:6379
+      - POSTGRES_HOST=${CLIENT_SLUG:-cliente}-postgres:5432
+      - CLICKHOUSE_HOST=${CLIENT_SLUG:-cliente}-clickhouse:9000
+    depends_on:
+      - redis
+      - postgres
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${CLIENT_SLUG:-cliente}-api.rule=Host(`${TRACKING_DOMAIN}`)"
+      - "traefik.http.routers.${CLIENT_SLUG:-cliente}-api.entrypoints=websecure"
+      - "traefik.http.routers.${CLIENT_SLUG:-cliente}-api.tls=true"
+      - "traefik.http.routers.${CLIENT_SLUG:-cliente}-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.${CLIENT_SLUG:-cliente}-api.loadbalancer.server.port=8080"
+    networks:
+      - client-net
+      # Conecta à rede do Traefik existente para roteamento de subdomínio
+      - ${TRAEFIK_NETWORK:-tracking-net}
+
+  ingester:
+    image: domhenrique/hn-tracking:${TAG:-latest}
+    container_name: ${CLIENT_SLUG:-cliente}-ingester
+    restart: unless-stopped
+    command: ["ingester"]
+    env_file:
+      - ${CLIENT_ENV_FILE:-.env}
+    environment:
+      - REDIS_HOST=${CLIENT_SLUG:-cliente}-redis:6379
+      - CLICKHOUSE_HOST=${CLIENT_SLUG:-cliente}-clickhouse:9000
+    depends_on:
+      - redis
+      - clickhouse
+    networks:
+      - client-net
+
+  dispatcher:
+    image: domhenrique/hn-tracking:${TAG:-latest}
+    container_name: ${CLIENT_SLUG:-cliente}-dispatcher
+    restart: unless-stopped
+    command: ["dispatcher"]
+    env_file:
+      - ${CLIENT_ENV_FILE:-.env}
+    environment:
+      - REDIS_HOST=${CLIENT_SLUG:-cliente}-redis:6379
+      - POSTGRES_HOST=${CLIENT_SLUG:-cliente}-postgres:5432
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - client-net
+
+networks:
+  client-net:
+    driver: bridge
+  # Rede externa do Traefik para rotear tráfego HTTPS sem conflito de portas 80/443
+  tracking-net:
+    external: true

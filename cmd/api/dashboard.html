@@ -2353,6 +2353,74 @@
             display: none;
             line-height: 1.6;
         }
+
+        /* Stepper e Elementos do First-Party Ingress Gateway */
+        .cname-stepper-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+            padding: 0.85rem 1.25rem;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 10px;
+            gap: 0.75rem;
+        }
+
+        .cname-step-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #64748b;
+            transition: all 0.2s ease;
+        }
+
+        .cname-step-circle {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background: rgba(100, 116, 139, 0.2);
+            color: #94a3b8;
+            border: 1px solid rgba(100, 116, 139, 0.3);
+            transition: all 0.2s;
+        }
+
+        .cname-step-item.active .cname-step-circle {
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            border-color: #38bdf8;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+        }
+        .cname-step-item.active {
+            color: #f8fafc;
+        }
+
+        .cname-step-item.done .cname-step-circle {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border-color: #34d399;
+        }
+        .cname-step-item.done {
+            color: #34d399;
+        }
+
+        .cname-step-divider {
+            flex: 1;
+            height: 2px;
+            background: rgba(100, 116, 139, 0.2);
+            border-radius: 2px;
+            transition: all 0.2s;
+        }
+        .cname-step-divider.done {
+            background: rgba(16, 185, 129, 0.4);
+        }
     </style>
 
 </head>
@@ -3716,6 +3784,149 @@ if (typeof fbq === 'function' && eventId) {
                     </div>
                 </div>
 
+                <!-- Card Prioritário: Assistente de First-Party Ingress Gateway (CNAME & Cookieless Stepper) -->
+                <div class="table-card" style="margin-bottom: 2rem; background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.7)); border: 1px solid rgba(56, 189, 248, 0.35); box-shadow: 0 10px 30px -10px rgba(2, 132, 199, 0.15);">
+                    <div class="table-card-header" style="flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px solid rgba(56, 189, 248, 0.2); padding: 1.25rem 1.5rem;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                <span class="doc-badge-tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); font-weight: 700;">
+                                    ⚡ First-Party Ingress Gateway
+                                </span>
+                                <span id="dash-cname-status-pill" class="badge-pro" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8; font-size: 0.75rem;">
+                                    Não Configurado
+                                </span>
+                            </div>
+                            <h3 style="color: #f8fafc; font-size: 1.25rem; margin: 0; font-weight: 700; letter-spacing: -0.01em;">
+                                Túnel Blindado First-Party (Subdomínio CNAME)
+                            </h3>
+                            <p style="font-size: 0.82rem; color: #94a3b8; margin-top: 0.35rem; line-height: 1.4;">
+                                Elimine perdas por ad-blockers e bloqueios de terceiros (Safari ITP / Chrome) enviando toda a telemetria através de um subdomínio do seu próprio cliente com certificado SSL automático.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="padding: 1.5rem;">
+                        <!-- Stepper Visual de 3 Etapas -->
+                        <div class="cname-stepper-container">
+                            <div class="cname-step-item active" id="cname-step-1">
+                                <div class="cname-step-circle" id="cname-circle-1">1</div>
+                                <span>1. Definir Subdomínio</span>
+                            </div>
+                            <div class="cname-step-divider" id="cname-divider-1"></div>
+                            <div class="cname-step-item" id="cname-step-2">
+                                <div class="cname-step-circle" id="cname-circle-2">2</div>
+                                <span>2. Apontamento DNS</span>
+                            </div>
+                            <div class="cname-step-divider" id="cname-divider-2"></div>
+                            <div class="cname-step-item" id="cname-step-3">
+                                <div class="cname-step-circle" id="cname-circle-3">3</div>
+                                <span>3. Snippet Instalador</span>
+                            </div>
+                        </div>
+
+                        <!-- Grid de Passos 1 e 2 -->
+                        <div class="grid-2" style="gap: 1.5rem; margin-bottom: 1.25rem;">
+                            <!-- Etapa 1: Definir Subdomínio e Verificar DNS -->
+                            <div>
+                                <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem;">
+                                    Passo 1: Escolha o Subdomínio do Cliente
+                                </label>
+                                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                    <div style="display: flex; flex: 1; align-items: center; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; padding-left: 0.75rem;">
+                                        <span style="color: #64748b; font-size: 0.8rem; font-family: monospace; user-select: none;">https://</span>
+                                        <input type="text" id="dash-input-cname" class="form-input-integ" placeholder="track.seusite.com.br" style="flex: 1; border: none; background: transparent; padding-left: 0.35rem;" oninput="onCnameInputChange(this.value)">
+                                    </div>
+                                    <button id="btn-verify-cname" class="btn-integ-wizard" onclick="handleVerifyCnameFromDashboard()" style="white-space: nowrap; background: linear-gradient(135deg, #0284c7, #0369a1); font-weight: 600;">
+                                        <span>🔍</span> Verificar DNS
+                                    </button>
+                                </div>
+
+                                <!-- Botão de Sugestão Rápida -->
+                                <div id="dash-cname-suggestion-box" style="margin-bottom: 0.65rem; display: none;">
+                                    <button type="button" class="btn-sm-action" onclick="applyCnameSuggestion()" id="btn-cname-suggestion" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; border-color: rgba(56, 189, 248, 0.25); font-size: 0.75rem; padding: 0.25rem 0.6rem;">
+                                        💡 Sugestão para este site: <strong id="cname-suggestion-val">track...</strong>
+                                    </button>
+                                </div>
+
+                                <!-- Feedback Inline -->
+                                <div id="dash-cname-dns-feedback" style="font-size: 0.8rem; line-height: 1.45; color: var(--text-muted); min-height: 2.4rem; padding: 0.75rem 0.95rem; background: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid var(--border);">
+                                    Digite o subdomínio e clique em "Verificar DNS" para validar o apontamento.
+                                </div>
+                            </div>
+
+                            <!-- Etapa 2: Instruções de DNS no Provedor -->
+                            <div style="background: rgba(15, 23, 42, 0.45); border: 1px dashed rgba(56, 189, 248, 0.35); border-radius: 10px; padding: 1.1rem; display: flex; flex-direction: column; justify-content: space-between;">
+                                <div>
+                                    <div style="font-size: 0.85rem; font-weight: 700; color: #38bdf8; margin-bottom: 0.65rem; display: flex; align-items: center; gap: 0.4rem;">
+                                        <span>📋</span> Passo 2: Crie no seu Provedor de DNS (Registro.br / Cloudflare / cPanel):
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: 85px 1fr; gap: 0.5rem; font-size: 0.8rem; font-family: monospace; align-items: center;">
+                                        <span style="color: #94a3b8;">Tipo:</span>
+                                        <span style="color: #f8fafc; font-weight: 700;">CNAME</span>
+
+                                        <span style="color: #94a3b8;">Nome/Host:</span>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <span id="dns-instruction-host" style="color: #38bdf8; font-weight: 700;">track</span>
+                                            <button type="button" id="btn-copy-dns-host" class="btn-sm-action" onclick="copyDnsValue('host')" style="padding: 0.15rem 0.5rem; font-size: 0.7rem; background: rgba(56, 189, 248, 0.1); color: #38bdf8; border-color: rgba(56, 189, 248, 0.25);">
+                                                📋 Copiar
+                                            </button>
+                                        </div>
+
+                                        <span style="color: #94a3b8;">Destino:</span>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <span id="dns-instruction-target" style="color: #34d399; font-weight: 700;">vps.griddmkt360.com.br</span>
+                                            <button type="button" id="btn-copy-dns-target" class="btn-sm-action" onclick="copyDnsValue('target')" style="padding: 0.15rem 0.5rem; font-size: 0.7rem; background: rgba(16, 185, 129, 0.1); color: #34d399; border-color: rgba(16, 185, 129, 0.25);">
+                                                📋 Copiar
+                                            </button>
+                                        </div>
+
+                                        <span style="color: #94a3b8;">TTL:</span>
+                                        <span style="color: #cbd5e1;">Automático ou 1 minuto (60s)</span>
+                                    </div>
+
+                                    <!-- Callout de Alerta Cloudflare -->
+                                    <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 0.65rem 0.85rem; margin-top: 0.85rem; font-size: 0.78rem; color: #fde68a; display: flex; align-items: flex-start; gap: 0.5rem; line-height: 1.4;">
+                                        <span style="font-size: 1rem;">☁️</span>
+                                        <div>
+                                            <strong>Atenção Cloudflare:</strong> Mantenha o Proxy DESATIVADO (<strong>Nuvem Cinza / DNS Only</strong>). A nuvem laranja impede a emissão automática do certificado SSL e a conexão direta com a VPS.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Link Dinâmico DNSChecker -->
+                                <div id="dash-cname-dnschecker-container" style="margin-top: 0.75rem; display: none;">
+                                    <a id="dash-cname-dnschecker-link" href="#" target="_blank" class="btn-sm-action" style="display: inline-flex; align-items: center; gap: 0.4rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); font-size: 0.78rem; text-decoration: none; padding: 0.4rem 0.85rem;">
+                                        🌐 Checar Propagação Mundial no DNSChecker ↗
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Etapa 3: Snippet Gerado para o Subdomínio First-Party -->
+                        <div id="dash-cname-snippet-box" style="display: none; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 1.25rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="color: #34d399; font-size: 1.15rem;">✅</span>
+                                    <div>
+                                        <span style="font-size: 0.92rem; font-weight: 700; color: #f8fafc;">Passo 3: Snippet de Instalação First-Party (Cookieless)</span>
+                                        <div style="font-size: 0.75rem; color: #94a3b8;">Instale este código no <code>&lt;head&gt;</code> do site do cliente para iniciar o rastreamento blindado.</div>
+                                    </div>
+                                </div>
+                                <button class="btn-sm-action" onclick="copyCnameSnippet()" id="btn-copy-cname-snippet" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); font-weight: 600; padding: 0.4rem 0.85rem;">
+                                    📋 Copiar Snippet
+                                </button>
+                            </div>
+
+                            <!-- Alerta de site sem chave pública gerada -->
+                            <div id="dash-cname-nokey-alert" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; padding: 0.65rem 0.85rem; border-radius: 8px; margin-bottom: 0.75rem; font-size: 0.8rem;">
+                                ⚠️ <strong>Atenção:</strong> Nenhuma chave de site pública ativa encontrada. <a href="javascript:void(0)" onclick="switchTab('tab-settings')" style="color: #67e8f9; text-decoration: underline; font-weight: 700;">Clique aqui para gerar uma chave pública</a> na aba de Chaves.
+                            </div>
+
+                            <pre id="cname-snippet-code" style="background: #020617; color: #a5f3fc; padding: 0.95rem; border-radius: 6px; font-family: monospace; font-size: 0.82rem; margin: 0; overflow-x: auto; white-space: pre; border: 1px solid rgba(255,255,255,0.08);"></pre>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Grid Principal: Domínios Autorizados vs Auditoria e Robôs -->
                 <div class="grid-2" style="margin-bottom: 1.5rem;">
                     <!-- Card 1: Domínios Autorizados (Whitelist) -->
@@ -3791,76 +4002,6 @@ if (typeof fbq === 'function' && eventId) {
                             <div id="dash-alerts-container" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 250px; overflow-y: auto;">
                                 <p style="color: var(--text-muted); font-size: 0.85rem;">Verificando origens bloqueadas...</p>
                             </div>
-                        </div>
-                </div>
-
-                <!-- Card 3: Assistente de First-Party Ingress Gateway (CNAME & Cookieless) -->
-                <div class="table-card" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(15, 23, 42, 0.85), rgba(30, 41, 59, 0.6)); border: 1px solid rgba(56, 189, 248, 0.25);">
-                    <div class="table-card-header" style="flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px solid rgba(56, 189, 248, 0.15);">
-                        <div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-                                <span class="doc-badge-tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">
-                                    ⚡ First-Party Ingress Gateway
-                                </span>
-                                <span id="dash-cname-status-pill" class="badge-pro" style="background: rgba(100, 116, 139, 0.2); color: #94a3b8; font-size: 0.72rem;">
-                                    Não Configurado
-                                </span>
-                            </div>
-                            <h3 style="color: #f8fafc; font-size: 1.15rem; margin: 0;">Subdomínio CNAME Personalizado (Túnel Blindado)</h3>
-                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">
-                                Configure um subdomínio próprio (ex: <code>track.seusite.com.br</code>) para envio de telemetria 100% First-Party, imune a ad-blockers e bloqueadores de terceiros.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div style="padding: 1.5rem;">
-                        <div class="grid-2" style="gap: 1.5rem; margin-bottom: 1.25rem;">
-                            <!-- Etapa 1: Definir Subdomínio e Verificar DNS -->
-                            <div>
-                                <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem;">
-                                    1. Escolha o Subdomínio do Cliente:
-                                </label>
-                                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                    <input type="text" id="dash-input-cname" class="form-input-integ" placeholder="Ex: track.spspower.com.br" style="flex: 1;">
-                                    <button id="btn-verify-cname" class="btn-integ-wizard" onclick="handleVerifyCnameFromDashboard()" style="white-space: nowrap; background: linear-gradient(135deg, #0284c7, #0369a1);">
-                                        <span>🔍</span> Verificar DNS
-                                    </button>
-                                </div>
-                                <div id="dash-cname-dns-feedback" style="font-size: 0.8rem; line-height: 1.4; color: var(--text-muted); min-height: 2.2rem; padding: 0.6rem 0.85rem; background: rgba(15, 23, 42, 0.5); border-radius: 8px; border: 1px solid var(--border);">
-                                    Digite o subdomínio e clique em "Verificar DNS" para validar o apontamento.
-                                </div>
-                            </div>
-
-                            <!-- Etapa 2: Instruções de DNS no Provedor -->
-                            <div style="background: rgba(15, 23, 42, 0.4); border: 1px dashed rgba(56, 189, 248, 0.3); border-radius: 10px; padding: 1rem;">
-                                <div style="font-size: 0.82rem; font-weight: 700; color: #38bdf8; margin-bottom: 0.5rem;">
-                                    📋 Instrução de DNS (Crie no seu Registro de Domínio / Cloudflare):
-                                </div>
-                                <div style="display: grid; grid-template-columns: 80px 1fr; gap: 0.4rem; font-size: 0.78rem; font-family: monospace;">
-                                    <span style="color: #94a3b8;">Tipo:</span>
-                                    <span style="color: #f8fafc; font-weight: 700;">CNAME</span>
-                                    <span style="color: #94a3b8;">Nome/Host:</span>
-                                    <span id="dns-instruction-host" style="color: #38bdf8; font-weight: 700;">track</span>
-                                    <span style="color: #94a3b8;">Destino:</span>
-                                    <span style="color: #34d399; font-weight: 700;">vps.griddmkt360.com.br</span>
-                                    <span style="color: #94a3b8;">Proxy/SSL:</span>
-                                    <span style="color: #cbd5e1;">DNS Apenas (Cinza) / Let's Encrypt Automático</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Etapa 3: Snippet Gerado para o Subdomínio First-Party -->
-                        <div id="dash-cname-snippet-box" style="display: none; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 1.1rem;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span style="color: #34d399; font-size: 1rem;">✅</span>
-                                    <span style="font-size: 0.88rem; font-weight: 700; color: #f8fafc;">Snippet de Instalação First-Party (Cookieless)</span>
-                                </div>
-                                <button class="btn-sm-action" onclick="copyCnameSnippet()" id="btn-copy-cname-snippet" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">
-                                    📋 Copiar Snippet
-                                </button>
-                            </div>
-                            <pre id="cname-snippet-code" style="background: #020617; color: #a5f3fc; padding: 0.85rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; margin: 0; overflow-x: auto; white-space: pre; border: 1px solid rgba(255,255,255,0.08);"></pre>
                         </div>
                     </div>
                 </div>
@@ -4200,13 +4341,51 @@ if (typeof fbq === 'function' && eventId) {
             loadCnameStateForSite(activeSite);
         }
 
-        function loadCnameStateForSite(siteID) {
+        let activeSiteKeyForCname = '';
+
+        function updateCnameStepperUI(step1Status, step2Status, step3Status) {
+            const s1 = document.getElementById('cname-step-1');
+            const s2 = document.getElementById('cname-step-2');
+            const s3 = document.getElementById('cname-step-3');
+            const c1 = document.getElementById('cname-circle-1');
+            const c2 = document.getElementById('cname-circle-2');
+            const c3 = document.getElementById('cname-circle-3');
+            const d1 = document.getElementById('cname-divider-1');
+            const d2 = document.getElementById('cname-divider-2');
+
+            if (!s1) return;
+
+            [s1, s2, s3].forEach(el => el.classList.remove('active', 'done', 'pending'));
+            s1.classList.add(step1Status);
+            s2.classList.add(step2Status);
+            s3.classList.add(step3Status);
+
+            if (c1) c1.innerHTML = step1Status === 'done' ? '✓' : '1';
+            if (c2) c2.innerHTML = step2Status === 'done' ? '✓' : '2';
+            if (c3) c3.innerHTML = step3Status === 'done' ? '✓' : '3';
+
+            if (d1) {
+                if (step1Status === 'done') d1.classList.add('done');
+                else d1.classList.remove('done');
+            }
+            if (d2) {
+                if (step2Status === 'done') d2.classList.add('done');
+                else d2.classList.remove('done');
+            }
+        }
+
+        async function loadCnameStateForSite(siteID) {
             const input = document.getElementById('dash-input-cname');
             const pill = document.getElementById('dash-cname-status-pill');
             const feedback = document.getElementById('dash-cname-dns-feedback');
             const snippetBox = document.getElementById('dash-cname-snippet-box');
             const snippetCode = document.getElementById('cname-snippet-code');
             const hostInstruction = document.getElementById('dns-instruction-host');
+            const suggestionBox = document.getElementById('dash-cname-suggestion-box');
+            const suggestionVal = document.getElementById('cname-suggestion-val');
+            const dnscheckerContainer = document.getElementById('dash-cname-dnschecker-container');
+            const dnscheckerLink = document.getElementById('dash-cname-dnschecker-link');
+            const noKeyAlert = document.getElementById('dash-cname-nokey-alert');
 
             if (!siteID || !input) {
                 if (input) input.value = '';
@@ -4215,17 +4394,52 @@ if (typeof fbq === 'function' && eventId) {
                     pill.style.background = 'rgba(100, 116, 139, 0.2)';
                     pill.style.color = '#94a3b8';
                 }
-                if (feedback) feedback.textContent = 'Selecione um site específico no topo para gerenciar o subdomínio CNAME First-Party.';
+                if (feedback) feedback.innerHTML = '<span style="color: #94a3b8;">ℹ️ Selecione um site específico no topo para gerenciar o subdomínio CNAME First-Party.</span>';
                 if (snippetBox) snippetBox.style.display = 'none';
+                if (suggestionBox) suggestionBox.style.display = 'none';
+                if (dnscheckerContainer) dnscheckerContainer.style.display = 'none';
+                updateCnameStepperUI('pending', 'pending', 'pending');
                 return;
             }
 
             const site = (globalSitesList || []).find(s => s.id === siteID);
             if (!site) return;
 
+            // Busca chaves ativas do site para garantir que o snippet tenha data-site-key
+            activeSiteKeyForCname = '';
+            try {
+                const resKeys = await fetch(`/api/v1/sites/${siteID}/keys`);
+                if (resKeys.ok) {
+                    const keys = await resKeys.json();
+                    const activeKeyObj = (keys || []).find(k => k.status === 'active');
+                    if (activeKeyObj) activeSiteKeyForCname = activeKeyObj.key;
+                }
+            } catch (e) {
+                console.warn("Aviso ao buscar chaves para CNAME:", e);
+            }
+
+            // Configura sugestão de subdomínio
+            const primaryDomain = site.domain || (site.allowed_domains && site.allowed_domains[0]) || '';
+            if (suggestionBox && suggestionVal) {
+                if (primaryDomain && !site.cname_subdomain) {
+                    suggestionVal.textContent = `track.${primaryDomain}`;
+                    suggestionBox.style.display = 'block';
+                } else {
+                    suggestionBox.style.display = 'none';
+                }
+            }
+
             input.value = site.cname_subdomain || '';
             const parts = (site.cname_subdomain || '').split('.');
             if (hostInstruction) hostInstruction.textContent = parts[0] || 'track';
+
+            // Atualiza link DNSChecker
+            if (site.cname_subdomain && dnscheckerContainer && dnscheckerLink) {
+                dnscheckerContainer.style.display = 'block';
+                dnscheckerLink.href = `https://dnschecker.org/#CNAME/${encodeURIComponent(site.cname_subdomain)}`;
+            } else if (dnscheckerContainer) {
+                dnscheckerContainer.style.display = 'none';
+            }
 
             if (site.cname_subdomain && site.cname_verified) {
                 if (pill) {
@@ -4234,21 +4448,30 @@ if (typeof fbq === 'function' && eventId) {
                     pill.style.color = '#34d399';
                 }
                 if (feedback) {
-                    feedback.innerHTML = `<span style="color: #34d399;">✓ Apontamento CNAME validado para <strong>${escapeHTML(site.cname_subdomain)}</strong>. Ingress Gateway First-Party pronto!</span>`;
+                    feedback.innerHTML = `<span style="color: #34d399;">✓ Apontamento CNAME validado para <strong>${escapeHTML(site.cname_subdomain)}</strong>. Túnel Ingress Gateway First-Party pronto e blindado!</span>`;
                 }
+                updateCnameStepperUI('done', 'done', 'done');
+
                 if (snippetBox && snippetCode) {
                     snippetBox.style.display = 'block';
-                    snippetCode.textContent = `<!-- HN Performance First-Party Ingress Snippet (Cookieless) -->\n<script\n  src="https://${site.cname_subdomain}/sdk/tracker.js"\n  async>\n<` + `/script>`;
+                    if (activeSiteKeyForCname) {
+                        if (noKeyAlert) noKeyAlert.style.display = 'none';
+                        snippetCode.textContent = `<!-- HN Performance First-Party Ingress Snippet (Cookieless) -->\n<script\n  src="https://${site.cname_subdomain}/sdk/tracker.js"\n  data-site-key="${activeSiteKeyForCname}"\n  async>\n<` + `/script>`;
+                    } else {
+                        if (noKeyAlert) noKeyAlert.style.display = 'block';
+                        snippetCode.textContent = `<!-- ATENÇÃO: Nenhuma chave pública ativa encontrada para este site. Crie uma na aba Chaves -->\n<!-- HN Performance First-Party Ingress Snippet (Cookieless) -->\n<script\n  src="https://${site.cname_subdomain}/sdk/tracker.js"\n  data-site-key="SUA_CHAVE_AQUI"\n  async>\n<` + `/script>`;
+                    }
                 }
             } else if (site.cname_subdomain) {
                 if (pill) {
-                    pill.textContent = '⏳ Verificação Pendente';
+                    pill.textContent = '⏳ Propagando DNS';
                     pill.style.background = 'rgba(234, 179, 8, 0.15)';
                     pill.style.color = '#fde047';
                 }
                 if (feedback) {
-                    feedback.innerHTML = `<span style="color: #fde047;">⚠️ Subdomínio cadastrado (<strong>${escapeHTML(site.cname_subdomain)}</strong>). Crie o CNAME no seu provedor de DNS e clique em "Verificar DNS".</span>`;
+                    feedback.innerHTML = `<span style="color: #fde047;">⚠️ Subdomínio cadastrado (<strong>${escapeHTML(site.cname_subdomain)}</strong>). Crie o apontamento no seu DNS e clique em "Verificar DNS".</span>`;
                 }
+                updateCnameStepperUI('done', 'active', 'pending');
                 if (snippetBox) snippetBox.style.display = 'none';
             } else {
                 if (pill) {
@@ -4257,9 +4480,44 @@ if (typeof fbq === 'function' && eventId) {
                     pill.style.color = '#94a3b8';
                 }
                 if (feedback) {
-                    feedback.textContent = 'Digite o subdomínio e clique em "Verificar DNS" para validar o apontamento.';
+                    feedback.innerHTML = `<span style="color: var(--text-muted);">Digite o subdomínio desejado ou clique na sugestão para começar.</span>`;
                 }
+                updateCnameStepperUI('active', 'pending', 'pending');
                 if (snippetBox) snippetBox.style.display = 'none';
+            }
+        }
+
+        function onCnameInputChange(val) {
+            const hostInstruction = document.getElementById('dns-instruction-host');
+            const dnscheckerContainer = document.getElementById('dash-cname-dnschecker-container');
+            const dnscheckerLink = document.getElementById('dash-cname-dnschecker-link');
+
+            const clean = (val || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+            if (!clean) {
+                if (hostInstruction) hostInstruction.textContent = 'track';
+                if (dnscheckerContainer) dnscheckerContainer.style.display = 'none';
+                return;
+            }
+
+            const parts = clean.split('.');
+            if (hostInstruction) hostInstruction.textContent = parts[0] || 'track';
+
+            if (dnscheckerContainer && dnscheckerLink && clean.includes('.')) {
+                dnscheckerContainer.style.display = 'block';
+                dnscheckerLink.href = `https://dnschecker.org/#CNAME/${encodeURIComponent(clean)}`;
+            }
+        }
+
+        function applyCnameSuggestion() {
+            const input = document.getElementById('dash-input-cname');
+            const suggestionVal = document.getElementById('cname-suggestion-val');
+            if (input && suggestionVal && suggestionVal.textContent) {
+                input.value = suggestionVal.textContent.trim();
+                onCnameInputChange(input.value);
+                const feedback = document.getElementById('dash-cname-dns-feedback');
+                if (feedback) {
+                    feedback.innerHTML = `<span style="color: #38bdf8;">Sugestão aplicada! Agora crie o registro CNAME no seu DNS e clique em "Verificar DNS".</span>`;
+                }
             }
         }
 
@@ -4271,20 +4529,38 @@ if (typeof fbq === 'function' && eventId) {
             const snippetBox = document.getElementById('dash-cname-snippet-box');
             const snippetCode = document.getElementById('cname-snippet-code');
             const btn = document.getElementById('btn-verify-cname');
+            const dnscheckerContainer = document.getElementById('dash-cname-dnschecker-container');
+            const dnscheckerLink = document.getElementById('dash-cname-dnschecker-link');
+            const noKeyAlert = document.getElementById('dash-cname-nokey-alert');
 
             if (!siteID) {
-                alert('Selecione um site específico no topo antes de configurar o subdomínio CNAME.');
+                feedback.innerHTML = '<span style="color: #f87171;">⚠️ Por favor, selecione um site específico no topo antes de configurar o subdomínio CNAME.</span>';
                 return;
             }
             if (!input || !input.value.trim()) {
-                alert('Informe um subdomínio válido (ex: track.spspower.com.br).');
+                feedback.innerHTML = '<span style="color: #f87171;">⚠️ Informe um subdomínio válido (ex: track.spspower.com.br).</span>';
                 return;
             }
 
-            const subdomain = input.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+            let subdomain = input.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+            
+            // Auxílio inteligente: se o usuário digitou apenas o prefixo (ex: "track") sem ponto, anexa o domínio do site
+            const site = (globalSitesList || []).find(s => s.id === siteID);
+            const primaryDomain = site ? (site.domain || (site.allowed_domains && site.allowed_domains[0]) || '') : '';
+            if (!subdomain.includes('.') && primaryDomain) {
+                subdomain = `${subdomain}.${primaryDomain}`;
+                input.value = subdomain;
+                onCnameInputChange(subdomain);
+            }
+
             btn.disabled = true;
             btn.innerHTML = '<span>⏳</span> Consultando DNS...';
             feedback.innerHTML = '<span style="color: #38bdf8;">Realizando consulta DNS no servidor...</span>';
+
+            if (dnscheckerContainer && dnscheckerLink) {
+                dnscheckerContainer.style.display = 'block';
+                dnscheckerLink.href = `https://dnschecker.org/#CNAME/${encodeURIComponent(subdomain)}`;
+            }
 
             try {
                 const res = await fetch('/api/v1/domains/verify-cname', {
@@ -4298,19 +4574,40 @@ if (typeof fbq === 'function' && eventId) {
                         pill.textContent = '✅ Ativo & Verificado';
                         pill.style.background = 'rgba(16, 185, 129, 0.15)';
                         pill.style.color = '#34d399';
-                        feedback.innerHTML = `<span style="color: #34d399;">✓ Apontamento CNAME validado com sucesso! CNAME Target: <strong>${escapeHTML(data.cname_target || 'vps.griddmkt360.com.br')}</strong></span>`;
+                        feedback.innerHTML = `<span style="color: #34d399;">✓ Apontamento CNAME validado com sucesso! CNAME Target: <strong>${escapeHTML(data.cname_target || 'vps.griddmkt360.com.br')}</strong>. SSL automático provisionado!</span>`;
+                        updateCnameStepperUI('done', 'done', 'done');
+
+                        // Recarrega chaves caso ainda não tenhamos
+                        if (!activeSiteKeyForCname) {
+                            try {
+                                const resK = await fetch(`/api/v1/sites/${siteID}/keys`);
+                                if (resK.ok) {
+                                    const keys = await resK.json();
+                                    const activeK = (keys || []).find(k => k.status === 'active');
+                                    if (activeK) activeSiteKeyForCname = activeK.key;
+                                }
+                            } catch (e) {}
+                        }
+
                         snippetBox.style.display = 'block';
-                        snippetCode.textContent = `<!-- HN Performance First-Party Ingress Snippet (Cookieless) -->\n<script\n  src="https://${subdomain}/sdk/tracker.js"\n  async>\n<` + `/script>`;
+                        if (activeSiteKeyForCname) {
+                            if (noKeyAlert) noKeyAlert.style.display = 'none';
+                            snippetCode.textContent = `<!-- HN Performance First-Party Ingress Snippet (Cookieless) -->\n<script\n  src="https://${subdomain}/sdk/tracker.js"\n  data-site-key="${activeSiteKeyForCname}"\n  async>\n<` + `/script>`;
+                        } else {
+                            if (noKeyAlert) noKeyAlert.style.display = 'block';
+                            snippetCode.textContent = `<!-- ATENÇÃO: Nenhuma chave pública ativa encontrada para este site. Crie uma na aba Chaves -->\n<!-- HN Performance First-Party Ingress Snippet (Cookieless) -->\n<script\n  src="https://${subdomain}/sdk/tracker.js"\n  data-site-key="SUA_CHAVE_AQUI"\n  async>\n<` + `/script>`;
+                        }
                         await loadSites(true);
                     } else {
-                        pill.textContent = '⏳ Verificação Pendente';
+                        pill.textContent = '⏳ Propagando DNS';
                         pill.style.background = 'rgba(234, 179, 8, 0.15)';
                         pill.style.color = '#fde047';
-                        feedback.innerHTML = `<span style="color: #fde047;">⚠️ ${escapeHTML(data.message || 'CNAME não propagado')}</span>`;
+                        feedback.innerHTML = `<span style="color: #fde047;">⚠️ ${escapeHTML(data.message || 'CNAME ainda não propagado')}. Caso tenha acabado de criar o registro, aguarde alguns instantes ou verifique no link abaixo.</span>`;
+                        updateCnameStepperUI('done', 'active', 'pending');
                         snippetBox.style.display = 'none';
                     }
                 } else {
-                    feedback.innerHTML = `<span style="color: #f87171;">Erro: ${escapeHTML(data.error || 'Falha na verificação')}</span>`;
+                    feedback.innerHTML = `<span style="color: #f87171;">Erro: ${escapeHTML(data.error || 'Falha na verificação de DNS')}</span>`;
                 }
             } catch (err) {
                 feedback.innerHTML = `<span style="color: #f87171;">Erro de conexão: ${escapeHTML(err.message)}</span>`;
@@ -4320,15 +4617,40 @@ if (typeof fbq === 'function' && eventId) {
             }
         }
 
+        function copyDnsValue(type) {
+            let val = '';
+            let btnId = '';
+            if (type === 'host') {
+                const el = document.getElementById('dns-instruction-host');
+                val = el ? el.textContent.trim() : 'track';
+                btnId = 'btn-copy-dns-host';
+            } else if (type === 'target') {
+                val = 'vps.griddmkt360.com.br';
+                btnId = 'btn-copy-dns-target';
+            }
+            if (!val) return;
+
+            navigator.clipboard.writeText(val).then(() => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '✅ Copiado!';
+                    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+                }
+            }).catch(e => console.error('Erro ao copiar valor de DNS:', e));
+        }
+
         function copyCnameSnippet() {
             const codeEl = document.getElementById('cname-snippet-code');
             if (!codeEl || !codeEl.textContent) return;
             navigator.clipboard.writeText(codeEl.textContent).then(() => {
                 const btn = document.getElementById('btn-copy-cname-snippet');
-                const orig = btn.innerHTML;
-                btn.innerHTML = '✅ Copiado!';
-                setTimeout(() => { btn.innerHTML = orig; }, 2000);
-            }).catch(e => alert('Erro ao copiar: ' + e));
+                if (btn) {
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '✅ Copiado!';
+                    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+                }
+            }).catch(e => console.error('Erro ao copiar snippet:', e));
         }
 
         async function handleAddDomainFromDashboard() {
