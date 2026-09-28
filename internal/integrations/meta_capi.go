@@ -152,7 +152,7 @@ func (m *MetaCAPI) TestPing(ctx context.Context, pixelID, accessToken, testCode 
 
 func mapMetaEventName(name string) string {
 	switch strings.ToLower(name) {
-	case "lead":
+	case "lead", "form_submit":
 		return "Lead"
 	case "purchase":
 		return "Purchase"

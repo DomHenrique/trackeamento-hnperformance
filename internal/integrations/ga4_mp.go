@@ -108,7 +108,7 @@ func (g *GA4MP) TestPing(ctx context.Context, measurementID, apiSecret string) (
 
 func mapGA4EventName(name string) string {
 	switch strings.ToLower(name) {
-	case "lead":
+	case "lead", "form_submit":
 		return "generate_lead"
 	case "purchase":
 		return "purchase"

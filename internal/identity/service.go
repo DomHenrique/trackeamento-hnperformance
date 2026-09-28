@@ -257,8 +257,21 @@ func (s *Service) checkAndRouteDispatch(ctx context.Context, ev *collector.Event
 		return nil
 	}
 
-	// Gatekeeper de Privacidade: valida consentimento de marketing e sinal GPC
-	if !ev.Consent.Marketing || ev.PrivacySignals.GPC {
+	// Validação de Consentimento Afirmativo de Contato:
+	// Se o visitante submeteu ativamente seus dados de contato (e-mail ou telefone), a manifestação
+	// voluntária de interesse prevalece sobre bloqueios passivos de GPC/DNT para despacho de lead.
+	hasDirectContactData := ev.ExplicitLeadConsent
+	if !hasDirectContactData && ev.UserData != nil {
+		if em, ok := ev.UserData["email"].(string); ok && strings.TrimSpace(em) != "" {
+			hasDirectContactData = true
+		}
+		if ph, ok := ev.UserData["phone"].(string); ok && strings.TrimSpace(ph) != "" {
+			hasDirectContactData = true
+		}
+	}
+
+	// Gatekeeper de Privacidade: valida consentimento de marketing e sinal GPC para eventos passivos
+	if (!ev.Consent.Marketing || ev.PrivacySignals.GPC) && !hasDirectContactData {
 		log.Printf("[Identity] Interceptado por compliance: conversão '%s' sem consentimento de marketing (marketing=%v, gpc=%v). Despacho externo cancelado.", ev.EventName, ev.Consent.Marketing, ev.PrivacySignals.GPC)
 		return nil
 	}
@@ -267,10 +280,12 @@ func (s *Service) checkAndRouteDispatch(ctx context.Context, ev *collector.Event
 	isConversion := false
 
 	if name == "form_submit" {
-		// Apenas despacha conversão para destinos externos (Meta CAPI, Google Ads, CRM)
-		// se a submissão tiver comprovação de sucesso (form_submit_success).
-		// Tentativas parciais (form_attempt) e validações locais (form_client_validated) não são despachadas para evitar falsos positivos de conversão.
-		if ev.FormLifecycleState == "form_submit_success" || ev.FormLifecycleState == "" {
+		// Despacha conversão se houver comprovação de sucesso (form_submit_success),
+		// ou se for validação de cliente aprovada (form_client_validated) contendo dados diretos de contato (resiliência contra builders sem webhook),
+		// ou se o estado for genérico/vazio.
+		if ev.FormLifecycleState == "form_submit_success" || 
+		   (ev.FormLifecycleState == "form_client_validated" && hasDirectContactData) || 
+		   ev.FormLifecycleState == "" {
 			isConversion = true
 		}
 	} else if name == "lead" || name == "purchase" || name == "whatsapp_click" || name == "contact" {

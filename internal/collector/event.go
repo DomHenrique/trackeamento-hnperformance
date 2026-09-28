@@ -21,6 +21,7 @@ type ClientSignals struct {
 
 type EventRequest struct {
 	SiteKey       string                 `json:"site_key"`
+	VisitorID     string                 `json:"visitor_id,omitempty"`
 	EventName     string                 `json:"event_name"`
 	EventID       string                 `json:"event_id,omitempty"` // Se passado pelo frontend para deduplicação com Meta Pixel
 	SessionID     string                 `json:"session_id,omitempty"`
@@ -34,6 +35,7 @@ type EventRequest struct {
 	FieldSource        string                 `json:"field_source,omitempty"`
 	ClientSignals      *ClientSignals         `json:"client_signals,omitempty"`
 	Consent            *ConsentState          `json:"consent,omitempty"`
+	ExplicitLeadConsent bool                  `json:"explicit_lead_consent,omitempty"`
 	IsDebug            bool                   `json:"is_debug,omitempty"`
 }
 
@@ -56,6 +58,7 @@ type EventPayload struct {
 	FieldSource        string                 `json:"field_source,omitempty"`
 	ClientSignals      *ClientSignals         `json:"client_signals,omitempty"`
 	Consent            ConsentState           `json:"consent"`
+	ExplicitLeadConsent bool                  `json:"explicit_lead_consent,omitempty"`
 	PrivacySignals     PrivacySignals         `json:"privacy_signals"`
 	IsBot              bool                   `json:"is_bot"`
 	BotReason          string                 `json:"bot_reason"`

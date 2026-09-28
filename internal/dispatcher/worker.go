@@ -177,8 +177,19 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 		return
 	}
 
-	// Gatekeeper Final de Privacidade: mensagens sem consentimento de marketing ou sob GPC são descartadas e confirmadas
-	if !ev.Consent.Marketing || ev.PrivacySignals.GPC {
+	// Gatekeeper Final de Privacidade: mensagens passivas sem consentimento de marketing ou sob GPC são descartadas.
+	// No entanto, submissões voluntárias de contato (com dados de lead) preservam autorização para despacho.
+	hasDirectLeadConsent := ev.ExplicitLeadConsent
+	if !hasDirectLeadConsent && ev.UserData != nil {
+		if em, ok := ev.UserData["email"].(string); ok && strings.TrimSpace(em) != "" {
+			hasDirectLeadConsent = true
+		}
+		if ph, ok := ev.UserData["phone"].(string); ok && strings.TrimSpace(ph) != "" {
+			hasDirectLeadConsent = true
+		}
+	}
+
+	if (!ev.Consent.Marketing || ev.PrivacySignals.GPC) && !hasDirectLeadConsent {
 		log.Printf("[Dispatcher] Interceptado por compliance: evento %s site=%s sem consentimento de marketing (marketing=%v, gpc=%v). Despacho externo abortado.", ev.EventID, ev.SiteID, ev.Consent.Marketing, ev.PrivacySignals.GPC)
 		_ = wp.redis.Client.XAck(ctx, stream, group, msg.ID).Err()
 		return

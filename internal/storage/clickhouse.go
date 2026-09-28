@@ -73,6 +73,7 @@ type OverviewStats struct {
 	UniqueVisitors      uint64            `json:"unique_visitors"`
 	TotalLeads          uint64            `json:"total_leads"`
 	TotalWhatsAppClicks uint64            `json:"total_whatsapp_clicks"`
+	ActiveLast5Min      uint64            `json:"active_last_5_min"`
 	ActiveLast30Min     uint64            `json:"active_last_30_min"`
 	TimeSeries          []TimePoint       `json:"time_series"`
 	TopSources          []SourceItem      `json:"top_sources"`
@@ -229,8 +230,9 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, domainF
 		SELECT 
 			count(*) AS total_events,
 			uniqExact(visitor_id) AS unique_visitors,
-			countIf(event_name = 'lead') AS total_leads,
+			countIf(event_name = 'lead' OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS total_leads,
 			countIf(event_name = 'whatsapp_click') AS total_whatsapp,
+			uniqExactIf(visitor_id, event_time >= now() - INTERVAL 5 MINUTE) AS active_5m,
 			uniqExactIf(visitor_id, event_time >= now() - INTERVAL 30 MINUTE) AS active_30m
 		FROM tracking_events.events
 		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
@@ -238,7 +240,7 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, domainF
 		  AND event_time >= ? AND is_bot = 0
 	`
 	row := c.Conn.QueryRow(ctx, queryKPIs, siteID, siteID, domainFilter, domainFilter, since)
-	if err := row.Scan(&stats.TotalEvents, &stats.UniqueVisitors, &stats.TotalLeads, &stats.TotalWhatsAppClicks, &stats.ActiveLast30Min); err != nil {
+	if err := row.Scan(&stats.TotalEvents, &stats.UniqueVisitors, &stats.TotalLeads, &stats.TotalWhatsAppClicks, &stats.ActiveLast5Min, &stats.ActiveLast30Min); err != nil {
 		return nil, fmt.Errorf("falha ao consultar KPIs gerais: %w", err)
 	}
 
@@ -248,7 +250,7 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, domainF
 			toStartOfInterval(event_time, INTERVAL 1 DAY) AS dt,
 			countIf(event_name = 'page_view') AS pvs,
 			uniqExact(visitor_id) AS visitors,
-			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase')) AS convs
+			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS convs
 		FROM tracking_events.events
 		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
 		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
@@ -351,7 +353,7 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, doma
 			uniqExact(splitByChar('#', cutQueryString(if(page_url != '', page_url, landing_page)))[1]) AS active_pages,
 			countIf(event_name = 'page_view') AS pvs,
 			uniqExact(visitor_id) AS visitors,
-			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase')) AS convs
+			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS convs
 		FROM tracking_events.events
 		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
 		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
@@ -384,7 +386,7 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, doma
 			argMax(JSONExtractString(custom_data_json, 'page_title'), event_time) AS title,
 			countIf(event_name = 'page_view') AS pvs,
 			uniqExact(visitor_id) AS visitors,
-			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase')) AS convs,
+			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS convs,
 			max(event_time) AS last_seen
 		FROM tracking_events.events
 		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
@@ -537,8 +539,8 @@ func (c *ClickHouseDB) GetFunnelAnalysis(ctx context.Context, siteID, domainFilt
 				  AND event_time >= ? AND is_bot = 0 
 				GROUP BY visitor_id HAVING count(*) >= 2
 			)) AS step2_engaged,
-			uniqExactIf(visitor_id, event_name IN ('whatsapp_click', 'cta_click', 'click', 'form_start')) AS step3_cta,
-			uniqExactIf(visitor_id, event_name IN ('lead', 'purchase', 'form_submit', 'contact')) AS step4_conv
+			uniqExactIf(visitor_id, event_name IN ('whatsapp_click', 'cta_click', 'click', 'form_start') OR (event_name = 'form_submit' AND form_lifecycle_state = 'form_attempt')) AS step3_cta,
+			uniqExactIf(visitor_id, event_name IN ('lead', 'purchase', 'contact') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS step4_conv
 		FROM tracking_events.events
 		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
 		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
@@ -644,7 +646,7 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, domainFi
 		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
 		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
 		  AND event_time >= ? AND is_bot = 0
-		  AND event_name IN ('lead', 'purchase', 'whatsapp_click')
+		  AND (event_name IN ('lead', 'purchase', 'whatsapp_click') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = '')))
 	`
 	var totalConvs uint64
 	_ = c.Conn.QueryRow(ctx, queryTotalConvs, siteID, siteID, domainFilter, domainFilter, since).Scan(&totalConvs)
@@ -684,7 +686,7 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, domainFi
 				WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
 				  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
 				  AND event_time >= ? AND is_bot = 0
-				  AND event_name IN ('lead', 'purchase', 'whatsapp_click')
+				  AND (event_name IN ('lead', 'purchase', 'whatsapp_click') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = '')))
 			)
 			GROUP BY visitor_id
 		)
@@ -723,7 +725,7 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, domainFi
 				WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
 				  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
 				  AND event_time >= ? AND is_bot = 0
-				  AND event_name IN ('lead', 'purchase', 'whatsapp_click')
+				  AND (event_name IN ('lead', 'purchase', 'whatsapp_click') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = '')))
 			  )
 		)
 		WHERE rn = 1
@@ -757,7 +759,7 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, domainFi
 				WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
 				  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
 				  AND event_time >= ? AND is_bot = 0
-				  AND event_name IN ('lead', 'purchase', 'whatsapp_click')
+				  AND (event_name IN ('lead', 'purchase', 'whatsapp_click') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = '')))
 			  )
 		)
 		WHERE rn = 1

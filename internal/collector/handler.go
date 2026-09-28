@@ -114,6 +114,21 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	analyticsPolicy := privacy.CategoriesPolicy["analytics"]
 	marketingPolicy := privacy.CategoriesPolicy["marketing"]
 
+	hasActiveLeadConsent := req.ExplicitLeadConsent
+	if !hasActiveLeadConsent && req.CustomData != nil {
+		if val, ok := req.CustomData["explicit_lead_consent"].(bool); ok && val {
+			hasActiveLeadConsent = true
+		}
+	}
+	if !hasActiveLeadConsent && req.UserData != nil {
+		if em, ok := req.UserData["email"].(string); ok && strings.TrimSpace(em) != "" {
+			hasActiveLeadConsent = true
+		}
+		if ph, ok := req.UserData["phone"].(string); ok && strings.TrimSpace(ph) != "" {
+			hasActiveLeadConsent = true
+		}
+	}
+
 	if req.Consent != nil {
 		// Preferência explícita do usuário enviada pelo SDK/CMP
 		consent.Analytics = req.Consent.Analytics
@@ -124,9 +139,16 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		consent.Marketing = !marketingPolicy.RequiresConsent
 	}
 
-	// Se GPC/DNT estiver ativo e a política mandar respeitar, revoga marketing
+	// Se GPC/DNT estiver ativo e a política mandar respeitar, revoga marketing para navegações passivas,
+	// mas PRESERVA a autorização se houver manifestação voluntária de formulário/lead
 	if (isGPC || isDNT) && privacy.EnforceGPC {
-		consent.Marketing = false
+		if !hasActiveLeadConsent {
+			consent.Marketing = false
+		} else {
+			consent.Marketing = true
+		}
+	} else if hasActiveLeadConsent {
+		consent.Marketing = true
 	}
 
 	// 2. Extração de IP Real Confiável (com validação de TRUSTED_PROXIES e mascaramento de privacidade)
@@ -140,12 +162,19 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	ua := c.Get("User-Agent")
 	deviceType := detectDeviceType(ua)
 
-	// 4. Resolução Determinística Server-Side do Visitor ID (Cookieless)
-	// Elimina totalmente leitura, geração e emissão do cookie _vid via Set-Cookie.
+	// 4. Resolução de Identidade do Visitante (1st-Party Storage ou Cookieless Server-Side Determinístico)
 	if h.identityMgr == nil {
 		h.identityMgr = NewVisitorIdentityManager(h.redis)
 	}
-	visitorID := h.identityMgr.ResolveVisitorID(c.Context(), time.Now(), siteID, ip, ua, req.ClientSignals)
+	visitorID := ""
+	if req.VisitorID != "" && strings.HasPrefix(req.VisitorID, prefixedid.PrefixVisitor) {
+		visitorID = strings.TrimSpace(req.VisitorID)
+	} else if vid, ok := req.UserData["visitor_id"].(string); ok && strings.HasPrefix(vid, prefixedid.PrefixVisitor) {
+		visitorID = strings.TrimSpace(vid)
+	}
+	if visitorID == "" {
+		visitorID = h.identityMgr.ResolveVisitorID(c.Context(), time.Now(), siteID, ip, ua, req.ClientSignals)
+	}
 	isNewVisitor := false
 
 	if req.UserData == nil {
@@ -262,6 +291,7 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		FieldSource:        fieldSource,
 		ClientSignals:      req.ClientSignals,
 		Consent:            consent,
+		ExplicitLeadConsent: hasActiveLeadConsent,
 		PrivacySignals:     PrivacySignals{GPC: isGPC, DNT: isDNT},
 		IsBot:              isBot,
 		BotReason:          botReason,

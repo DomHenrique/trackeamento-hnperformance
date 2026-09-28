@@ -165,6 +165,20 @@
         isNewSession = true;
     }
 
+    // 3.1 Gestão de Identidade de 1ª Parte do Visitante (hn_vis_...) em localStorage (First-Party)
+    var VISITOR_KEY = '_hn_vid';
+    var visitorId = null;
+    try {
+        visitorId = localStorage.getItem(VISITOR_KEY);
+        if (!visitorId) {
+            visitorId = generatePrefixedId('hn_vis_', 24);
+            localStorage.setItem(VISITOR_KEY, visitorId);
+        }
+    } catch (e) {
+        // Se o storage estiver bloqueado ou modo anônimo estrito, o backend resolve deterministicamente via HMAC server-side
+        visitorId = null;
+    }
+
     // 4. Gestão de Governança de Privacidade, Consentimento e Sinais do Navegador (GPC)
     var CONSENT_STORAGE_KEY = '_hn_consent';
     var isGPCActive = false;
@@ -344,11 +358,18 @@
 
         var eventIsDebug = isDebug || (customData && (customData.debug === true || customData.debug_mode === true || customData.is_debug === true));
 
+        var hasDirectLeadData = (userData && (userData.email || userData.phone)) ||
+                                (customData && (customData.explicit_lead_consent === true || customData.form_lifecycle_state === 'form_submit_success'));
+        if (hasDirectLeadData) {
+            customData.explicit_lead_consent = true;
+        }
+
         var payload = {
             site_key: siteKey,
             event_name: eventName,
             event_id: eventId,
             session_id: sessionId,
+            visitor_id: visitorId || undefined,
             url: window.location.href,
             referrer: document.referrer || '',
             user_data: userData,
@@ -357,8 +378,9 @@
             consent: {
                 necessary: true,
                 analytics: !!userConsent.analytics,
-                marketing: !!userConsent.marketing
+                marketing: hasDirectLeadData ? true : !!userConsent.marketing
             },
+            explicit_lead_consent: !!hasDirectLeadData,
             is_debug: !!eventIsDebug
         };
 
@@ -681,7 +703,8 @@
                 submission_id: submissionId,
                 form_id: domFormId,
                 time: Date.now(),
-                has_error: false
+                has_error: false,
+                success_dispatched: false
             };
 
             // 1. Estado form_attempt (event_name consistente 'form_submit', estágio 'form_attempt')
@@ -691,7 +714,8 @@
                 field_source: JSON.stringify(fieldSources),
                 form_id: domFormId,
                 form_action: form.action || '',
-                trigger_source: 'dom_submit'
+                trigger_source: 'dom_submit',
+                explicit_lead_consent: true
             });
 
             // 2. Estado form_client_validated (se passou na validação nativa do navegador - sem re-envio de PII)
@@ -700,11 +724,55 @@
                     submission_id: submissionId,
                     form_lifecycle_state: 'form_client_validated',
                     form_id: domFormId,
-                    trigger_source: 'dom_validation'
+                    trigger_source: 'dom_validation',
+                    explicit_lead_consent: true
                 });
+
+                // 2.1 Promoção Resiliente: se passou na validação com PII válida e nenhum erro de builder ocorrer em 1200ms
+                var curSubId = submissionId;
+                var curFormId = domFormId;
+                setTimeout(function() {
+                    if (lastSubmission && lastSubmission.submission_id === curSubId && !lastSubmission.has_error && !lastSubmission.success_dispatched) {
+                        lastSubmission.success_dispatched = true;
+                        debugLog('Promoção resiliente de validação HTML5 para form_submit_success (submission_id=' + curSubId + ')');
+                        trackEvent('form_submit', {}, {
+                            submission_id: curSubId,
+                            form_lifecycle_state: 'form_submit_success',
+                            form_id: curFormId,
+                            trigger_source: 'resilient_validated_promotion',
+                            explicit_lead_consent: true
+                        });
+                    }
+                }, 1200);
             }
         }
     }, true);
+
+    // D.0) Listener Nativo no DOM para eventos de sucesso do Bricks Builder (bricksformsuccess)
+    try {
+        document.addEventListener('bricksformsuccess', function (e) {
+            debugLog('Capturado evento nativo bricksformsuccess no DOM:', e);
+            var nowTime = Date.now();
+            if (lastSubmission && lastSubmission.has_error && (!e.detail || !e.detail.submission_id)) {
+                debugLog('Ignorando bricksformsuccess pois a submissão foi previamente marcada com erro.');
+                return;
+            }
+            if (lastSubmission && (nowTime - lastSubmission.time < 30000)) {
+                lastSubmission.success_dispatched = true;
+            }
+            var subId = (e.detail && e.detail.submission_id) || ((lastSubmission && (nowTime - lastSubmission.time < 30000)) ? lastSubmission.submission_id : '') || generateSubmissionId();
+            var formEl = (e.detail && e.detail.form) || (e.target && e.target.tagName === 'FORM' ? e.target : null);
+            var fId = (e.detail && e.detail.formId) || (formEl && (formEl.getAttribute('data-element-id') || formEl.id || formEl.name)) || (lastSubmission ? lastSubmission.form_id : '') || 'bricks_form';
+
+            trackEvent('form_submit', {}, {
+                submission_id: subId,
+                form_lifecycle_state: 'form_submit_success',
+                form_id: fId,
+                trigger_source: 'bricks_native_bricksformsuccess',
+                explicit_lead_consent: true
+            });
+        }, false);
+    } catch (e) {}
 
     // D) Deduplicação e Auto-Interceptação de Eventos do Google Tag Manager (dataLayer)
     var lastCapturedForm = { time: 0, key: '' };
@@ -743,14 +811,16 @@
             return;
         }
 
-        // D.2) Detecção de Confirmação de Sucesso de Builders (Bricks, Elementor, WPForms)
+        // D.2) Detecção de Confirmação de Sucesso de Builders (Bricks, Elementor, WPForms, leadgenerated)
         var isSuccessEvent = evt === 'bricks/form/submit/success' ||
                              evt === 'elementor/form/submit/success' ||
                              evt === 'wpforms_completed' ||
                              evt === 'fluentform_submission_success' ||
                              evt === 'wpcf7mailsent' ||
                              evt === 'form_success' ||
-                             evt === 'form_submit_success';
+                             evt === 'form_submit_success' ||
+                             evt === 'leadgenerated' ||
+                             evt === 'lead_generated';
 
         if (isSuccessEvent) {
             var nowTime = Date.now();
@@ -760,15 +830,33 @@
                 return;
             }
 
-            var successSubId = item.submission_id || ((nowTime - lastSubmission.time < 30000) ? lastSubmission.submission_id : '') || generateSubmissionId();
-            var successFormId = item.form_id || item.formId || lastSubmission.form_id || 'builder_success_form';
+            var successSubId = item.submission_id || ((lastSubmission && (nowTime - lastSubmission.time < 30000)) ? lastSubmission.submission_id : '') || generateSubmissionId();
+            var successFormId = item.form_id || item.formId || item.formid || (lastSubmission ? lastSubmission.form_id : '') || 'builder_success_form';
 
-            debugLog('Capturado evento de sucesso do servidor via dataLayer:', evt, successSubId);
-            trackEvent('form_submit', {}, {
+            if (lastSubmission && (nowTime - lastSubmission.time < 30000)) {
+                lastSubmission.success_dispatched = true;
+            }
+
+            var extraUserData = {};
+            var emailVal = item.email || item.mail || item.dlv_email || item.user_email || '';
+            var phoneVal = item.telefone || item.phone || item.tel || item.celular || item.whatsapp || item.dlv_telefone || '';
+            var nameVal = item.nome || item.name || item.first_name || item.dlv_nome || '';
+            if (item.user_data && typeof item.user_data === 'object') {
+                emailVal = emailVal || item.user_data.email || '';
+                phoneVal = phoneVal || item.user_data.phone || item.user_data.telefone || '';
+                nameVal = nameVal || item.user_data.name || item.user_data.nome || '';
+            }
+            if (emailVal) extraUserData.email = String(emailVal).trim();
+            if (phoneVal) extraUserData.phone = String(phoneVal).trim();
+            if (nameVal) extraUserData.name = String(nameVal).trim();
+
+            debugLog('Capturado evento de sucesso do servidor via dataLayer:', evt, successSubId, extraUserData);
+            trackEvent('form_submit', extraUserData, {
                 submission_id: successSubId,
                 form_lifecycle_state: 'form_submit_success',
                 form_id: successFormId,
-                trigger_source: 'builder_event_' + evt
+                trigger_source: 'builder_event_' + evt,
+                explicit_lead_consent: true
             });
             return;
         }
@@ -781,7 +869,9 @@
                            evt === 'envio de formulário' || 
                            evt === 'envio de formulario' ||
                            evt === 'contato' || 
-                           evt === 'contact';
+                           evt === 'contact' ||
+                           evt === 'leadgenerated' ||
+                           evt === 'lead_generated';
 
         if (isFormEvent) {
             var email = item.email || item.mail || item.dlv_email || item.user_email || '';
@@ -794,7 +884,7 @@
                 name = name || item.user_data.name || item.user_data.nome || '';
             }
 
-            var formId = item.form_id || item.formId || item.id || 'gtm_datalayer_form';
+            var formId = item.form_id || item.formId || item.formid || item.id || 'gtm_datalayer_form';
             var dedupKey = (email || phone || name) + '_' + formId;
             if (shouldDeduplicateForm(dedupKey)) {
                 debugLog('Deduplicação: ignorando disparo duplicado de formulário dataLayer em < 3s');
@@ -812,17 +902,21 @@
                 submission_id: submissionId,
                 form_id: formId,
                 time: Date.now(),
-                has_error: false
+                has_error: false,
+                success_dispatched: false
             };
+
+            var lifecycle = (evt === 'leadgenerated' || evt === 'lead_generated' || evt === 'lead' || evt === 'generate_lead') ? 'form_submit_success' : 'form_attempt';
 
             var customData = {
                 submission_id: submissionId,
-                form_lifecycle_state: 'form_attempt',
+                form_lifecycle_state: lifecycle,
                 field_source: JSON.stringify(fieldSources),
                 form_id: formId,
                 page_url: item.page_url || window.location.href,
                 page_title: item.page_title || document.title,
-                trigger_source: 'datalayer_' + evt
+                trigger_source: 'datalayer_' + evt,
+                explicit_lead_consent: true
             };
 
             debugLog('Capturado evento de formulário via dataLayer:', evt, userData, customData);
