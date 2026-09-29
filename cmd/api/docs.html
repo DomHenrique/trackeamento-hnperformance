@@ -931,12 +931,43 @@
             </div>
         </div>
 
-        <!-- PASSO 1: INSTALAÇÃO DA TAG -->
+        <!-- ETAPA 1: SUBDOMÍNIO & DNS FIRST-PARTY -->
         <div class="step-card">
             <div class="step-card-header">
-                <div class="step-number">1</div>
+                <div class="step-number" style="background: linear-gradient(135deg, #0284c7, #0369a1);">1</div>
                 <div>
-                    <h2>Instalação Básica da Tag no Site</h2>
+                    <h2>Etapa 1: Subdomínio Próprio & DNS First-Party (CNAME)</h2>
+                    <p style="font-size: 0.8rem; color: #38bdf8; margin-top: 0.2rem; font-weight: 600;">🛡️ Máxima Resiliência • Cookies de 13 meses • Proteção contra Adblockers e Safari ITP</p>
+                </div>
+            </div>
+            <p class="step-desc">
+                Antes de publicar o script, crie um subdomínio no DNS do seu cliente (ex: <code>track.seudominio.com.br</code>) apontando como CNAME para nosso coletor. Isso garante que o tráfego seja 100% First-Party, prevenindo que o Safari ou o Chrome eliminem cookies de navegação e garantindo atribuição contínua de até 13 meses.
+            </p>
+
+            <div style="background: rgba(11, 17, 32, 0.7); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 1.25rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; align-items: center;">
+                    <div>
+                        <span style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Tipo de Registro</span>
+                        <div style="font-size: 0.95rem; font-weight: 800; color: #38bdf8; font-family: monospace;">CNAME</div>
+                    </div>
+                    <div>
+                        <span style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Nome / Entrada</span>
+                        <div style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; font-family: monospace;">track (ou coletor)</div>
+                    </div>
+                    <div>
+                        <span style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Destino / Valor</span>
+                        <div style="font-size: 0.85rem; font-weight: 700; color: #34d399; font-family: monospace;">trackeamento.hnperformancedigital.com.br</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASSO 2: INSTALAÇÃO DA TAG -->
+        <div class="step-card">
+            <div class="step-card-header">
+                <div class="step-number">2</div>
+                <div>
+                    <h2>Etapa 2: Instalação Básica da Tag no Site</h2>
                 </div>
             </div>
             <p class="step-desc">

@@ -2421,7 +2421,267 @@
         .cname-step-divider.done {
             background: rgba(16, 185, 129, 0.4);
         }
+
+        /* ============================================================ */
+        /* SITE ONBOARDING HEALTH CHECKLIST & GUIDED STEPPER STYLES     */
+        /* ============================================================ */
+        .site-onboarding-panel {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85));
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            padding: 1.35rem 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 15px rgba(99, 102, 241, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .site-onboarding-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #6366f1, #3b82f6, #10b981);
+        }
+        .onboarding-header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 0.85rem;
+        }
+        .onboarding-site-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .onboarding-site-badge {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            color: #c7d2fe;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+        }
+        .onboarding-progress-wrapper {
+            margin-bottom: 1.25rem;
+        }
+        .onboarding-progress-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.82rem;
+            margin-bottom: 0.45rem;
+        }
+        .onboarding-progress-track {
+            height: 8px;
+            background: rgba(2, 6, 23, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            overflow: hidden;
+            position: relative;
+        }
+        .onboarding-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6366f1, #38bdf8, #10b981);
+            border-radius: 999px;
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+        }
+        .onboarding-steps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.85rem;
+        }
+        .onboarding-step-card {
+            background: rgba(11, 17, 32, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 10px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.25s ease;
+            position: relative;
+        }
+        .onboarding-step-card:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            transform: translateY(-2px);
+            background: rgba(15, 23, 42, 0.85);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+        .onboarding-step-card.is-done {
+            border-color: rgba(16, 185, 129, 0.35);
+        }
+        .onboarding-step-card.is-done:hover {
+            border-color: rgba(16, 185, 129, 0.6);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.15);
+        }
+        .onboarding-step-card.is-pending {
+            border-color: rgba(245, 158, 11, 0.35);
+        }
+        .onboarding-step-card.is-pending:hover {
+            border-color: rgba(245, 158, 11, 0.6);
+        }
+        .onboarding-step-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        .onboarding-step-num {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .onboarding-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            letter-spacing: 0.02em;
+        }
+        .onboarding-pill-done {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.35);
+        }
+        .onboarding-pill-pending {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.35);
+        }
+        .onboarding-pill-wait {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+        }
+        .onboarding-pill-opt {
+            background: rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+        .onboarding-step-title {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 0.3rem;
+        }
+        .onboarding-step-desc {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            line-height: 1.4;
+            margin-bottom: 0.75rem;
+            flex-grow: 1;
+        }
+        .onboarding-step-btn {
+            width: 100%;
+            padding: 0.45rem 0.75rem;
+            font-size: 0.76rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            text-decoration: none;
+            background: rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+        }
+        .onboarding-step-btn:hover {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: rgba(99, 102, 241, 0.4);
+            color: #fff;
+        }
+        .onboarding-step-btn.btn-accent {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(59, 130, 246, 0.3));
+            border-color: rgba(99, 102, 241, 0.5);
+            color: #a5b4fc;
+        }
+        .onboarding-step-btn.btn-accent:hover {
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            color: #fff;
+        }
+
+        /* Stepper Sequencial do Guia de Instalação */
+        .guide-stepper-nav {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+        .guide-stepper-item {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: inherit;
+        }
+        .guide-stepper-item:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            background: rgba(30, 41, 59, 0.7);
+        }
+        .guide-stepper-item.active {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.12);
+        }
+        .guide-stepper-circle {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #94a3b8;
+            flex-shrink: 0;
+        }
+        .guide-stepper-item.active .guide-stepper-circle {
+            background: #6366f1;
+            border-color: #6366f1;
+            color: #fff;
+        }
+        .guide-stepper-text {
+            min-width: 0;
+        }
+        .guide-stepper-phase {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 600;
+            display: block;
+        }
+        .guide-stepper-title {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #f8fafc;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
     </style>
+
 
 </head>
 <body>
@@ -3204,6 +3464,109 @@
 
             <!-- TAB 7: CONFIGURAÇÕES DO SITE (Central de Chaves & Setup) -->
             <div id="tab-settings" class="tab-pane">
+                <!-- Seção 0: Card de Progresso e Saúde do Onboarding do Site -->
+                <div id="site-onboarding-panel" class="site-onboarding-panel">
+                    <div class="onboarding-header-top">
+                        <div class="onboarding-site-info">
+                            <span style="font-size: 1.15rem; font-weight: 800; color: #fff;" id="onboarding-site-name">Carregando site...</span>
+                            <span class="onboarding-site-badge" id="onboarding-site-id">hn_site_...</span>
+                            <span id="onboarding-site-domain" style="font-size: 0.82rem; color: #94a3b8;"></span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <button class="btn-refresh" onclick="loadSiteSettingsTab()" style="font-size: 0.76rem; padding: 0.35rem 0.75rem;">
+                                <span>🔄</span> Atualizar Status
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="onboarding-progress-wrapper">
+                        <div class="onboarding-progress-meta">
+                            <span style="color: #cbd5e1; font-weight: 600;">Status do Setup & Ativação</span>
+                            <span id="onboarding-progress-pct" style="color: #38bdf8; font-weight: 700;">0%</span>
+                        </div>
+                        <div class="onboarding-progress-track">
+                            <div id="onboarding-progress-fill" class="onboarding-progress-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="onboarding-steps-grid">
+                        <!-- 1. IDENTIFICAÇÃO -->
+                        <div id="ob-step-1" class="onboarding-step-card">
+                            <div>
+                                <div class="onboarding-step-top">
+                                    <span class="onboarding-step-num">Etapa 1</span>
+                                    <span id="ob-step-1-pill" class="onboarding-pill onboarding-pill-wait">Verificando</span>
+                                </div>
+                                <div class="onboarding-step-title">🔑 Identificação & Chave</div>
+                                <div id="ob-step-1-desc" class="onboarding-step-desc">Site cadastrado e com chave de API ativa.</div>
+                            </div>
+                            <button class="onboarding-step-btn" onclick="openModalNewKey()">
+                                <span>➕</span> Nova Chave
+                            </button>
+                        </div>
+
+                        <!-- 2. DNS FIRST-PARTY -->
+                        <div id="ob-step-2" class="onboarding-step-card">
+                            <div>
+                                <div class="onboarding-step-top">
+                                    <span class="onboarding-step-num">Etapa 2</span>
+                                    <span id="ob-step-2-pill" class="onboarding-pill onboarding-pill-wait">Pendente</span>
+                                </div>
+                                <div class="onboarding-step-title">🌐 DNS First-Party</div>
+                                <div id="ob-step-2-desc" class="onboarding-step-desc">Subdomínio CNAME para cookies seguros e anti-adblock.</div>
+                            </div>
+                            <button class="onboarding-step-btn btn-accent" onclick="openMandatoryDnsModal()">
+                                <span>⚙️</span> Configurar DNS
+                            </button>
+                        </div>
+
+                        <!-- 3. TAG NO SITE -->
+                        <div id="ob-step-3" class="onboarding-step-card">
+                            <div>
+                                <div class="onboarding-step-top">
+                                    <span class="onboarding-step-num">Etapa 3</span>
+                                    <span id="ob-step-3-pill" class="onboarding-pill onboarding-pill-wait">Aguardando</span>
+                                </div>
+                                <div class="onboarding-step-title">⚡ Tag no Site</div>
+                                <div id="ob-step-3-desc" class="onboarding-step-desc">Inserção do script no HTML, GTM ou WordPress.</div>
+                            </div>
+                            <button class="onboarding-step-btn" onclick="copyInstallSnippet()">
+                                <span>📋</span> Copiar Snippet
+                            </button>
+                        </div>
+
+                        <!-- 4. SINAL AO VIVO -->
+                        <div id="ob-step-4" class="onboarding-step-card">
+                            <div>
+                                <div class="onboarding-step-top">
+                                    <span class="onboarding-step-num">Etapa 4</span>
+                                    <span id="ob-step-4-pill" class="onboarding-pill onboarding-pill-wait">Aguardando</span>
+                                </div>
+                                <div class="onboarding-step-title">📡 Sinal em Tempo Real</div>
+                                <div id="ob-step-4-desc" class="onboarding-step-desc">Recepção de tráfego e eventos no coletor.</div>
+                            </div>
+                            <button class="onboarding-step-btn" onclick="switchTab('debug', document.getElementById('nav-debug'))">
+                                <span>⚡</span> Abrir DebugView
+                            </button>
+                        </div>
+
+                        <!-- 5. ENVIOS CAPI -->
+                        <div id="ob-step-5" class="onboarding-step-card">
+                            <div>
+                                <div class="onboarding-step-top">
+                                    <span class="onboarding-step-num">Etapa 5</span>
+                                    <span id="ob-step-5-pill" class="onboarding-pill onboarding-pill-opt">Opcional</span>
+                                </div>
+                                <div class="onboarding-step-title">🚀 Envios CAPI</div>
+                                <div id="ob-step-5-desc" class="onboarding-step-desc">Conexão server-side com Meta, Google Ads e LinkedIn.</div>
+                            </div>
+                            <button class="onboarding-step-btn btn-accent" onclick="openIntegrationsWizard()">
+                                <span>🚀</span> Conectar CAPI
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Seção 1: Snippet com Chave Real (Zero Edição) -->
                 <div class="table-card" style="margin-bottom: 1.5rem;">
                     <div class="table-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
@@ -3222,6 +3585,13 @@
                     </div>
 
                     <div style="padding: 1.25rem 1.5rem;">
+                        <!-- Abas de Plataforma para o Snippet de Configurações -->
+                        <div class="doc-tab-buttons" style="margin-bottom: 1rem;">
+                            <button type="button" class="doc-tab-btn active" id="btn-snippet-platform-html" onclick="switchSettingsSnippetPlatform('html')">🌐 HTML / Landing Page</button>
+                            <button type="button" class="doc-tab-btn" id="btn-snippet-platform-gtm" onclick="switchSettingsSnippetPlatform('gtm')">📦 Google Tag Manager (GTM)</button>
+                            <button type="button" class="doc-tab-btn" id="btn-snippet-platform-wp" onclick="switchSettingsSnippetPlatform('wp')">⚡ WordPress / Elementor</button>
+                        </div>
+
                         <div style="background: #020617; border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 10px; padding: 1.15rem; position: relative; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #cbd5e1; overflow-x: auto;">
                             <pre id="snippet-code-box" style="margin: 0; line-height: 1.6;"></pre>
                             <button class="btn-sm-action" id="btn-copy-install-snippet" onclick="copyInstallSnippet()" style="position: absolute; top: 12px; right: 12px; background: rgba(99, 102, 241, 0.25); border-color: rgba(99, 102, 241, 0.5); color: #fff;">
@@ -3287,7 +3657,7 @@
             <!-- ============================================== -->
             <div id="tab-docs" class="tab-pane">
                 <!-- Cabeçalho Interno do Guia -->
-                <div class="doc-section-card" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));">
+                <div class="doc-section-card" style="margin-bottom: 1.25rem; background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));">
                     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
                         <div>
                             <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.4rem;">
@@ -3295,8 +3665,8 @@
                                 <span style="font-size: 0.8rem; color: #10b981; font-weight: 600;">● First-Party 100% Server-Side</span>
                             </div>
                             <h2 style="font-size: 1.7rem; font-weight: 800; color: #fff; margin-bottom: 0.35rem;">Guia de Instalação & SDK de Eventos</h2>
-                            <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
-                                Passo a passo completo de integração nos sites dos clientes, captura de eventos automáticos, disparos manuais JS e deduplicação CAPI.
+                            <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0;">
+                                Jornada completa de onboarding: apontamento DNS de 1ª parte, publicação da tag, captura de eventos e validação ao vivo.
                             </p>
                         </div>
                         <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
@@ -3310,12 +3680,44 @@
                     </div>
                 </div>
 
+                <!-- Stepper Sequencial de Fases da Instalação -->
+                <div class="guide-stepper-nav">
+                    <a href="#doc-etapa-1" class="guide-stepper-item active" onclick="highlightGuideStep(this)">
+                        <div class="guide-stepper-circle">1</div>
+                        <div class="guide-stepper-text">
+                            <span class="guide-stepper-phase">Etapa 1</span>
+                            <span class="guide-stepper-title">DNS First-Party (CNAME)</span>
+                        </div>
+                    </a>
+                    <a href="#doc-etapa-2" class="guide-stepper-item" onclick="highlightGuideStep(this)">
+                        <div class="guide-stepper-circle">2</div>
+                        <div class="guide-stepper-text">
+                            <span class="guide-stepper-phase">Etapa 2</span>
+                            <span class="guide-stepper-title">Inserção da Tag</span>
+                        </div>
+                    </a>
+                    <a href="#doc-etapa-3" class="guide-stepper-item" onclick="highlightGuideStep(this)">
+                        <div class="guide-stepper-circle">3</div>
+                        <div class="guide-stepper-text">
+                            <span class="guide-stepper-phase">Etapa 3</span>
+                            <span class="guide-stepper-title">Captura de Eventos & CAPI</span>
+                        </div>
+                    </a>
+                    <a href="#doc-etapa-4" class="guide-stepper-item" onclick="highlightGuideStep(this)">
+                        <div class="guide-stepper-circle">4</div>
+                        <div class="guide-stepper-text">
+                            <span class="guide-stepper-phase">Etapa 4</span>
+                            <span class="guide-stepper-title">Validação & Teste</span>
+                        </div>
+                    </a>
+                </div>
+
                 <!-- Banner Dinâmico da Chave do Site -->
-                <div class="doc-site-banner">
+                <div class="doc-site-banner" style="margin-bottom: 1.25rem;">
                     <div>
                         <h4 style="font-size: 0.95rem; font-weight: 600; color: #e0e7ff; margin-bottom: 0.2rem;">Chave do Site em Uso (Type-Prefixed ID)</h4>
                         <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
-                            Os códigos e snippets abaixo são sincronizados automaticamente com a chave ativa do site selecionado no menu superior:
+                            Os códigos e snippets abaixo são sincronizados automaticamente com o site ativo selecionado:
                         </p>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
@@ -3324,32 +3726,53 @@
                     </div>
                 </div>
 
-                <!-- Callout de Alerta: DNS First-Party Obrigatório -->
-                <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-                    <div style="display: flex; align-items: center; gap: 0.75rem;">
-                        <span style="font-size: 1.4rem;">🚨</span>
-                        <div>
-                            <strong style="color: #f87171; font-size: 0.9rem;">Apontamento DNS CNAME Obrigatório no Domínio do Cliente</strong>
-                            <p style="margin: 0.2rem 0 0 0; color: #cbd5e1; font-size: 0.8rem; line-height: 1.4;">
-                                Para máxima precisão de <strong>Tempo Real</strong>, <strong>Visitantes Únicos</strong> e evitar bloqueios de navegadores (Safari/Chrome), configure o subdomínio CNAME de 1ª parte antes de publicar a tag.
-                            </p>
-                        </div>
-                    </div>
-                    <button type="button" class="btn-refresh" onclick="openMandatoryDnsModal()" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; font-size: 0.8rem; padding: 0.5rem 1rem; border: none; font-weight: 700; cursor: pointer;">
-                        <span>⚙️</span> O Que Mudar no DNS
-                    </button>
-                </div>
-
-                <!-- PASSO 1: INSTALAÇÃO DA TAG -->
-                <div class="doc-section-card">
+                <!-- ETAPA 1: SUBDOMÍNIO & DNS FIRST-PARTY -->
+                <div id="doc-etapa-1" class="doc-section-card" style="scroll-margin-top: 80px;">
                     <div class="doc-step-header">
-                        <div class="doc-step-number">1</div>
+                        <div class="doc-step-number" style="background: linear-gradient(135deg, #0284c7, #0369a1);">1</div>
                         <div>
-                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Instalação Básica da Tag no Site</h3>
+                            <h3 style="font-size: 1.25rem; font-weight: 700; color: #fff;">Etapa 1: Subdomínio Próprio & DNS First-Party (CNAME)</h3>
+                            <p style="font-size: 0.8rem; color: #38bdf8; margin: 0; font-weight: 600;">🛡️ Máxima Resiliência • Cookies de 13 meses • Proteção contra Adblockers e Safari ITP</p>
                         </div>
                     </div>
                     <p class="doc-step-desc">
-                        Adicione a tag do script preferencialmente dentro da tag <code>&lt;head&gt;</code> ou logo antes do fechamento de <code>&lt;/body&gt;</code> do site cliente. O script é ultraleve (&lt; 4KB) e assíncrono (<code>async</code>), sem nenhum impacto no tempo de carregamento da página.
+                        Antes ou durante a publicação da tag, crie um subdomínio no DNS do cliente (ex: <code>track.seudominio.com.br</code>) apontando como CNAME para nosso coletor. Isso faz com que todo o rastreamento seja <b>100% nativo (First-Party)</b>, blindando seus dados contra bloqueios do Safari (ITP) e garantindo atribuição contínua de até 13 meses.
+                    </p>
+
+                    <div style="background: rgba(11, 17, 32, 0.7); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 1.25rem; margin-bottom: 0.5rem;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; align-items: center;">
+                            <div>
+                                <span style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Tipo de Registro</span>
+                                <div style="font-size: 0.95rem; font-weight: 800; color: #38bdf8; font-family: monospace;">CNAME</div>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Nome / Entrada</span>
+                                <div style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; font-family: monospace;" id="docs-cname-host">track (ou coletor)</div>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Destino / Valor</span>
+                                <div style="font-size: 0.85rem; font-weight: 700; color: #34d399; font-family: monospace;">trackeamento.hnperformancedigital.com.br</div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; justify-content: flex-end; flex-wrap: wrap;">
+                                <button type="button" class="btn-refresh" onclick="openMandatoryDnsModal()" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; font-size: 0.8rem; padding: 0.5rem 0.9rem; border: none; font-weight: 700; cursor: pointer;">
+                                    <span>⚙️</span> Tutorial Passo a Passo do DNS
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ETAPA 2: INSTALAÇÃO DA TAG -->
+                <div id="doc-etapa-2" class="doc-section-card" style="scroll-margin-top: 80px;">
+                    <div class="doc-step-header">
+                        <div class="doc-step-number">2</div>
+                        <div>
+                            <h3 style="font-size: 1.25rem; font-weight: 700; color: #fff;">Etapa 2: Publicação da Tag no Site</h3>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Script ultraleve (&lt; 4KB), assíncrono (async) e com zero impacto no PageSpeed.</p>
+                        </div>
+                    </div>
+                    <p class="doc-step-desc">
+                        Adicione a tag do script preferencialmente dentro da tag <code>&lt;head&gt;</code> ou logo antes do fechamento de <code>&lt;/body&gt;</code> do site cliente. Quando o subdomínio CNAME de 1ª parte estiver verificado, a URL do script se ajustará automaticamente para o domínio do seu cliente:
                     </p>
 
                     <div class="doc-tab-buttons">
@@ -3367,7 +3790,7 @@
                             </div>
                             <pre><code id="snippet-docs-html">&lt;!-- HN Performance Server-Side Tracking SDK --&gt;
 &lt;script 
-  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
+  src="<span class="docs-dynamic-host">https://trackeamento.hnperformancedigital.com.br</span>/sdk/tracker.js" 
   data-site-key="<span class="docs-dynamic-key">hn_site_demo</span>" 
   async&gt;
 &lt;/script&gt;</code></pre>
@@ -3395,7 +3818,7 @@
   window.__HN_SITE_KEY__ = "<span class="docs-dynamic-key">hn_site_demo</span>";
 &lt;/script&gt;
 &lt;script 
-  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js?key=<span class="docs-dynamic-key">hn_site_demo</span>" 
+  src="<span class="docs-dynamic-host">https://trackeamento.hnperformancedigital.com.br</span>/sdk/tracker.js?key=<span class="docs-dynamic-key">hn_site_demo</span>" 
   data-site-key="<span class="docs-dynamic-key">hn_site_demo</span>" 
   async&gt;
 &lt;/script&gt;</code></pre>
@@ -3416,8 +3839,9 @@
                                 <span class="doc-code-lang">Código para o Header</span>
                                 <button class="doc-btn-copy" onclick="copyDocsSnippet('snippet-docs-wp', this)">📋 Copiar Código</button>
                             </div>
-                            <pre><code id="snippet-docs-wp">&lt;script 
-  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
+                            <pre><code id="snippet-docs-wp">&lt;!-- HN Performance Server-Side Tracking SDK (WordPress) --&gt;
+&lt;script 
+  src="<span class="docs-dynamic-host">https://trackeamento.hnperformancedigital.com.br</span>/sdk/tracker.js" 
   data-site-key="<span class="docs-dynamic-key">hn_site_demo</span>" 
   async&gt;
 &lt;/script&gt;</code></pre>
@@ -3425,24 +3849,28 @@
                     </div>
                 </div>
 
-                <!-- PASSO 2: EVENTOS AUTOMÁTICOS -->
-                <div class="doc-section-card">
+                <!-- ETAPA 3: CAPTURA DE EVENTOS & CAPI -->
+                <div id="doc-etapa-3" class="doc-section-card" style="scroll-margin-top: 80px;">
                     <div class="doc-step-header">
-                        <div class="doc-step-number">2</div>
+                        <div class="doc-step-number">3</div>
                         <div>
-                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Eventos Automáticos (Zero Código Adicional)</h3>
+                            <h3 style="font-size: 1.25rem; font-weight: 700; color: #fff;">Etapa 3: Captura de Eventos & Deduplicação CAPI</h3>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Captura nativa zero-código, disparos manuais JS e conformidade com Meta e LinkedIn.</p>
                         </div>
                     </div>
+
+                    <!-- 3.1 Eventos Automáticos -->
+                    <h4 style="font-size: 0.95rem; color: #e0e7ff; margin: 1rem 0 0.5rem 0;">3.1 Eventos Automáticos (Zero Código Adicional)</h4>
                     <p class="doc-step-desc">
-                        Assim que a tag é carregada, o SDK ativa 3 ouvintes globais para capturar os principais momentos da jornada do usuário sem que você precise escrever código JavaScript:
+                        Assim que a tag é carregada, o SDK ativa 3 ouvintes globais para capturar os principais momentos da jornada sem necessidade de código adicional:
                     </p>
 
-                    <div class="doc-event-grid">
+                    <div class="doc-event-grid" style="margin-bottom: 1.5rem;">
                         <div class="doc-event-card">
                             <span class="doc-event-badge doc-badge-pv">page_view</span>
                             <h4 style="font-size: 0.9rem; margin-bottom: 0.35rem; color: #fff;">Visualização de Página</h4>
                             <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
-                                Disparado no carregamento da URL. Salva e preserva no <code>localStorage</code> todos os parâmetros de anúncio da URL (<code>utm_source</code>, <code>utm_medium</code>, <code>utm_campaign</code>, <code>gclid</code>, <code>fbclid</code>, etc.) em modelo First-Touch resiliente.
+                                Disparado no carregamento da URL. Preserva parâmetros de anúncio da URL (<code>utm_*</code>, <code>gclid</code>, <code>fbclid</code>) em modelo First-Touch resiliente.
                             </p>
                         </div>
 
@@ -3450,7 +3878,7 @@
                             <span class="doc-event-badge doc-badge-wa">whatsapp_click</span>
                             <h4 style="font-size: 0.9rem; margin-bottom: 0.35rem; color: #fff;">Cliques de WhatsApp</h4>
                             <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
-                                Intercepta automaticamente qualquer clique em links <code>wa.me/*</code>, <code>api.whatsapp.com/*</code> e <code>whatsapp.com/*</code>, gravando a URL do WhatsApp e o texto do botão clicado.
+                                Intercepta automaticamente cliques em links <code>wa.me/*</code>, <code>api.whatsapp.com/*</code> e botões de contato, gravando texto e link de destino.
                             </p>
                         </div>
 
@@ -3458,20 +3886,13 @@
                             <span class="doc-event-badge doc-badge-lead">lead (Auto-Form)</span>
                             <h4 style="font-size: 0.9rem; margin-bottom: 0.35rem; color: #fff;">Submissão de Formulários</h4>
                             <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
-                                Monitora envios de <code>&lt;form&gt;</code> na página, extrai e normaliza automaticamente campos de e-mail, telefone/celular e nome do lead, enviando via <code>navigator.sendBeacon</code> sem atrasar a navegação.
+                                Monitora envios de <code>&lt;form&gt;</code> na página, extrai e normaliza automaticamente e-mail, telefone e nome via <code>navigator.sendBeacon</code>.
                             </p>
                         </div>
                     </div>
-                </div>
 
-                <!-- PASSO 3: DISPAROS MANUAIS JS -->
-                <div class="doc-section-card">
-                    <div class="doc-step-header">
-                        <div class="doc-step-number">3</div>
-                        <div>
-                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Disparos Manuais via JavaScript (<code>window.hnTrack</code>)</h3>
-                        </div>
-                    </div>
+                    <!-- 3.2 Disparos Manuais JS -->
+                    <h4 style="font-size: 0.95rem; color: #e0e7ff; margin: 1.5rem 0 0.5rem 0;">3.2 Disparos Manuais via JavaScript (<code>window.hnTrack</code>)</h4>
                     <p class="doc-step-desc">
                         Para funis com modais JS, popups, botões customizados ou checkout de e-commerce, use a função global <code>window.hnTrack(eventName, options)</code>:
                     </p>
@@ -3523,7 +3944,7 @@
                             </div>
                             <pre><code id="code-docs-wa">window.hnTrack('whatsapp_click', {
   user_data: {
-    phone: '5521999998888' // se disponível
+    phone: '5521999998888'
   },
   custom_data: {
     button_name: 'Botão Flutuante Inferior Direito',
@@ -3537,7 +3958,7 @@
                     <!-- Exemplo 3: Purchase -->
                     <div id="subtab-docs-events-purchase" class="doc-sub-content">
                         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
-                            Para páginas de "Obrigado pela Compra" / Confirmação de Pedido em e-commerces, plataformas Hotmart, Eduzz, Kiwify ou checkout próprio.
+                            Para páginas de confirmação de pedido em e-commerces, plataformas Hotmart, Eduzz, Kiwify ou checkout próprio.
                         </p>
                         <div class="doc-code-box">
                             <div class="doc-code-header">
@@ -3627,7 +4048,7 @@
                     <!-- Exemplo 7: Contact -->
                     <div id="subtab-docs-events-contact" class="doc-sub-content">
                         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">
-                            Para cliques em links telefônicos (<code>tel:+5511...</code>), links de e-mail (<code>mailto:contato@...</code>) ou clique em agendamento de ligação.
+                            Para cliques em links telefônicos (<code>tel:+5511...</code>), links de e-mail (<code>mailto:...</code>) ou clique em agendamento.
                         </p>
                         <div class="doc-code-box">
                             <div class="doc-code-header">
@@ -3641,23 +4062,16 @@
 });</code></pre>
                         </div>
                     </div>
-                </div>
 
-                <!-- PASSO 4: DEDUPLICAÇÃO COM META PIXEL -->
-                <div class="doc-section-card">
-                    <div class="doc-step-header">
-                        <div class="doc-step-number">4</div>
-                        <div>
-                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Deduplicação 100% Perfeita com Meta Pixel & CAPI</h3>
-                        </div>
-                    </div>
+                    <!-- 3.3 Deduplicação com Meta Pixel -->
+                    <h4 style="font-size: 0.95rem; color: #e0e7ff; margin: 1.5rem 0 0.5rem 0;">3.3 Deduplicação 100% Perfeita com Meta Pixel & CAPI</h4>
                     <p class="doc-step-desc">
-                        Para garantir que o Meta Ads não duplique conversões quando o cliente tiver o Meta Pixel do navegador e o nosso Tracking Server-side rodando juntos, a função <code>window.hnTrack</code> retorna automaticamente o <code>event_id</code> (UUID v4) gerado no navegador:
+                        Para garantir que o Meta Ads não duplique conversões quando o Meta Pixel do navegador e o Server-side tracking operam juntos, <code>window.hnTrack</code> retorna automaticamente o <code>event_id</code> gerado:
                     </p>
 
                     <div class="doc-code-box">
                         <div class="doc-code-header">
-                            <span class="doc-code-lang">Exemplo de Deduplicação (Browser Pixel + HN Engine)</span>
+                            <span class="doc-code-lang">Deduplicação (Browser Pixel + Server-Side)</span>
                             <button class="doc-btn-copy" onclick="copyDocsSnippet('code-docs-dedup', this)">📋 Copiar Código</button>
                         </div>
                         <pre><code id="code-docs-dedup">// 1. Dispara no HN Tracker Engine e obtém o eventId único
@@ -3670,50 +4084,43 @@ if (typeof fbq === 'function' && eventId) {
   fbq('track', 'Lead', {}, { eventID: eventId });
 }</code></pre>
                     </div>
-                </div>
 
-                <!-- PASSO 5: INTEGRAÇÃO LINKEDIN & CAPI -->
-                <div class="doc-section-card">
-                    <div class="doc-step-header">
-                        <div class="doc-step-number" style="background: linear-gradient(135deg, #0a66c2, #0077b5);">in</div>
-                        <div>
-                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Passo 5: Envios Server-Side para LinkedIn CAPI (Direct API)</h3>
-                        </div>
-                    </div>
+                    <!-- 3.4 Conexão Server-Side LinkedIn CAPI -->
+                    <h4 style="font-size: 0.95rem; color: #e0e7ff; margin: 1.5rem 0 0.5rem 0;">3.4 Envios Server-Side para LinkedIn CAPI (Direct API)</h4>
                     <p class="doc-step-desc">
-                        O Trackeamento HN possui conector nativo para a <b>LinkedIn Conversions API (Direct API)</b>, permitindo o encaminhamento de conversões qualificadas (como <code>lead</code>, <code>purchase</code> e <code>contact</code>) diretamente aos servidores do LinkedIn Marketing Solutions com sanitização e hashing SHA-256 em conformidade com as diretrizes oficiais.
+                        Encaminhe conversões qualificadas diretamente aos servidores do LinkedIn com hashing SHA-256 e conformidade oficial através do Wizard:
                     </p>
 
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                        <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border);">
-                            <h4 style="color: #38bdf8; margin-bottom: 0.4rem; font-size: 0.92rem;">1. Gerar Access Token</h4>
-                            <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin: 0;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 0.75rem;">
+                        <div style="background: rgba(15, 23, 42, 0.6); padding: 1.15rem; border-radius: 10px; border: 1px solid var(--border);">
+                            <h4 style="color: #38bdf8; margin-bottom: 0.35rem; font-size: 0.88rem;">1. Gerar Access Token</h4>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
                                 No Campaign Manager, acesse <i>Mensurar > Gerenciador de Sinais > Direct API</i> e gere seu token de acesso.
                             </p>
                         </div>
-                        <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border);">
-                            <h4 style="color: #38bdf8; margin-bottom: 0.4rem; font-size: 0.92rem;">2. Criar Regra de Conversão</h4>
-                            <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin: 0;">
+                        <div style="background: rgba(15, 23, 42, 0.6); padding: 1.15rem; border-radius: 10px; border: 1px solid var(--border);">
+                            <h4 style="color: #38bdf8; margin-bottom: 0.35rem; font-size: 0.88rem;">2. Criar Regra de Conversão</h4>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
                                 Em <i>Rastreamento de conversões</i>, crie uma conversão via <b>Direct API</b> e copie o <b>Conversion Rule ID</b>.
                             </p>
                         </div>
-                        <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border);">
-                            <h4 style="color: #38bdf8; margin-bottom: 0.4rem; font-size: 0.92rem;">3. Ativar no Wizard</h4>
-                            <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin: 0;">
+                        <div style="background: rgba(15, 23, 42, 0.6); padding: 1.15rem; border-radius: 10px; border: 1px solid var(--border);">
+                            <h4 style="color: #38bdf8; margin-bottom: 0.35rem; font-size: 0.88rem;">3. Ativar no Wizard</h4>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; margin: 0;">
                                 Clique em <b>Envios & CAPI (Wizard)</b> no menu lateral, selecione LinkedIn e salve as credenciais.
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <!-- PASSO 6: CONSOLE DE TESTE INTERATIVO -->
-                <div class="doc-section-card doc-tester-card">
+                <!-- ETAPA 4: VALIDAÇÃO & CONSOLE DE TESTE -->
+                <div id="doc-etapa-4" class="doc-section-card doc-tester-card" style="scroll-margin-top: 80px;">
                     <div class="doc-step-header">
-                        <div class="doc-step-number" style="background: linear-gradient(135deg, #10b981, #059669);">🧪</div>
+                        <div class="doc-step-number" style="background: linear-gradient(135deg, #10b981, #059669);">4</div>
                         <div>
-                            <h3 style="font-size: 1.2rem; font-weight: 700; color: #fff;">Passo 6: Console de Teste Interativo (Playground)</h3>
+                            <h3 style="font-size: 1.25rem; font-weight: 700; color: #fff;">Etapa 4: Validação & Console de Teste Interativo (Playground)</h3>
                             <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
-                                Envie um evento em tempo real a partir desta tela para testar a comunicação imediata com o coletor em produção:
+                                Envie um evento simulado agora mesmo para testar a comunicação em tempo real com o coletor em produção:
                             </p>
                         </div>
                     </div>
@@ -3749,7 +4156,6 @@ if (typeof fbq === 'function' && eventId) {
                             <span>⚡</span> Ver no DebugView
                         </button>
                     </div>
-
                 </div>
             </div>
 
@@ -7333,6 +7739,18 @@ if (typeof fbq === 'function' && eventId) {
             return '';
         }
 
+        let currentSettingsSnippetPlatform = 'html';
+
+        function switchSettingsSnippetPlatform(platform) {
+            currentSettingsSnippetPlatform = platform;
+            document.querySelectorAll('#tab-settings .doc-tab-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById(`btn-snippet-platform-${platform}`);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            const selectKeyEl = document.getElementById('select-active-snippet-key');
+            renderInstallSnippet(selectKeyEl ? selectKeyEl.value : '');
+        }
+
         async function loadSiteSettingsTab() {
             const siteId = getActiveSettingsSiteId();
             const keysTbody = document.getElementById('keys-table-body');
@@ -7355,10 +7773,177 @@ if (typeof fbq === 'function' && eventId) {
                 siteKeysList = await res.json();
                 renderKeysTable(siteKeysList);
                 populateSnippetKeySelect(siteKeysList);
+                await updateSiteOnboardingChecklist(siteId);
             } catch (err) {
                 console.error("Erro ao carregar configurações do site:", err);
                 keysTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #f87171; padding: 2rem;">Erro ao carregar chaves: ${escapeHTML(err.message)}</td></tr>`;
             }
+        }
+
+        async function updateSiteOnboardingChecklist(siteId) {
+            if (!siteId) return;
+
+            const siteObj = (globalSitesList || []).find(s => s.id === siteId);
+            if (siteObj) {
+                const nameEl = document.getElementById('onboarding-site-name');
+                const idEl = document.getElementById('onboarding-site-id');
+                const domainEl = document.getElementById('onboarding-site-domain');
+                if (nameEl) nameEl.textContent = siteObj.name || 'Site Sem Nome';
+                if (idEl) idEl.textContent = siteObj.id;
+                if (domainEl) domainEl.textContent = siteObj.domain ? `🌐 ${siteObj.domain}` : '';
+            }
+
+            let completedSteps = 0;
+            const totalSteps = 5;
+
+            // 1. Identificação & Chave Ativa
+            const step1Card = document.getElementById('ob-step-1');
+            const step1Pill = document.getElementById('ob-step-1-pill');
+            const step1Desc = document.getElementById('ob-step-1-desc');
+            const activeKeys = (siteKeysList || []).filter(k => k.status === 'active');
+
+            if (activeKeys.length > 0) {
+                completedSteps++;
+                if (step1Card) step1Card.className = 'onboarding-step-card is-done';
+                if (step1Pill) {
+                    step1Pill.className = 'onboarding-pill onboarding-pill-done';
+                    step1Pill.textContent = '✓ Concluído';
+                }
+                if (step1Desc) step1Desc.textContent = `${activeKeys.length} chave(s) ativa(s) configurada(s).`;
+            } else {
+                if (step1Card) step1Card.className = 'onboarding-step-card is-pending';
+                if (step1Pill) {
+                    step1Pill.className = 'onboarding-pill onboarding-pill-pending';
+                    step1Pill.textContent = 'Pendente';
+                }
+                if (step1Desc) step1Desc.textContent = 'Nenhuma chave ativa encontrada. Gere uma chave abaixo.';
+            }
+
+            // 2. DNS First-Party (CNAME)
+            const step2Card = document.getElementById('ob-step-2');
+            const step2Pill = document.getElementById('ob-step-2-pill');
+            const step2Desc = document.getElementById('ob-step-2-desc');
+
+            if (siteObj && siteObj.cname_verified) {
+                completedSteps++;
+                if (step2Card) step2Card.className = 'onboarding-step-card is-done';
+                if (step2Pill) {
+                    step2Pill.className = 'onboarding-pill onboarding-pill-done';
+                    step2Pill.textContent = '✓ Verificado';
+                }
+                if (step2Desc) step2Desc.textContent = `CNAME ativo: ${siteObj.cname_subdomain}`;
+            } else if (siteObj && siteObj.cname_subdomain) {
+                if (step2Card) step2Card.className = 'onboarding-step-card is-pending';
+                if (step2Pill) {
+                    step2Pill.className = 'onboarding-pill onboarding-pill-pending';
+                    step2Pill.textContent = 'Propagando...';
+                }
+                if (step2Desc) step2Desc.textContent = `Aguardando propagação de ${siteObj.cname_subdomain}`;
+            } else {
+                if (step2Card) step2Card.className = 'onboarding-step-card is-pending';
+                if (step2Pill) {
+                    step2Pill.className = 'onboarding-pill onboarding-pill-pending';
+                    step2Pill.textContent = 'Pendente';
+                }
+                if (step2Desc) step2Desc.textContent = 'Subdomínio de 1ª parte não configurado.';
+            }
+
+            // 3. Tag no Site & 4. Sinal em Tempo Real
+            const step3Card = document.getElementById('ob-step-3');
+            const step3Pill = document.getElementById('ob-step-3-pill');
+            const step3Desc = document.getElementById('ob-step-3-desc');
+
+            const step4Card = document.getElementById('ob-step-4');
+            const step4Pill = document.getElementById('ob-step-4-pill');
+            const step4Desc = document.getElementById('ob-step-4-desc');
+
+            let totalEvents = 0;
+            let latestTraffic = null;
+            (siteKeysList || []).forEach(k => {
+                if (k.events_count) totalEvents += k.events_count;
+                if (k.last_used_at) {
+                    const d = new Date(k.last_used_at);
+                    if (!latestTraffic || d > latestTraffic) latestTraffic = d;
+                }
+            });
+
+            if (totalEvents > 0) {
+                completedSteps++;
+                if (step3Card) step3Card.className = 'onboarding-step-card is-done';
+                if (step3Pill) {
+                    step3Pill.className = 'onboarding-pill onboarding-pill-done';
+                    step3Pill.textContent = '✓ Tag Detectada';
+                }
+                if (step3Desc) step3Desc.textContent = `${totalEvents.toLocaleString()} evento(s) já capturado(s).`;
+            } else {
+                if (step3Card) step3Card.className = 'onboarding-step-card is-pending';
+                if (step3Pill) {
+                    step3Pill.className = 'onboarding-pill onboarding-pill-wait';
+                    step3Pill.textContent = 'Aguardando';
+                }
+                if (step3Desc) step3Desc.textContent = 'Cole o snippet no site para iniciar a coleta.';
+            }
+
+            if (latestTraffic) {
+                completedSteps++;
+                if (step4Card) step4Card.className = 'onboarding-step-card is-done';
+                if (step4Pill) {
+                    step4Pill.className = 'onboarding-pill onboarding-pill-done';
+                    step4Pill.textContent = '✓ Sinal Ativo';
+                }
+                const formattedTime = latestTraffic.toLocaleDateString('pt-BR') + ' ' + latestTraffic.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                if (step4Desc) step4Desc.textContent = `Último sinal recebido: ${formattedTime}`;
+            } else {
+                if (step4Card) step4Card.className = 'onboarding-step-card is-pending';
+                if (step4Pill) {
+                    step4Pill.className = 'onboarding-pill onboarding-pill-wait';
+                    step4Pill.textContent = 'Aguardando';
+                }
+                if (step4Desc) step4Desc.textContent = 'Nenhum sinal recebido nas chaves ativas.';
+            }
+
+            // 5. Envios CAPI
+            const step5Card = document.getElementById('ob-step-5');
+            const step5Pill = document.getElementById('ob-step-5-pill');
+            const step5Desc = document.getElementById('ob-step-5-desc');
+
+            try {
+                const integRes = await fetch(`/api/v1/sites/${siteId}/integrations`);
+                if (integRes.ok) {
+                    const integData = await integRes.json();
+                    let activePlatforms = [];
+                    if (integData) {
+                        for (const [k, v] of Object.entries(integData)) {
+                            if (v && v.is_active) activePlatforms.push(k.replace('_capi', '').toUpperCase());
+                        }
+                    }
+                    if (activePlatforms.length > 0) {
+                        completedSteps++;
+                        if (step5Card) step5Card.className = 'onboarding-step-card is-done';
+                        if (step5Pill) {
+                            step5Pill.className = 'onboarding-pill onboarding-pill-done';
+                            step5Pill.textContent = '✓ CAPI Ativo';
+                        }
+                        if (step5Desc) step5Desc.textContent = `Destinos conectados: ${activePlatforms.join(', ')}`;
+                    } else {
+                        if (step5Card) step5Card.className = 'onboarding-step-card is-optional';
+                        if (step5Pill) {
+                            step5Pill.className = 'onboarding-pill onboarding-pill-opt';
+                            step5Pill.textContent = 'Opcional';
+                        }
+                        if (step5Desc) step5Desc.textContent = 'Disparos server-side não configurados ainda.';
+                    }
+                }
+            } catch(e) {
+                console.warn('Falha ao checar integrações do site:', e);
+            }
+
+            // Barra e Percentual Geral
+            const pct = Math.round((completedSteps / totalSteps) * 100);
+            const fillEl = document.getElementById('onboarding-progress-fill');
+            const pctEl = document.getElementById('onboarding-progress-pct');
+            if (fillEl) fillEl.style.width = `${pct}%`;
+            if (pctEl) pctEl.textContent = `${pct}% (${completedSteps} de ${totalSteps} etapas concluídas)`;
         }
 
         function populateSnippetKeySelect(keys) {
@@ -7402,7 +7987,14 @@ if (typeof fbq === 'function' && eventId) {
                 origin = `https://${currentSiteObj.cname_subdomain}`;
             }
 
-            const snippet = `<!-- HN Performance Server-Side Tracking SDK (Cookieless) -->\n<script \n  src="${origin}/sdk/tracker.js" \n  data-site-key="${key}" \n  async>\n<` + `/script>`;
+            let snippet = '';
+            if (currentSettingsSnippetPlatform === 'gtm') {
+                snippet = `<!-- HN Performance Server-Side Tracking SDK (Google Tag Manager) -->\n<script>\n  window.__HN_SITE_KEY__ = "${key}";\n<` + `/script>\n<script \n  src="${origin}/sdk/tracker.js?key=${key}" \n  data-site-key="${key}" \n  async>\n<` + `/script>`;
+            } else if (currentSettingsSnippetPlatform === 'wp') {
+                snippet = `<!-- HN Performance Server-Side Tracking SDK (WordPress / WPCode / Elementor) -->\n<!-- Cole este código no Header do seu WordPress (<head>) -->\n<script \n  src="${origin}/sdk/tracker.js" \n  data-site-key="${key}" \n  async>\n<` + `/script>`;
+            } else {
+                snippet = `<!-- HN Performance Server-Side Tracking SDK (HTML / Landing Page) -->\n<script \n  src="${origin}/sdk/tracker.js" \n  data-site-key="${key}" \n  async>\n<` + `/script>`;
+            }
             snippetBox.textContent = snippet;
         }
 
@@ -7576,13 +8168,33 @@ if (typeof fbq === 'function' && eventId) {
         // ========================================================
         let currentDocsActiveKey = '';
 
+        function highlightGuideStep(element) {
+            document.querySelectorAll('.guide-stepper-item').forEach(el => el.classList.remove('active'));
+            if (element) element.classList.add('active');
+        }
+
         async function syncDocsTabKey() {
             const siteId = getActiveSettingsSiteId();
             const inputEl = document.getElementById('docs-global-site-key');
+            const cnameHostEl = document.getElementById('docs-cname-host');
+
+            let activeKey = 'hn_site_demo';
+            let activeHost = 'https://trackeamento.hnperformancedigital.com.br';
+
+            const found = (globalSitesList || []).find(s => s.id === siteId);
+            if (found) {
+                if (cnameHostEl) {
+                    cnameHostEl.textContent = found.cname_subdomain || ('track.' + (found.domain || 'seudominio.com.br'));
+                }
+                if (found.cname_subdomain && found.cname_verified) {
+                    activeHost = `https://${found.cname_subdomain}`;
+                }
+            }
+
             if (!siteId) {
                 currentDocsActiveKey = 'hn_site_demo';
                 if (inputEl) inputEl.value = 'Cadastre ou selecione um site no topo';
-                updateDocsSnippetKeys('hn_site_demo');
+                updateDocsSnippetKeys('hn_site_demo', activeHost);
                 return;
             }
 
@@ -7592,27 +8204,32 @@ if (typeof fbq === 'function' && eventId) {
                     const keys = await res.json();
                     const activeKeyObj = keys.find(k => k.status === 'active');
                     if (activeKeyObj) {
-                        currentDocsActiveKey = activeKeyObj.key;
-                        if (inputEl) inputEl.value = activeKeyObj.key;
-                        updateDocsSnippetKeys(activeKeyObj.key);
-                        return;
+                        activeKey = activeKeyObj.key;
+                    } else if (found && found.api_key) {
+                        activeKey = found.api_key;
                     }
+                } else if (found && found.api_key) {
+                    activeKey = found.api_key;
                 }
-                const found = (globalSitesList || []).find(s => s.id === siteId);
-                const k = (found && found.api_key) ? found.api_key : 'hn_site_' + siteId;
-                currentDocsActiveKey = k;
-                if (inputEl) inputEl.value = k;
-                updateDocsSnippetKeys(k);
             } catch (err) {
                 console.error("Erro ao sincronizar chave com docs:", err);
             }
+
+            currentDocsActiveKey = activeKey;
+            if (inputEl) inputEl.value = activeKey;
+            updateDocsSnippetKeys(activeKey, activeHost);
         }
 
-        function updateDocsSnippetKeys(key) {
+        function updateDocsSnippetKeys(key, host) {
             key = (key || '').trim() || 'hn_site_demo';
             document.querySelectorAll('.docs-dynamic-key').forEach(el => {
                 el.textContent = key;
             });
+            if (host) {
+                document.querySelectorAll('.docs-dynamic-host').forEach(el => {
+                    el.textContent = host;
+                });
+            }
         }
 
         function switchDocsSubTab(group, tabName, btn) {
