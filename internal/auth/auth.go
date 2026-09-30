@@ -263,13 +263,15 @@ func (s *Service) GetUserFromCtx(c *fiber.Ctx) (User, bool) {
 	return user, true
 }
 
-// RequireAuth middleware que bloqueia requisições não autenticadas
+// RequireAuth middleware que bloqueia requisições não autenticadas e injeta dados do usuário no contexto
 func (s *Service) RequireAuth() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		_, ok := s.GetUserFromCtx(c)
+		user, ok := s.GetUserFromCtx(c)
 		if !ok {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "autenticacao necessaria"})
 		}
+		c.Locals("user", user.Username)
+		c.Locals("currentUser", user)
 		return c.Next()
 	}
 }

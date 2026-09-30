@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -31,6 +32,19 @@ func NewHTTPClient(timeout time.Duration) *HTTPClient {
 		client: &http.Client{
 			Transport: transport,
 			Timeout:   timeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return fmt.Errorf("limite maximo de redirecionamentos atingido (10)")
+				}
+				env := os.Getenv("ENV")
+				if env == "" {
+					env = "production"
+				}
+				if err := ValidateOutboundURL(req.URL.String(), env); err != nil {
+					return fmt.Errorf("redirecionamento bloqueado por politica anti-ssrf: %w", err)
+				}
+				return nil
+			},
 		},
 	}
 }

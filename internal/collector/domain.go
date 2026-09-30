@@ -17,32 +17,52 @@ type SiteMetadata struct {
 	ID              string
 	AllowedDomains  []string
 	PrivacySettings *PrivacySettings
+	CnameSubdomain  string
 }
 
-// ExtractOriginDomain extrai o domínio limpo da requisição.
+// ExtractOriginDomain extrai o domínio limpo da requisição conforme a Abordagem B.
 // Prioriza os cabeçalhos padrão de navegador Origin e Referer.
-// Se ambos estiverem ausentes (ex: políticas restritivas no-referrer, sendBeacon ou modo preview do GTM)
-// ou se for chamada server-side autenticada (isServerAuth), realiza fallback seguro para a URL do payload (req.URL / req.PageURL / req.Referrer).
-// O domínio extraído ainda é estritamente validado contra a whitelist de domínios permitidos do site.
-func ExtractOriginDomain(c *fiber.Ctx, req *EventRequest, isServerAuth bool) string {
+// Se ambos estiverem ausentes:
+// - Aceita a URL do payload (req.URL / req.PageURL / req.Referrer) EXCLUSIVAMENTE se isServerAuth for true (chamada server-side com X-Server-Key)
+//   OU se a requisição estiver transitando pelo túnel CNAME First-Party do site (c.Hostname() == cname_subdomain).
+// - Requisições anônimas sem cabeçalho de navegador originadas de rotas padrão têm o domínio rejeitado (retorna "").
+func ExtractOriginDomain(c *fiber.Ctx, req *EventRequest, isServerAuth bool, cnameSubdomain ...string) string {
 	// 1. Tenta header Origin (enviado por fetch/XHR do navegador)
-	origin := strings.TrimSpace(c.Get("Origin"))
-	if origin != "" {
-		if d := cleanHost(origin); d != "" {
-			return d
+	if c != nil {
+		origin := strings.TrimSpace(c.Get("Origin"))
+		if origin != "" {
+			if d := cleanHost(origin); d != "" {
+				return d
+			}
+		}
+
+		// 2. Tenta header Referer
+		referer := strings.TrimSpace(c.Get("Referer"))
+		if referer != "" {
+			if d := cleanHost(referer); d != "" {
+				return d
+			}
 		}
 	}
 
-	// 2. Tenta header Referer
-	referer := strings.TrimSpace(c.Get("Referer"))
-	if referer != "" {
-		if d := cleanHost(referer); d != "" {
-			return d
+	// 3. Fallback restrito (Abordagem B):
+	// Apenas aceita o payload de URL se a requisição for autenticada server-side (isServerAuth)
+	// OU se a conexão chegou diretamente via CNAME First-Party do site.
+	allowPayloadFallback := isServerAuth
+	if !allowPayloadFallback && c != nil && len(cnameSubdomain) > 0 && cnameSubdomain[0] != "" {
+		expectedCname := cleanHost(cnameSubdomain[0])
+		if expectedCname != "" {
+			currentHost := cleanHost(c.Hostname())
+			if fwdHost := c.Get("X-Forwarded-Host"); fwdHost != "" {
+				currentHost = cleanHost(fwdHost)
+			}
+			if currentHost == expectedCname {
+				allowPayloadFallback = true
+			}
 		}
 	}
 
-	// 3. Fallback: se Origin e Referer estiverem ausentes ou se for chamada server-side autenticada
-	if req != nil {
+	if allowPayloadFallback && req != nil {
 		pageURL := req.URL
 		if pageURL == "" {
 			pageURL = req.PageURL
@@ -578,6 +598,7 @@ func (h *Handler) resolveSiteByHost(ctx context.Context, host string) (*SiteMeta
 				ID:              siteID,
 				AllowedDomains:  domains,
 				PrivacySettings: privacy,
+				CnameSubdomain:  clean,
 			}
 			h.siteKeys.Store("host:"+clean, meta)
 			return meta, true
@@ -587,7 +608,8 @@ func (h *Handler) resolveSiteByHost(ctx context.Context, host string) (*SiteMeta
 	return nil, false
 }
 
-// HandleCheckCnameAuthorized é consultado pelo Caddy (on_demand_tls ask) para autorizar emissão dinâmica de SSL
+// HandleCheckCnameAuthorized é consultado pelo Caddy (on_demand_tls ask) para autorizar emissão dinâmica de SSL.
+// Implementa política fail-closed retornando 503 indisponivel em caso de falha de conexão com a base de dados.
 func (h *Handler) HandleCheckCnameAuthorized(c *fiber.Ctx) error {
 	domain := cleanHost(c.Query("domain"))
 	if domain == "" {
@@ -595,7 +617,7 @@ func (h *Handler) HandleCheckCnameAuthorized(c *fiber.Ctx) error {
 	}
 
 	if h.pg == nil || h.pg.Pool == nil {
-		return c.Status(fiber.StatusOK).SendString("ok")
+		return c.Status(fiber.StatusServiceUnavailable).SendString("indisponivel")
 	}
 
 	var exists bool
@@ -605,14 +627,18 @@ func (h *Handler) HandleCheckCnameAuthorized(c *fiber.Ctx) error {
 		)
 	`, domain).Scan(&exists)
 
-	if err == nil && exists {
+	if err != nil {
+		return c.Status(fiber.StatusServiceUnavailable).SendString("indisponivel")
+	}
+
+	if exists {
 		return c.Status(fiber.StatusOK).SendString("ok")
 	}
 
 	return c.Status(fiber.StatusForbidden).SendString("nao autorizado")
 }
 
-// HandleVerifyCname verifica se o apontamento CNAME DNS do cliente está ativo e aponta para a VPS
+// HandleVerifyCname verifica se o apontamento CNAME DNS do cliente está ativo e aponta para a VPS com timeout de 3s
 func (h *Handler) HandleVerifyCname(c *fiber.Ctx) error {
 	var req struct {
 		SiteID    string `json:"site_id"`
@@ -628,11 +654,14 @@ func (h *Handler) HandleVerifyCname(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "site_id e subdomain sao obrigatorios"})
 	}
 
-	// 1. Resolução DNS real
-	cnameTarget, errDNS := net.LookupCNAME(subdomain)
+	// 1. Resolução DNS real com timeout estrito de 3 segundos
+	dnsCtx, dnsCancel := context.WithTimeout(c.Context(), 3*time.Second)
+	defer dnsCancel()
+
+	cnameTarget, errDNS := net.DefaultResolver.LookupCNAME(dnsCtx, subdomain)
 	var resolvedIPs []string
 	if errDNS == nil {
-		resolvedIPs, _ = net.LookupHost(subdomain)
+		resolvedIPs, _ = net.DefaultResolver.LookupHost(dnsCtx, subdomain)
 	}
 
 	dnsOk := (errDNS == nil && cnameTarget != "") || len(resolvedIPs) > 0

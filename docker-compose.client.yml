@@ -17,8 +17,8 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis_secret_pass}"]
     ports:
-      # Portas no host opcionais e configuráveis para evitar conflito com a SPS Power (6379)
-      - "${REDIS_HOST_PORT:-16379}:6379"
+      # Portas no host opcionais e restritas ao localhost para evitar exposição pública
+      - "127.0.0.1:${REDIS_HOST_PORT:-16379}:6379"
     volumes:
       - "./data/${CLIENT_SLUG:-cliente}/redis:/data"
     networks:
@@ -33,8 +33,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-tracking_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_secret_pass}
     ports:
-      # Conflito evitado: SPS Power usa 5432, o novo cliente usa 15432
-      - "${POSTGRES_HOST_PORT:-15432}:5432"
+      # Conflito evitado e restrito ao localhost: SPS Power usa 5432, o novo cliente usa 15432
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-15432}:5432"
     volumes:
       - "./data/${CLIENT_SLUG:-cliente}/postgres:/var/lib/postgresql/data"
       - "./migrations/postgres:/docker-entrypoint-initdb.d"
@@ -50,9 +50,9 @@ services:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_secret_pass}
     ports:
-      # Conflito evitado: SPS Power usa 8123/9000, novo cliente usa 18123/19000
-      - "${CLICKHOUSE_HTTP_HOST_PORT:-18123}:8123"
-      - "${CLICKHOUSE_NATIVE_HOST_PORT:-19000}:9000"
+      # Restrito ao localhost: SPS Power usa 8123/9000, novo cliente usa 18123/19000
+      - "127.0.0.1:${CLICKHOUSE_HTTP_HOST_PORT:-18123}:8123"
+      - "127.0.0.1:${CLICKHOUSE_NATIVE_HOST_PORT:-19000}:9000"
     volumes:
       - "./data/${CLIENT_SLUG:-cliente}/clickhouse:/var/lib/clickhouse"
       - "./migrations/clickhouse:/docker-entrypoint-initdb.d"

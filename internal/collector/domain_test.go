@@ -66,44 +66,60 @@ func TestIsDomainAllowed(t *testing.T) {
 
 func TestExtractOriginDomain(t *testing.T) {
 	tests := []struct {
-		name         string
-		originHdr    string
-		refererHdr   string
-		reqURL       string
-		isServerAuth bool
-		expected     string
+		name           string
+		originHdr      string
+		refererHdr     string
+		hostHdr        string
+		cnameSubdomain string
+		reqURL         string
+		isServerAuth   bool
+		expected       string
 	}{
 		{
-			name:         "Header Origin de navegador legítimo",
-			originHdr:    "https://spspower.com.br",
-			refererHdr:   "",
-			reqURL:       "https://evil.com/fake",
-			isServerAuth: false,
-			expected:     "spspower.com.br",
+			name:           "Header Origin de navegador legítimo",
+			originHdr:      "https://spspower.com.br",
+			refererHdr:     "",
+			reqURL:         "https://evil.com/fake",
+			isServerAuth:   false,
+			cnameSubdomain: "",
+			expected:       "spspower.com.br",
 		},
 		{
-			name:         "Header Referer quando Origin ausente",
-			originHdr:    "",
-			refererHdr:   "https://lp.spspower.com.br/contato?utm=1",
-			reqURL:       "https://evil.com/fake",
-			isServerAuth: false,
-			expected:     "lp.spspower.com.br",
+			name:           "Header Referer quando Origin ausente",
+			originHdr:      "",
+			refererHdr:     "https://lp.spspower.com.br/contato?utm=1",
+			reqURL:         "https://evil.com/fake",
+			isServerAuth:   false,
+			cnameSubdomain: "",
+			expected:       "lp.spspower.com.br",
 		},
 		{
-			name:         "Fallback seguro via payload req.URL quando headers de navegador ausentes",
-			originHdr:    "",
-			refererHdr:   "",
-			reqURL:       "https://spspower.com.br",
-			isServerAuth: false,
-			expected:     "spspower.com.br",
+			name:           "Rejeita payload sem headers de navegador, sem server auth e fora do CNAME (Abordagem B)",
+			originHdr:      "",
+			refererHdr:     "",
+			reqURL:         "https://spspower.com.br",
+			isServerAuth:   false,
+			cnameSubdomain: "track.spspower.com.br",
+			expected:       "",
 		},
 		{
-			name:         "Disparo Server-Side autenticado via X-Server-Key aceita payload",
-			originHdr:    "",
-			refererHdr:   "",
-			reqURL:       "https://spspower.com.br/agradecimento",
-			isServerAuth: true,
-			expected:     "spspower.com.br",
+			name:           "Disparo Server-Side autenticado via X-Server-Key aceita payload",
+			originHdr:      "",
+			refererHdr:     "",
+			reqURL:         "https://spspower.com.br/agradecimento",
+			isServerAuth:   true,
+			cnameSubdomain: "",
+			expected:       "spspower.com.br",
+		},
+		{
+			name:           "Tráfego recebido via CNAME First-Party verificado aceita payload",
+			originHdr:      "",
+			refererHdr:     "",
+			hostHdr:        "track.spspower.com.br",
+			reqURL:         "https://spspower.com.br/produto",
+			isServerAuth:   false,
+			cnameSubdomain: "track.spspower.com.br",
+			expected:       "spspower.com.br",
 		},
 	}
 
@@ -116,7 +132,11 @@ func TestExtractOriginDomain(t *testing.T) {
 				eventReq := &EventRequest{
 					URL: tt.reqURL,
 				}
-				gotDomain = ExtractOriginDomain(c, eventReq, tt.isServerAuth)
+				if tt.cnameSubdomain != "" {
+					gotDomain = ExtractOriginDomain(c, eventReq, tt.isServerAuth, tt.cnameSubdomain)
+				} else {
+					gotDomain = ExtractOriginDomain(c, eventReq, tt.isServerAuth)
+				}
 				return c.SendStatus(fiber.StatusOK)
 			})
 
@@ -126,6 +146,9 @@ func TestExtractOriginDomain(t *testing.T) {
 			}
 			if tt.refererHdr != "" {
 				httpReq.Header.Set("Referer", tt.refererHdr)
+			}
+			if tt.hostHdr != "" {
+				httpReq.Host = tt.hostHdr
 			}
 
 			resp, err := app.Test(httpReq)

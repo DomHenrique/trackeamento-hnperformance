@@ -204,10 +204,10 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 	}
 	referrer := req.Referrer
 
-	// Validação de Domínio de Origem (Whitelist com suporte a subdomínios)
+	// Validação de Domínio de Origem (Whitelist com suporte a subdomínios - Abordagem B)
 	serverKeyHeader := strings.TrimSpace(c.Get("X-Server-Key"))
 	isServerAuth := (h.cfg.ServerKey != "" && serverKeyHeader == h.cfg.ServerKey)
-	originDomain := ExtractOriginDomain(c, &req, isServerAuth)
+	originDomain := ExtractOriginDomain(c, &req, isServerAuth, siteMeta.CnameSubdomain)
 	isDev := h.cfg.Env == "development"
 	if !IsDomainAllowed(originDomain, siteMeta.AllowedDomains, isDev) {
 		h.RecordDomainAlert(siteID, originDomain, ip, ua, pageURL)
@@ -384,18 +384,19 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 		var siteID string
 		var isActive bool
 		var rawPrivacy []byte
+		var cnameSub string
 
 		// 2.1 Primeiro tenta na tabela site_api_keys (suporte a múltiplas chaves e revogação)
 		err := h.pg.Pool.QueryRow(ctx, `
-			SELECT k.site_id::text, (k.status = 'active' AND s.is_active = true), COALESCE(s.privacy_settings, '{}'::jsonb)
+			SELECT k.site_id::text, (k.status = 'active' AND s.is_active = true), COALESCE(s.privacy_settings, '{}'::jsonb), COALESCE(s.cname_subdomain, '')
 			FROM site_api_keys k
 			JOIN sites s ON s.id = k.site_id
 			WHERE k.key = $1
-		`, siteKey).Scan(&siteID, &isActive, &rawPrivacy)
+		`, siteKey).Scan(&siteID, &isActive, &rawPrivacy, &cnameSub)
 
 		// 2.2 Fallback retroativo para sites.api_key caso ainda não esteja em site_api_keys
 		if err != nil {
-			err = h.pg.Pool.QueryRow(ctx, "SELECT id::text, is_active, COALESCE(privacy_settings, '{}'::jsonb) FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive, &rawPrivacy)
+			err = h.pg.Pool.QueryRow(ctx, "SELECT id::text, is_active, COALESCE(privacy_settings, '{}'::jsonb), COALESCE(cname_subdomain, '') FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive, &rawPrivacy, &cnameSub)
 		}
 
 		if err == nil && isActive {
@@ -427,6 +428,7 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 				ID:              siteID,
 				AllowedDomains:  domains,
 				PrivacySettings: privacy,
+				CnameSubdomain:  cnameSub,
 			}
 			h.siteKeys.Store(siteKey, meta)
 

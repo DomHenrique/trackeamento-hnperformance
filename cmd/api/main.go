@@ -215,7 +215,7 @@ func main() {
 		Max:        5,
 		Expiration: 1 * time.Minute,
 		KeyGenerator: func(c *fiber.Ctx) string {
-			return c.IP()
+			return collector.ResolveClientIP(c, cfg)
 		},
 		LimitReached: func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{

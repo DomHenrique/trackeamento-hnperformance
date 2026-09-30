@@ -317,6 +317,16 @@ func (h *IntegrationsHandler) HandleTestIntegration(c *fiber.Ctx) error {
 			})
 		}
 
+		env := "production"
+		if h.cfg != nil && h.cfg.Env != "" {
+			env = h.cfg.Env
+		}
+		if err := integrations.ValidateOutboundURL(endpointURL, env); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fmt.Sprintf("endpoint_url invalido ou restrito: %v", err),
+			})
+		}
+
 		gads := integrations.NewGoogleAds(client)
 		respBody, statusCode, testErr = gads.TestPing(ctx, endpointURL, token, action)
 

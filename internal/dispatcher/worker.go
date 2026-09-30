@@ -259,7 +259,15 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 			case "google_ads":
 				endpointURL := it.Credentials["endpoint_url"]
 				token := it.Credentials["api_token"]
-				callErr = wp.googleAds.SendConversion(callCtx, endpointURL, token, ev)
+				env := "production"
+				if wp.cfg != nil && wp.cfg.Env != "" {
+					env = wp.cfg.Env
+				}
+				if ssrfErr := integrations.ValidateOutboundURL(endpointURL, env); ssrfErr != nil {
+					callErr = fmt.Errorf("envio bloqueado por seguranca anti-ssrf: %w", ssrfErr)
+				} else {
+					callErr = wp.googleAds.SendConversion(callCtx, endpointURL, token, ev)
+				}
 
 			case "linkedin_capi":
 				token := it.Credentials["access_token"]
@@ -269,7 +277,15 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 			case "webhook":
 				url := it.Credentials["webhook_url"]
 				secret := it.Credentials["secret_token"]
-				callErr = wp.crm.SendWebhook(callCtx, url, secret, ev, dMsg.FirstTouch)
+				env := "production"
+				if wp.cfg != nil && wp.cfg.Env != "" {
+					env = wp.cfg.Env
+				}
+				if ssrfErr := integrations.ValidateOutboundURL(url, env); ssrfErr != nil {
+					callErr = fmt.Errorf("envio bloqueado por seguranca anti-ssrf: %w", ssrfErr)
+				} else {
+					callErr = wp.crm.SendWebhook(callCtx, url, secret, ev, dMsg.FirstTouch)
+				}
 			}
 
 			if callErr == nil {
@@ -408,6 +424,8 @@ func isPermanentError(err error) bool {
 		strings.Contains(errStr, "forbidden") ||
 		strings.Contains(errStr, "invalid_client") ||
 		strings.Contains(errStr, "invalid token") ||
+		strings.Contains(errStr, "anti-ssrf") ||
+		strings.Contains(errStr, "proibido") ||
 		strings.Contains(errStr, "erro cliente http") {
 		return true
 	}

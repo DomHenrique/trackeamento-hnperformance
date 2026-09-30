@@ -147,3 +147,23 @@ func TestHandleLogout_ClearsCookie(t *testing.T) {
 		}
 	}
 }
+
+func TestRequireAuth_Unauthorized(t *testing.T) {
+	app := fiber.New()
+	svc := &Service{}
+
+	app.Get("/protected", svc.RequireAuth(), func(c *fiber.Ctx) error {
+		return c.SendString("ok")
+	})
+
+	req := httptest.NewRequest("GET", "/protected", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Erro ao executar requisição: %v", err)
+	}
+
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("Esperava HTTP 401 Unauthorized, obteve %d", resp.StatusCode)
+	}
+}
+
