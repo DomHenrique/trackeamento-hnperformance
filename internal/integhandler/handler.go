@@ -396,3 +396,55 @@ func maskToken(t string) string {
 	suffix := t[len(t)-4:]
 	return fmt.Sprintf("%s••••••••%s", prefix, suffix)
 }
+
+// HandleGetRoutingSummary retorna o sumário diário de telemetria de roteamento para um site ou global
+func (h *IntegrationsHandler) HandleGetRoutingSummary(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Params("site_id"))
+	if siteID == "" || siteID == "all" || siteID == "global" {
+		siteID = "global"
+	}
+
+	if h.redis == nil {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"total":           0,
+			"success":         0,
+			"error":           0,
+			"blocked_consent": 0,
+			"blocked_gpc":     0,
+			"success_rate":    "100.0",
+			"destinations":    map[string]interface{}{},
+		})
+	}
+
+	summary, err := h.redis.GetRoutingSummary(c.Context(), siteID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(summary)
+}
+
+// HandleGetRoutingRecent retorna o buffer circular das últimas decisões de roteamento para um site ou global
+func (h *IntegrationsHandler) HandleGetRoutingRecent(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Params("site_id"))
+	if siteID == "" || siteID == "all" || siteID == "global" {
+		siteID = "global"
+	}
+
+	limit := int64(30)
+	if l := c.QueryInt("limit", 0); l > 0 && l <= 50 {
+		limit = int64(l)
+	}
+
+	if h.redis == nil {
+		return c.Status(fiber.StatusOK).JSON([]storage.RoutingDecisionRecord{})
+	}
+
+	recent, err := h.redis.GetRecentRoutingDecisions(c.Context(), siteID, limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(recent)
+}
+

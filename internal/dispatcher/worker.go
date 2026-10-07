@@ -190,6 +190,21 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 	}
 
 	if (!ev.Consent.Marketing || ev.PrivacySignals.GPC) && !hasDirectLeadConsent {
+		status := "blocked_consent"
+		reason := "Falta de consentimento de marketing (LGPD)"
+		if ev.PrivacySignals.GPC {
+			status = "blocked_gpc"
+			reason = "Sinal GPC (Global Privacy Control) ativo"
+		}
+		_ = wp.redis.RecordRoutingDecision(ctx, ev.SiteID, storage.RoutingDecisionRecord{
+			EventID:      ev.EventID,
+			EventName:    ev.EventName,
+			SiteID:       ev.SiteID,
+			Timestamp:    time.Now().UTC().Format(time.RFC3339),
+			Status:       status,
+			Reason:       reason,
+			ConsentFlags: map[string]bool{"marketing": ev.Consent.Marketing, "analytics": ev.Consent.Analytics, "gpc": ev.PrivacySignals.GPC},
+		})
 		log.Printf("[Dispatcher] Interceptado por compliance: evento %s site=%s sem consentimento de marketing (marketing=%v, gpc=%v). Despacho externo abortado.", ev.EventID, ev.SiteID, ev.Consent.Marketing, ev.PrivacySignals.GPC)
 		_ = wp.redis.Client.XAck(ctx, stream, group, msg.ID).Err()
 		return
@@ -240,6 +255,7 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 				return
 			}
 
+			callStart := time.Now()
 			callCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 
@@ -288,14 +304,38 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 				}
 			}
 
+			latency := time.Since(callStart).Milliseconds()
+
 			if callErr == nil {
 				log.Printf("[Dispatcher] SUCESSO %s: evento '%s' (%s) enviado com êxito!", it.Platform, ev.EventName, ev.EventID)
 				_ = wp.redis.MarkDispatchSuccess(ctx, integID, ev.EventID)
+				_ = wp.redis.RecordRoutingDecision(ctx, ev.SiteID, storage.RoutingDecisionRecord{
+					EventID:      ev.EventID,
+					EventName:    ev.EventName,
+					SiteID:       ev.SiteID,
+					Platform:     it.Platform,
+					Timestamp:    time.Now().UTC().Format(time.RFC3339),
+					Status:       "success",
+					StatusCode:   200,
+					LatencyMs:    latency,
+					ConsentFlags: map[string]bool{"marketing": ev.Consent.Marketing, "analytics": ev.Consent.Analytics, "lead_consent": hasDirectLeadConsent},
+				})
 				return
 			}
 
 			// Houve erro no disparo
 			log.Printf("[Dispatcher] Falha no disparo %s (site %s, evento %s, tentativa %d): %v", it.Platform, ev.SiteID, ev.EventID, attempts, callErr)
+			_ = wp.redis.RecordRoutingDecision(ctx, ev.SiteID, storage.RoutingDecisionRecord{
+				EventID:      ev.EventID,
+				EventName:    ev.EventName,
+				SiteID:       ev.SiteID,
+				Platform:     it.Platform,
+				Timestamp:    time.Now().UTC().Format(time.RFC3339),
+				Status:       "error",
+				Reason:       callErr.Error(),
+				LatencyMs:    latency,
+				ConsentFlags: map[string]bool{"marketing": ev.Consent.Marketing, "analytics": ev.Consent.Analytics},
+			})
 
 			isPermanent := isPermanentError(callErr)
 			if isPermanent || attempts >= 5 {

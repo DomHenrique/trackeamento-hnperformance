@@ -176,6 +176,7 @@ func main() {
 	app.Use("/api/v1/security", adminCors)
 	app.Use("/api/v1/analytics", adminCors)
 	app.Use("/api/v1/debug", adminCors)
+	app.Use("/api/v1/routing", adminCors)
 
 	// Landing page de status e documentação na raiz
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -266,6 +267,12 @@ func main() {
 	app.Get("/api/v1/sites/:site_id/integrations", authMiddleware, integHandler.HandleGetIntegrations)
 	app.Put("/api/v1/sites/:site_id/integrations/:platform", authMiddleware, integHandler.HandleSaveIntegration)
 	app.Post("/api/v1/sites/:site_id/integrations/:platform/test", authMiddleware, integHandler.HandleTestIntegration)
+
+	// Endpoints de Telemetria e Roteamento de Eventos Server-Side (Requer Autenticação)
+	app.Get("/api/v1/sites/:site_id/routing-summary", authMiddleware, integHandler.HandleGetRoutingSummary)
+	app.Get("/api/v1/sites/:site_id/routing-recent", authMiddleware, integHandler.HandleGetRoutingRecent)
+	app.Get("/api/v1/routing/summary", authMiddleware, integHandler.HandleGetRoutingSummary)
+	app.Get("/api/v1/routing/recent", authMiddleware, integHandler.HandleGetRoutingRecent)
 
 	// Endpoints de Gestão de Chaves de API por Site (Requer Autenticação)
 	app.Get("/api/v1/sites/:site_id/keys", authMiddleware, integHandler.HandleListSiteKeys)

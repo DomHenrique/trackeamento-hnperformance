@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -324,4 +325,184 @@ func (r *RedisClient) GetOrCreateDailySalt(ctx context.Context, dateStr string) 
 
 	return newSalt, nil
 }
+
+// RoutingDecisionRecord representa um registro de auditoria e telemetria de despacho
+type RoutingDecisionRecord struct {
+	EventID      string          `json:"event_id"`
+	EventName    string          `json:"event_name"`
+	SiteID       string          `json:"site_id"`
+	Timestamp    string          `json:"timestamp"`
+	Platform     string          `json:"platform,omitempty"`
+	Status       string          `json:"status"` // "success", "error", "blocked_consent", "blocked_gpc"
+	StatusCode   int             `json:"status_code,omitempty"`
+	Reason       string          `json:"reason,omitempty"`
+	LatencyMs    int64           `json:"latency_ms,omitempty"`
+	ConsentFlags map[string]bool `json:"consent_flags,omitempty"`
+}
+
+// RecordRoutingDecision incrementa contadores agregados e enfileira no buffer circular de auditoria recente
+func (r *RedisClient) RecordRoutingDecision(ctx context.Context, siteID string, rec RoutingDecisionRecord) error {
+	if r.Client == nil {
+		return nil
+	}
+
+	if siteID == "" {
+		siteID = "global"
+	}
+	if rec.Timestamp == "" {
+		rec.Timestamp = time.Now().UTC().Format(time.RFC3339)
+	}
+
+	today := time.Now().UTC().Format("20060102")
+	payloadJSON, err := json.Marshal(rec)
+	if err != nil {
+		return err
+	}
+
+	pipe := r.Client.Pipeline()
+
+	// 1. Contadores específicos do Site
+	siteStatsKey := fmt.Sprintf("stats:routing:%s:%s", siteID, today)
+	pipe.HIncrBy(ctx, siteStatsKey, "total", 1)
+	pipe.HIncrBy(ctx, siteStatsKey, rec.Status, 1)
+	if rec.Platform != "" {
+		pipe.HIncrBy(ctx, siteStatsKey, fmt.Sprintf("%s:%s", rec.Platform, rec.Status), 1)
+	}
+	pipe.Expire(ctx, siteStatsKey, 7*24*time.Hour)
+
+	// 2. Contadores Globais
+	if siteID != "global" {
+		globalStatsKey := fmt.Sprintf("stats:routing:global:%s", today)
+		pipe.HIncrBy(ctx, globalStatsKey, "total", 1)
+		pipe.HIncrBy(ctx, globalStatsKey, rec.Status, 1)
+		if rec.Platform != "" {
+			pipe.HIncrBy(ctx, globalStatsKey, fmt.Sprintf("%s:%s", rec.Platform, rec.Status), 1)
+		}
+		pipe.Expire(ctx, globalStatsKey, 7*24*time.Hour)
+	}
+
+	// 3. Buffer circular recente por Site (máximo 50 itens com TTL de 48h)
+	siteRecentKey := fmt.Sprintf("routing:recent:%s", siteID)
+	pipe.LPush(ctx, siteRecentKey, payloadJSON)
+	pipe.LTrim(ctx, siteRecentKey, 0, 49)
+	pipe.Expire(ctx, siteRecentKey, 48*time.Hour)
+
+	// 4. Buffer circular recente Global
+	if siteID != "global" {
+		globalRecentKey := "routing:recent:global"
+		pipe.LPush(ctx, globalRecentKey, payloadJSON)
+		pipe.LTrim(ctx, globalRecentKey, 0, 49)
+		pipe.Expire(ctx, globalRecentKey, 48*time.Hour)
+	}
+
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+// GetRoutingSummary retorna o resumo consolidado de roteamento para a data de hoje (ou global)
+func (r *RedisClient) GetRoutingSummary(ctx context.Context, siteID string) (map[string]interface{}, error) {
+	if r.Client == nil {
+		return map[string]interface{}{
+			"total":           0,
+			"success":         0,
+			"error":           0,
+			"blocked_consent": 0,
+			"blocked_gpc":     0,
+			"success_rate":    100.0,
+			"destinations":    map[string]map[string]int64{},
+		}, nil
+	}
+
+	if siteID == "" {
+		siteID = "global"
+	}
+
+	today := time.Now().UTC().Format("20060102")
+	statsKey := fmt.Sprintf("stats:routing:%s:%s", siteID, today)
+
+	data, err := r.Client.HGetAll(ctx, statsKey).Result()
+	if err != nil && err != redis.Nil {
+		return nil, err
+	}
+
+	var total, success, errCount, blockedConsent, blockedGPC int64
+	destinations := make(map[string]map[string]int64)
+
+	for k, vStr := range data {
+		val, _ := strconv.ParseInt(vStr, 10, 64)
+		switch k {
+		case "total":
+			total = val
+		case "success":
+			success = val
+		case "error":
+			errCount = val
+		case "blocked_consent":
+			blockedConsent = val
+		case "blocked_gpc":
+			blockedGPC = val
+		default:
+			// Pode ser "platform:status"
+			parts := strings.Split(k, ":")
+			if len(parts) == 2 {
+				plat := parts[0]
+				stat := parts[1]
+				if destinations[plat] == nil {
+					destinations[plat] = make(map[string]int64)
+				}
+				destinations[plat][stat] = val
+			}
+		}
+	}
+
+	var successRate float64 = 100.0
+	dispatched := success + errCount
+	if dispatched > 0 {
+		successRate = float64(success) / float64(dispatched) * 100.0
+	}
+
+	return map[string]interface{}{
+		"site_id":          siteID,
+		"date":             today,
+		"total":            total,
+		"success":          success,
+		"error":            errCount,
+		"blocked_consent":  blockedConsent,
+		"blocked_gpc":      blockedGPC,
+		"total_blocked":    blockedConsent + blockedGPC,
+		"success_rate":     fmt.Sprintf("%.1f", successRate),
+		"destinations":     destinations,
+	}, nil
+}
+
+// GetRecentRoutingDecisions recupera a lista de decisões recentes do buffer circular
+func (r *RedisClient) GetRecentRoutingDecisions(ctx context.Context, siteID string, limit int64) ([]RoutingDecisionRecord, error) {
+	if r.Client == nil {
+		return []RoutingDecisionRecord{}, nil
+	}
+
+	if siteID == "" {
+		siteID = "global"
+	}
+	if limit <= 0 || limit > 50 {
+		limit = 50
+	}
+
+	recentKey := fmt.Sprintf("routing:recent:%s", siteID)
+	rawItems, err := r.Client.LRange(ctx, recentKey, 0, limit-1).Result()
+	if err != nil && err != redis.Nil {
+		return nil, err
+	}
+
+	results := make([]RoutingDecisionRecord, 0, len(rawItems))
+	for _, raw := range rawItems {
+		var rec RoutingDecisionRecord
+		if err := json.Unmarshal([]byte(raw), &rec); err == nil {
+			results = append(results, rec)
+		}
+	}
+
+	return results, nil
+}
+
 

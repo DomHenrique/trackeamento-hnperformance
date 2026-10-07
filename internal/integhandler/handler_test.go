@@ -168,4 +168,62 @@ func TestHandleTestIntegration_LinkedIn_ResponseStructure(t *testing.T) {
 	}
 }
 
+func TestHandleGetRoutingSummary_Fallback(t *testing.T) {
+	cfg := &config.Config{Env: "test"}
+	h := NewIntegrationsHandler(cfg, nil, nil) // redis nil -> fallback suave
+
+	app := fiber.New()
+	app.Get("/api/v1/sites/:site_id/routing-summary", h.HandleGetRoutingSummary)
+
+	req := httptest.NewRequest("GET", "/api/v1/sites/global/routing-summary", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("erro na requisicao: %v", err)
+	}
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("esperado status 200, obtido %d", resp.StatusCode)
+	}
+
+	var data map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		t.Fatalf("erro ao decodificar resposta: %v", err)
+	}
+
+	if data["total"] != float64(0) {
+		t.Errorf("esperado total=0, obtido %v", data["total"])
+	}
+	if data["success_rate"] != "100.0" {
+		t.Errorf("esperado success_rate='100.0', obtido %v", data["success_rate"])
+	}
+}
+
+func TestHandleGetRoutingRecent_Fallback(t *testing.T) {
+	cfg := &config.Config{Env: "test"}
+	h := NewIntegrationsHandler(cfg, nil, nil) // redis nil -> lista vazia
+
+	app := fiber.New()
+	app.Get("/api/v1/sites/:site_id/routing-recent", h.HandleGetRoutingRecent)
+
+	req := httptest.NewRequest("GET", "/api/v1/sites/test-site/routing-recent", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("erro na requisicao: %v", err)
+	}
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("esperado status 200, obtido %d", resp.StatusCode)
+	}
+
+	var items []interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+		t.Fatalf("erro ao decodificar resposta: %v", err)
+	}
+
+	if len(items) != 0 {
+		t.Errorf("esperado 0 items, obtido %d", len(items))
+	}
+}
+
+
 

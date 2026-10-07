@@ -2680,6 +2680,149 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+
+        /* Estilos do Canvas de Roteamento de Eventos (Event Routing Hub) */
+        .routing-pipeline-canvas {
+            display: flex;
+            align-items: stretch;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-top: 1rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+        }
+        .pipeline-column {
+            flex: 1;
+            min-width: 250px;
+            background: rgba(15, 23, 42, 0.45);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .pipeline-column-center {
+            background: rgba(16, 185, 129, 0.03);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+        .pipeline-column-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.6rem;
+            margin-bottom: 0.25rem;
+        }
+        .column-badge {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+        .pipeline-nodes-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+        .pipeline-node {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.65rem 0.85rem;
+            transition: all 0.2s ease;
+        }
+        .pipeline-node:hover {
+            border-color: var(--border-hover);
+            transform: translateX(2px);
+        }
+        .node-icon {
+            font-size: 1.15rem;
+            flex-shrink: 0;
+        }
+        .node-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .node-name {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #f8fafc;
+            line-height: 1.2;
+        }
+        .node-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 0.15rem;
+        }
+        .node-pill {
+            font-size: 0.65rem;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+        .pill-neutral { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+        .pill-lead { background: rgba(99, 102, 241, 0.2); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); }
+        .pill-active { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .pill-inactive { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .pipeline-flow-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            opacity: 0.6;
+            flex-shrink: 0;
+        }
+        .gatekeeper-card {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            border-radius: 8px;
+            padding: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+        .gk-status-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .gk-rule-item {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.74rem;
+        }
+        .gk-rule-badge {
+            font-family: monospace;
+            font-size: 0.68rem;
+            padding: 0.12rem 0.4rem;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .badge-green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+        .badge-blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+        .badge-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+        .badge-purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+        .gk-rule-arrow { color: var(--text-muted); font-size: 0.7rem; }
+        .gk-rule-desc { color: #cbd5e1; flex: 1; }
+        .gk-footer-stat {
+            background: rgba(0, 0, 0, 0.25);
+            padding: 0.45rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.25rem;
+        }
     </style>
 
 
@@ -2728,6 +2871,10 @@
             <a class="nav-item" onclick="switchTab('debug', this)" id="nav-debug" data-tooltip="DebugView (Ao Vivo)">
                 <span class="nav-icon">⚡</span>
                 <span class="nav-label">DebugView (Ao Vivo)</span>
+            </a>
+            <a class="nav-item" onclick="switchTab('routing', this)" id="nav-routing" data-tooltip="Event Routing & Destinos">
+                <span class="nav-icon">🔀</span>
+                <span class="nav-label">Event Routing & Destinos</span>
             </a>
 
             <div class="menu-header" style="margin-top: 1rem;">Documentação & Setup</div>
@@ -3458,6 +3605,231 @@
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: EVENT ROUTING & DESTINOS SERVER-SIDE -->
+            <div id="tab-routing" class="tab-pane">
+                <!-- KPI CARDS DE ROTEAMENTO -->
+                <div class="kpi-grid" style="margin-bottom: 1.5rem;">
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Eventos Despachados Hoje</span>
+                            <span class="kpi-icon">⚡</span>
+                        </div>
+                        <div class="kpi-value" id="routing-kpi-total">0</div>
+                        <div class="kpi-sub" id="routing-kpi-total-sub">Processados pelo motor server-side</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Taxa de Entrega / Sucesso</span>
+                            <span class="kpi-icon">🎯</span>
+                        </div>
+                        <div class="kpi-value" id="routing-kpi-success-rate" style="color: var(--success);">100%</div>
+                        <div class="kpi-sub" id="routing-kpi-success-sub">0 falhas registradas</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Bloqueios por Governança LGPD</span>
+                            <span class="kpi-icon">🛡️</span>
+                        </div>
+                        <div class="kpi-value" id="routing-kpi-blocked" style="color: var(--warning);">0</div>
+                        <div class="kpi-sub" id="routing-kpi-blocked-sub">Falta de consentimento ou sinal GPC</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Conectores Ativos</span>
+                            <span class="kpi-icon">🌐</span>
+                        </div>
+                        <div class="kpi-value" id="routing-kpi-connectors-count">0</div>
+                        <div class="kpi-sub" id="routing-kpi-connectors-sub">Meta CAPI, GA4, LinkedIn & CRM</div>
+                    </div>
+                </div>
+
+                <!-- PIPELINE CANVAS VISUAL -->
+                <div class="chart-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+                        <div>
+                            <h3 style="font-size: 1.05rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+                                <span>🔀</span> Pipeline de Roteamento Server-Side
+                            </h3>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;">
+                                Fluxo operacional em tempo real: Ingestão de primeira parte → Filtro LGPD & Compliance → Despacho para redes externas
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn-integ-wizard" onclick="openIntegrationsWizard()" style="padding: 0.45rem 0.85rem; font-size: 0.8rem;">
+                                <span>⚡</span> Configurar Destinos
+                            </button>
+                            <button class="btn-refresh" onclick="loadRoutingTab()" style="padding: 0.45rem 0.85rem; font-size: 0.8rem;">
+                                <span>↻</span> Atualizar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="routing-pipeline-canvas">
+                        <!-- Estágio 1: Origem / Eventos Entrantes -->
+                        <div class="pipeline-column">
+                            <div class="pipeline-column-header">
+                                <span class="column-badge" style="background: rgba(99, 102, 241, 0.2); color: #818cf8;">1. Eventos Entrantes</span>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">SDK First-Party</span>
+                            </div>
+                            <div class="pipeline-nodes-list" id="pipeline-inbound-nodes">
+                                <div class="pipeline-node inbound-node">
+                                    <div class="node-icon">👁️</div>
+                                    <div class="node-info">
+                                        <div class="node-name">page_view</div>
+                                        <div class="node-desc">Visualização de URL</div>
+                                    </div>
+                                    <span class="node-pill pill-neutral">Passivo</span>
+                                </div>
+                                <div class="pipeline-node inbound-node">
+                                    <div class="node-icon">📝</div>
+                                    <div class="node-info">
+                                        <div class="node-name">form_submit</div>
+                                        <div class="node-desc">Envio de formulário</div>
+                                    </div>
+                                    <span class="node-pill pill-lead">Lead Intent</span>
+                                </div>
+                                <div class="pipeline-node inbound-node">
+                                    <div class="node-icon">🎯</div>
+                                    <div class="node-info">
+                                        <div class="node-name">generate_lead</div>
+                                        <div class="node-desc">Conversão qualificada</div>
+                                    </div>
+                                    <span class="node-pill pill-lead">Atribuição</span>
+                                </div>
+                                <div class="pipeline-node inbound-node">
+                                    <div class="node-icon">💬</div>
+                                    <div class="node-info">
+                                        <div class="node-name">whatsapp_click</div>
+                                        <div class="node-desc">Clique no botão WA</div>
+                                    </div>
+                                    <span class="node-pill pill-neutral">Engajamento</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Conector Visual 1 -->
+                        <div class="pipeline-flow-arrow">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </div>
+
+                        <!-- Estágio 2: Governança & Gatekeeper de Consentimento -->
+                        <div class="pipeline-column pipeline-column-center">
+                            <div class="pipeline-column-header">
+                                <span class="column-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">2. Gatekeeper LGPD</span>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">Decisão em Linha</span>
+                            </div>
+                            <div class="gatekeeper-card">
+                                <div class="gk-status-header">
+                                    <span class="status-indicator" style="color: var(--success);">●</span>
+                                    <span style="font-weight: 700; font-size: 0.85rem; color: #fff;">Filtro de Privacidade Ativo</span>
+                                </div>
+                                <div class="gk-rule-item">
+                                    <span class="gk-rule-badge badge-green">consent.analytics</span>
+                                    <span class="gk-rule-arrow">➔</span>
+                                    <span class="gk-rule-desc">Libera métricas e GA4</span>
+                                </div>
+                                <div class="gk-rule-item">
+                                    <span class="gk-rule-badge badge-blue">consent.marketing</span>
+                                    <span class="gk-rule-arrow">➔</span>
+                                    <span class="gk-rule-desc">Libera Meta CAPI & LinkedIn</span>
+                                </div>
+                                <div class="gk-rule-item">
+                                    <span class="gk-rule-badge badge-amber">Sec-GPC / DNT</span>
+                                    <span class="gk-rule-arrow">➔</span>
+                                    <span class="gk-rule-desc">Bloqueia Adtech preventivamente</span>
+                                </div>
+                                <div class="gk-rule-item">
+                                    <span class="gk-rule-badge badge-purple">Lead Direct Consent</span>
+                                    <span class="gk-rule-arrow">➔</span>
+                                    <span class="gk-rule-desc">Permite despacho com dados fornecidos</span>
+                                </div>
+                                <div class="gk-footer-stat" id="gk-blocked-metric">
+                                    <span>🛡️ Bloqueados hoje:</span> <strong id="gk-blocked-count" style="color: #f59e0b;">0 eventos</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Conector Visual 2 -->
+                        <div class="pipeline-flow-arrow">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </div>
+
+                        <!-- Estágio 3: Destinos Conectados -->
+                        <div class="pipeline-column">
+                            <div class="pipeline-column-header">
+                                <span class="column-badge" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8;">3. Destinos Server-Side</span>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">APIs Externas</span>
+                            </div>
+                            <div class="pipeline-nodes-list" id="pipeline-destinations-nodes">
+                                <!-- Cards dinâmicos de Destinos preenchidos via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MATRIZ DE REGRAS DE DESTINO -->
+                <div class="chart-card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="font-size: 0.95rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>📋</span> Matriz de Regras e Transformações de Destino
+                        </h3>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">Proteção SHA-256 e Políticas de Disparo</span>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Destino</th>
+                                    <th>Eventos Elegíveis</th>
+                                    <th>Requisito de Consentimento</th>
+                                    <th>Tratamento de Dados</th>
+                                    <th>Status do Conector</th>
+                                </tr>
+                            </thead>
+                            <tbody id="routing-rules-tbody">
+                                <!-- Preenchido dinamicamente via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- AUDITORIA RECENTE DE DECISÕES DE ROTEAMENTO -->
+                <div class="chart-card" style="padding: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <div>
+                            <h3 style="font-size: 0.95rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+                                <span>⚡</span> Trilha Recente de Decisões de Roteamento
+                            </h3>
+                            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                Últimos 30 despachos e auditorias de bloqueio registradas pelo worker pool
+                            </p>
+                        </div>
+                        <button class="btn-refresh" onclick="loadRoutingRecentDecisions()" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;">
+                            ↻ Atualizar Trilha
+                        </button>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Horário</th>
+                                    <th>Evento</th>
+                                    <th>Destino</th>
+                                    <th>Resultado</th>
+                                    <th>Latência</th>
+                                    <th>Motivo / Conformidade</th>
+                                </tr>
+                            </thead>
+                            <tbody id="routing-recent-tbody">
+                                <tr>
+                                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Carregando histórico recente...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -4801,6 +5173,7 @@ if (typeof fbq === 'function' && eventId) {
                 'traffic': 'Origem do Tráfego & Dispositivos',
                 'funnels': 'Funis & Atribuição Multi-Toque',
                 'debug': '⚡ DebugView • Validação & Depuração de Eventos em Tempo Real',
+                'routing': '🔀 Event Routing & Destinos Server-Side • Pipeline & Governança LGPD',
                 'settings': '⚙️ Configurações do Site • Chaves de API & Snippet de Instalação',
                 'docs': '📚 Guia de Instalação do SDK & Eventos',
                 'domains': '🌐 Gestão de Domínios Autorizados & Auditoria'
@@ -4813,6 +5186,287 @@ if (typeof fbq === 'function' && eventId) {
             } catch (e) {}
 
             loadActiveData();
+        }
+
+        // ==========================================
+        // ABA: EVENT ROUTING & DESTINOS SERVER-SIDE
+        // ==========================================
+        async function loadRoutingTab() {
+            const { siteID } = getSelectedSiteAndDomain();
+            const activeSite = siteID || 'global';
+
+            // 1. Carrega dados de telemetria de roteamento
+            try {
+                const summaryUrl = activeSite === 'global' ? '/api/v1/routing/summary' : `/api/v1/sites/${encodeURIComponent(activeSite)}/routing-summary`;
+                const res = await fetch(summaryUrl);
+                const summary = res.ok ? await res.json() : { total: 0, success: 0, error: 0, blocked_consent: 0, blocked_gpc: 0, total_blocked: 0, success_rate: "100.0", destinations: {} };
+
+                // Atualiza KPIs
+                const kpiTotal = document.getElementById('routing-kpi-total');
+                if (kpiTotal) kpiTotal.textContent = (summary.total || 0).toLocaleString('pt-BR');
+
+                const kpiRate = document.getElementById('routing-kpi-success-rate');
+                if (kpiRate) {
+                    const rate = parseFloat(summary.success_rate || 100);
+                    kpiRate.textContent = `${rate.toFixed(1)}%`;
+                    kpiRate.style.color = rate >= 95 ? 'var(--success)' : (rate >= 80 ? 'var(--warning)' : 'var(--danger)');
+                }
+
+                const kpiSuccessSub = document.getElementById('routing-kpi-success-sub');
+                if (kpiSuccessSub) {
+                    const errCount = summary.error || 0;
+                    kpiSuccessSub.textContent = errCount === 0 ? '100% de entregas sem falhas' : `${errCount} falha(s) após retentativas`;
+                }
+
+                const kpiBlocked = document.getElementById('routing-kpi-blocked');
+                if (kpiBlocked) kpiBlocked.textContent = (summary.total_blocked || 0).toLocaleString('pt-BR');
+
+                const gkCount = document.getElementById('gk-blocked-count');
+                if (gkCount) gkCount.textContent = `${(summary.total_blocked || 0).toLocaleString('pt-BR')} eventos`;
+
+                // 2. Busca integrações ativas do site (para saber quais conectores estão habilitados)
+                let integrations = [];
+                if (activeSite !== 'global') {
+                    try {
+                        const integRes = await fetch(`/api/v1/sites/${encodeURIComponent(activeSite)}/integrations`);
+                        if (integRes.ok) {
+                            integrations = await integRes.json();
+                        }
+                    } catch (e) {}
+                }
+
+                const activeIntegMap = {};
+                let activeCount = 0;
+                if (Array.isArray(integrations)) {
+                    integrations.forEach(it => {
+                        if (it.is_active) {
+                            activeIntegMap[it.platform] = it;
+                            activeCount++;
+                        }
+                    });
+                } else if (integrations && typeof integrations === 'object') {
+                    Object.keys(integrations).forEach(plat => {
+                        if (integrations[plat] && integrations[plat].is_active) {
+                            activeIntegMap[plat] = integrations[plat];
+                            activeCount++;
+                        }
+                    });
+                }
+
+                const kpiConnectors = document.getElementById('routing-kpi-connectors-count');
+                if (kpiConnectors) kpiConnectors.textContent = activeSite === 'global' ? 'Rede Global' : `${activeCount} Ativo(s)`;
+
+                // 3. Renderiza os cartões de Destinos no Pipeline Canvas
+                renderPipelineDestinations(activeIntegMap, summary.destinations || {});
+
+                // 4. Renderiza a Matriz de Regras de Destino
+                renderRoutingRulesMatrix(activeIntegMap);
+
+                // 5. Carrega o histórico recente de decisões
+                await loadRoutingRecentDecisions();
+
+            } catch (err) {
+                console.error('[Routing] Erro ao carregar dados de roteamento:', err);
+            }
+        }
+
+        function renderPipelineDestinations(activeMap, destStats) {
+            const container = document.getElementById('pipeline-destinations-nodes');
+            if (!container) return;
+
+            const platforms = [
+                {
+                    id: 'meta_capi',
+                    name: 'Meta Conversions API',
+                    desc: 'CAPI Facebook/Instagram (Pixel & Lead Events)',
+                    icon: '📘',
+                    authReq: 'consent.marketing'
+                },
+                {
+                    id: 'ga4',
+                    name: 'GA4 Measurement Protocol',
+                    desc: 'Google Analytics 4 (/mp/collect Server-Side)',
+                    icon: '📊',
+                    authReq: 'consent.analytics'
+                },
+                {
+                    id: 'linkedin_capi',
+                    name: 'LinkedIn Conversions API',
+                    desc: 'LinkedIn CAPI (B2B Lead Conversions)',
+                    icon: '💼',
+                    authReq: 'consent.marketing'
+                },
+                {
+                    id: 'webhook',
+                    name: 'Webhook CRM / n8n',
+                    desc: 'Disparo enriquecido com First/Last Touch UTMs',
+                    icon: '🔗',
+                    authReq: 'lead_direct_consent'
+                }
+            ];
+
+            container.innerHTML = platforms.map(plat => {
+                const isActive = !!activeMap[plat.id];
+                const stats = destStats[plat.id] || {};
+                const successCount = stats.success || 0;
+                const errCount = stats.error || 0;
+
+                return `
+                    <div class="pipeline-node" style="border-left: 3px solid ${isActive ? '#10b981' : 'rgba(255,255,255,0.1)'};">
+                        <div class="node-icon">${plat.icon}</div>
+                        <div class="node-info">
+                            <div class="node-name">${escapeHTML(plat.name)}</div>
+                            <div class="node-desc">${escapeHTML(plat.desc)}</div>
+                            ${isActive ? `
+                                <div style="font-size: 0.68rem; color: #34d399; margin-top: 0.2rem; display: flex; gap: 0.6rem;">
+                                    <span>✓ ${successCount} entregue(s)</span>
+                                    ${errCount > 0 ? `<span style="color: #f87171;">✕ ${errCount} erro(s)</span>` : ''}
+                                </div>
+                            ` : `
+                                <div style="font-size: 0.68rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                    Não configurado ou pausado
+                                </div>
+                            `}
+                        </div>
+                        <span class="node-pill ${isActive ? 'pill-active' : 'pill-inactive'}">
+                            ${isActive ? 'Conectado' : 'Inativo'}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderRoutingRulesMatrix(activeMap) {
+            const tbody = document.getElementById('routing-rules-tbody');
+            if (!tbody) return;
+
+            const rules = [
+                {
+                    platform: 'Meta Conversions API',
+                    icon: '📘',
+                    id: 'meta_capi',
+                    events: 'generate_lead, form_submit, purchase, view_content',
+                    consent: 'consent.marketing = true (ou Direct Lead Consent)',
+                    transforms: 'Hashes SHA-256 (em, ph), Cookies _fbp / _fbc, Client IP & UA'
+                },
+                {
+                    platform: 'Google Analytics 4 (MP)',
+                    icon: '📊',
+                    id: 'ga4',
+                    events: 'page_view, generate_lead, form_submit, whatsapp_click',
+                    consent: 'consent.analytics = true',
+                    transforms: 'client_id vinculado ao visitor_id, session_id e parâmetros UTM'
+                },
+                {
+                    platform: 'LinkedIn Conversions API',
+                    icon: '💼',
+                    id: 'linkedin_capi',
+                    events: 'generate_lead, form_submit (B2B Leads)',
+                    consent: 'consent.marketing = true (ou Direct Lead Consent)',
+                    transforms: 'SHA-256 e-mail, conversion_rule_id, user_agent e timestamp UTC'
+                },
+                {
+                    platform: 'Webhook CRM / n8n',
+                    icon: '🔗',
+                    id: 'webhook',
+                    events: 'generate_lead, form_submit (Novos Contatos)',
+                    consent: 'Submissão Voluntária de Formulário (LGPD Art. 7º)',
+                    transforms: 'Payload JSON enriquecido com atribuição first-touch e last-touch'
+                }
+            ];
+
+            tbody.innerHTML = rules.map(r => {
+                const isActive = !!activeMap[r.id];
+                return `
+                    <tr>
+                        <td style="font-weight: 600; color: #fff; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>${r.icon}</span> ${escapeHTML(r.platform)}
+                        </td>
+                        <td>
+                            <code style="font-size: 0.75rem; background: rgba(99,102,241,0.1); color: #a5b4fc; padding: 0.15rem 0.4rem; border-radius: 4px;">
+                                ${escapeHTML(r.events)}
+                            </code>
+                        </td>
+                        <td>
+                            <span style="font-size: 0.78rem; color: #cbd5e1;">
+                                ${escapeHTML(r.consent)}
+                            </span>
+                        </td>
+                        <td>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">
+                                ${escapeHTML(r.transforms)}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge-pro" style="background: ${isActive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.15)'}; color: ${isActive ? '#34d399' : '#94a3b8'}; border-color: ${isActive ? 'rgba(16, 185, 129, 0.3)' : 'rgba(148, 163, 184, 0.3)'};">
+                                ${isActive ? '● Ativo' : '○ Não Habilitado'}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function loadRoutingRecentDecisions() {
+            const { siteID } = getSelectedSiteAndDomain();
+            const activeSite = siteID || 'global';
+            const tbody = document.getElementById('routing-recent-tbody');
+            if (!tbody) return;
+
+            try {
+                const url = activeSite === 'global' ? '/api/v1/routing/recent?limit=30' : `/api/v1/sites/${encodeURIComponent(activeSite)}/routing-recent?limit=30`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('Falha ao obter decisões recentes');
+                const items = await res.json();
+
+                if (!items || items.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+                                Nenhuma decisão de roteamento registrada hoje ainda. Novos envios aparecerão aqui em tempo real.
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                tbody.innerHTML = items.map(it => {
+                    const timeStr = it.timestamp ? new Date(it.timestamp).toLocaleTimeString('pt-BR') : '--:--:--';
+                    let statusBadge = '<span class="badge-pro" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">✓ 200 OK</span>';
+                    
+                    if (it.status === 'blocked_consent') {
+                        statusBadge = '<span class="badge-pro" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3);">🛑 LGPD Block</span>';
+                    } else if (it.status === 'blocked_gpc') {
+                        statusBadge = '<span class="badge-pro" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border-color: rgba(168, 85, 247, 0.3);">🛑 GPC Signal</span>';
+                    } else if (it.status === 'error') {
+                        statusBadge = '<span class="badge-pro" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.3);">✕ Falha</span>';
+                    }
+
+                    const platLabel = it.platform ? escapeHTML(it.platform.toUpperCase().replace('_', ' ')) : 'Todos / Gatekeeper';
+                    const reasonStr = it.reason ? escapeHTML(it.reason) : (it.status === 'success' ? 'Despacho CAPI aceito' : 'Conformidade validada');
+                    const latencyStr = it.latency_ms ? `${it.latency_ms}ms` : '< 5ms';
+
+                    return `
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.78rem; color: var(--text-muted);">${timeStr}</td>
+                            <td><strong style="color: #fff; font-size: 0.8rem;">${escapeHTML(it.event_name || 'event')}</strong></td>
+                            <td style="font-size: 0.78rem; color: #cbd5e1;">${platLabel}</td>
+                            <td>${statusBadge}</td>
+                            <td style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">${latencyStr}</td>
+                            <td style="font-size: 0.75rem; color: #94a3b8; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${reasonStr}">${reasonStr}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: #f87171; padding: 1.5rem;">
+                            Erro ao carregar trilha recente: ${escapeHTML(err.message)}
+                        </td>
+                    </tr>
+                `;
+            }
         }
 
         // Funções da Aba de Gestão de Domínios
@@ -5701,6 +6355,9 @@ if (typeof fbq === 'function' && eventId) {
             }
             if (currentTab === 'debug') {
                 initDebugView();
+            }
+            if (currentTab === 'routing') {
+                await loadRoutingTab();
             }
             if (currentTab === 'settings') {
                 await loadSiteSettingsTab();
