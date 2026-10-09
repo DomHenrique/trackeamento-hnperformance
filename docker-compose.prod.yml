@@ -73,6 +73,7 @@ services:
       - DEFAULT_SITE_NAME=${DEFAULT_SITE_NAME:-Site Principal}
       - DEFAULT_SITE_DOMAIN=${DEFAULT_SITE_DOMAIN:-}
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
+      - LINKEDIN_API_VERSION=${LINKEDIN_API_VERSION:-202609}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=rede_gridd"
@@ -138,6 +139,7 @@ services:
       - DISPATCHER_WORKERS=8
       - DISPATCHER_MAX_RETRIES=5
       - DISPATCHER_TIMEOUT_SEC=10
+      - LINKEDIN_API_VERSION=${LINKEDIN_API_VERSION:-202609}
     networks:
       - tracking_internal
 

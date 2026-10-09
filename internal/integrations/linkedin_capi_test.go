@@ -175,7 +175,7 @@ func TestResolveLinkedInAPIVersion(t *testing.T) {
 	if len(dynamic) != 6 {
 		t.Errorf("Versão dinâmica deve ter 6 caracteres (YYYYMM), obteve %q", dynamic)
 	}
-	expectedCurrent := time.Now().UTC().Format("200601")
+	expectedCurrent := time.Now().UTC().AddDate(0, -1, 0).Format("200601")
 	if dynamic != expectedCurrent {
 		t.Errorf("Esperava %q, obteve %q", expectedCurrent, dynamic)
 	}

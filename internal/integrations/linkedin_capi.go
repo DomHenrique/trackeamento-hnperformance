@@ -21,8 +21,9 @@ const (
 
 // ResolveLinkedInAPIVersion retorna a versão ativa da API do LinkedIn no formato YYYYMM.
 // Se override for informado, utiliza-o; caso contrário, busca a variável de ambiente LINKEDIN_API_VERSION.
-// Se não configurado, calcula dinamicamente o ano e mês atuais em UTC (ex: 202609), garantindo que
-// o cabeçalho nunca expire ou sofra rejeição por NONEXISTENT_VERSION.
+// Se não configurado, calcula dinamicamente o mês anterior em UTC (ex: 202609), garantindo que
+// a versão já esteja oficialmente publicada pelo LinkedIn (as versões têm ciclo mensal e duram no mínimo
+// 12 meses, evitando falhas de NONEXISTENT_VERSION / 426 no início de um novo mês antes do LinkedIn ativá-lo).
 func ResolveLinkedInAPIVersion(override ...string) string {
 	if len(override) > 0 && strings.TrimSpace(override[0]) != "" {
 		return strings.TrimSpace(override[0])
@@ -30,7 +31,8 @@ func ResolveLinkedInAPIVersion(override ...string) string {
 	if envVer := strings.TrimSpace(os.Getenv("LINKEDIN_API_VERSION")); envVer != "" {
 		return envVer
 	}
-	return time.Now().UTC().Format("200601")
+	// Fallback padrão: Mês anterior (garantidamente publicado e com ~11 meses de suporte ativo)
+	return time.Now().UTC().AddDate(0, -1, 0).Format("200601")
 }
 
 type LinkedInCAPI struct {
@@ -233,17 +235,43 @@ func (l *LinkedInCAPI) SendEvent(ctx context.Context, accessToken, conversionRul
 		return fmt.Errorf("erro serializando LinkedIn payload: %w", err)
 	}
 
-	headers := map[string]string{
-		"Authorization":             "Bearer " + accessToken,
-		"LinkedIn-Version":          l.APIVersion(),
-		"X-Restli-Protocol-Version": LinkedInRestliProtocolVer,
+	candidateVersions := []string{
+		l.APIVersion(),
+		time.Now().UTC().AddDate(0, -1, 0).Format("200601"),
+		time.Now().UTC().AddDate(0, -2, 0).Format("200601"),
+		time.Now().UTC().AddDate(0, -3, 0).Format("200601"),
 	}
 
-	_, _, err = l.http.PostWithRetry(ctx, LinkedInConversionURL, headers, body, 3)
-	return err
+	var lastErr error
+	seenVersions := make(map[string]bool)
+	for _, ver := range candidateVersions {
+		if seenVersions[ver] {
+			continue
+		}
+		seenVersions[ver] = true
+
+		headers := map[string]string{
+			"Authorization":             "Bearer " + accessToken,
+			"LinkedIn-Version":          ver,
+			"X-Restli-Protocol-Version": LinkedInRestliProtocolVer,
+		}
+
+		_, statusCode, err := l.http.PostWithRetry(ctx, LinkedInConversionURL, headers, body, 2)
+		if statusCode == 426 {
+			lastErr = fmt.Errorf("linkedin api version %s inactive (426)", ver)
+			continue
+		}
+		if err == nil {
+			l.apiVersion = ver
+		}
+		return err
+	}
+
+	return lastErr
 }
 
-// TestPing realiza um envio sintético para a LinkedIn Conversions API para validar conectividade e token
+// TestPing realiza um envio sintético para a LinkedIn Conversions API para validar conectividade e token.
+// Se a versão utilizada retornar HTTP 426 (NONEXISTENT_VERSION), realiza fallback automático para versões anteriores ativas.
 func (l *LinkedInCAPI) TestPing(ctx context.Context, accessToken, conversionRuleID string) ([]byte, int, error) {
 	if strings.TrimSpace(accessToken) == "" {
 		return nil, 0, fmt.Errorf("access_token é obrigatório para testar o LinkedIn CAPI")
@@ -261,7 +289,7 @@ func (l *LinkedInCAPI) TestPing(ctx context.Context, accessToken, conversionRule
 			UserIds: []LinkedInUserId{
 				{
 					IdType:  "SHA256_EMAIL",
-					IdValue: identity.HashSHA256("test@hnperformancedigital.com.br"),
+					IdValue: identity.HashSHA256("test@dominioexemplo.com.br"),
 				},
 			},
 		},
@@ -273,13 +301,44 @@ func (l *LinkedInCAPI) TestPing(ctx context.Context, accessToken, conversionRule
 		return nil, 0, fmt.Errorf("erro serializando LinkedIn payload de teste: %w", err)
 	}
 
-	headers := map[string]string{
-		"Authorization":             "Bearer " + accessToken,
-		"LinkedIn-Version":          l.APIVersion(),
-		"X-Restli-Protocol-Version": LinkedInRestliProtocolVer,
+	candidateVersions := []string{
+		l.APIVersion(),
+		time.Now().UTC().AddDate(0, -1, 0).Format("200601"),
+		time.Now().UTC().AddDate(0, -2, 0).Format("200601"),
+		time.Now().UTC().AddDate(0, -3, 0).Format("200601"),
 	}
 
-	return l.http.PostRaw(ctx, LinkedInConversionURL, headers, body)
+	var lastResp []byte
+	var lastStatus int
+	var lastErr error
+
+	seenVersions := make(map[string]bool)
+	for _, ver := range candidateVersions {
+		if seenVersions[ver] {
+			continue
+		}
+		seenVersions[ver] = true
+
+		headers := map[string]string{
+			"Authorization":             "Bearer " + accessToken,
+			"LinkedIn-Version":          ver,
+			"X-Restli-Protocol-Version": LinkedInRestliProtocolVer,
+		}
+
+		resp, status, err := l.http.PostRaw(ctx, LinkedInConversionURL, headers, body)
+		lastResp, lastStatus, lastErr = resp, status, err
+
+		// Se a versão estiver inativa (426), tenta a próxima candidata
+		if status == 426 {
+			continue
+		}
+
+		// Se tiver sucesso ou outro status HTTP (ex: 201, 401, 403), atualiza a versão ativa do client
+		l.apiVersion = ver
+		return resp, status, err
+	}
+
+	return lastResp, lastStatus, lastErr
 }
 
 func parseNumericValue(val interface{}) float64 {
