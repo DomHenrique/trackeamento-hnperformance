@@ -616,6 +616,11 @@ func (h *Handler) HandleCheckCnameAuthorized(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).SendString("dominio ausente")
 	}
 
+	// 0. Domínio mestre do tracking (se configurado) é sempre autorizado
+	if h.cfg != nil && h.cfg.TrackingDomain != "" && domain == cleanHost(h.cfg.TrackingDomain) {
+		return c.Status(fiber.StatusOK).SendString("ok")
+	}
+
 	if h.pg == nil || h.pg.Pool == nil {
 		return c.Status(fiber.StatusServiceUnavailable).SendString("indisponivel")
 	}
@@ -623,7 +628,9 @@ func (h *Handler) HandleCheckCnameAuthorized(c *fiber.Ctx) error {
 	var exists bool
 	err := h.pg.Pool.QueryRow(c.Context(), `
 		SELECT EXISTS(
-			SELECT 1 FROM sites WHERE LOWER(cname_subdomain) = $1 AND is_active = true
+			SELECT 1 FROM sites 
+			WHERE (LOWER(cname_subdomain) = $1 OR LOWER(domain) = $1) 
+			  AND is_active = true
 		)
 	`, domain).Scan(&exists)
 

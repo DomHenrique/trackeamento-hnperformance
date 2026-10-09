@@ -5640,10 +5640,10 @@ if (typeof fbq === 'function' && eventId) {
                     snippetBox.style.display = 'block';
                     if (activeSiteKeyForCname) {
                         if (noKeyAlert) noKeyAlert.style.display = 'none';
-                        snippetCode.textContent = `<!-- HN Performance First-Party Ingress Snippet (Cookieless) -->\n<script\n  src="https://${site.cname_subdomain}/sdk/tracker.js"\n  data-site-key="${activeSiteKeyForCname}"\n  async>\n<` + `/script>`;
+                        snippetCode.textContent = `<!-- HN Performance First-Party Ingress Snippet (Cookieless & Resiliente) -->\n<script\n  src="https://${site.cname_subdomain}/sdk/tracker.js"\n  data-site-key="${activeSiteKeyForCname}"\n  onerror="console.error('[HN Tracking] Erro ao carregar tracker.js via https://${site.cname_subdomain}. Verifique DNS e certificado SSL.');"\n  async>\n<` + `/script>`;
                     } else {
                         if (noKeyAlert) noKeyAlert.style.display = 'block';
-                        snippetCode.textContent = `<!-- ATENÇÃO: Nenhuma chave pública ativa encontrada para este site. Crie uma na aba Chaves -->\n<!-- HN Performance First-Party Ingress Snippet (Cookieless) -->\n<script\n  src="https://${site.cname_subdomain}/sdk/tracker.js"\n  data-site-key="SUA_CHAVE_AQUI"\n  async>\n<` + `/script>`;
+                        snippetCode.textContent = `<!-- ATENÇÃO: Nenhuma chave pública ativa encontrada para este site. Crie uma na aba Chaves -->\n<!-- HN Performance First-Party Ingress Snippet (Cookieless & Resiliente) -->\n<script\n  src="https://${site.cname_subdomain}/sdk/tracker.js"\n  data-site-key="SUA_CHAVE_AQUI"\n  onerror="console.error('[HN Tracking] Erro ao carregar tracker.js. Verifique DNS e certificado SSL.');"\n  async>\n<` + `/script>`;
                     }
                 }
             } else if (site.cname_subdomain) {

@@ -1,139 +1,189 @@
 # 🚀 HN Server-Side Tracking Engine
 
-Plataforma corporativa de alta escala para **rastreamento server-side de 1ª parte (*1st-party*)**, **atribuição multitouch**, **despacho assíncrono de conversões (CAPI)** e **governança estrita de dados (LGPD / ANPD / GDPR)**.
+<div align="center">
 
-Desenvolvida em **Go (Golang)**, com processamento analítico colunar em **ClickHouse**, banco relacional transacional em **PostgreSQL**, filas e buffers em tempo real via **Redis Streams** e terminação TLS com certificados automáticos via **Traefik**.
+![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+![ClickHouse](https://img.shields.io/badge/ClickHouse-24+-FFCC01?style=for-the-badge&logo=clickhouse&logoColor=black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7+-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![LGPD](https://img.shields.io/badge/Compliance-LGPD%20%2F%20ANPD-10B981?style=for-the-badge)
 
-Projetada para neutralizar perdas de dados causadas por bloqueadores de anúncios (AdBlockers), Apple ITP (iOS 14.5+), restrições de navegadores e assegurar **100% de integridade na atribuição do primeiro clique** até a conversão final no WhatsApp, formulário ou CRM.
+**Plataforma corporativa de rastreamento server-side de 1ª parte (*First-Party*), atribuição multitouch de conversões e despacho assíncrono para redes de anúncios com governança estrita de privacidade.**
+
+</div>
+
+---
+
+## 📸 Visão Geral da Plataforma
+
+<div align="center">
+  <img src="docs/images/01_visao_geral_dashboard.png" alt="Visão Geral do Dashboard HN Tracking" width="100%" />
+  <p><em>Painel Analítico Unificado: Métricas de visitantes únicos, eventos em tempo real, monitoramento de saúde do DNS First-Party e tendências de conversão.</em></p>
+</div>
+
+---
+
+## 🎯 Por Que Esta Plataforma Existe?
+
+O rastreamento tradicional baseado em pixels de terceiros (*3rd-party cookies*) no navegador sofreu perdas de **30% a 50% de dados** devido a:
+1. **Bloqueadores de Anúncios e Extensões:** uBlock Origin, Brave Shields e AdBlockers bloqueiam domínios de terceiros conhecidos.
+2. **Apple ITP e Safari (iOS 14.5+):** Descarte forçado de cookies analíticos e limitação da vida útil para 24 horas ou 7 dias.
+3. **Desconexão de Atribuição:** A conversão final no WhatsApp ou CRM não conversa com o primeiro clique da campanha que gerou o lead.
+
+O **HN Tracking Engine** neutraliza essas restrições operando como um **Túnel de 1ª Parte (First-Party Gateway)** através de subdomínios dos próprios clientes (ex: `track.spspower.com.br`), calculando a identidade do visitante deterministicamente no servidor e despachando as conversões de forma assíncrona diretamente para as APIs dos canais de mídia (Meta CAPI, Google Ads, GA4 e LinkedIn).
 
 ---
 
 ## 🏛️ Arquitetura do Sistema
 
 ```
-                    INTERNET / SITES CLIENTES / GTM
-                               │
-                               ▼
-                        ┌─────────────┐
-                        │   Traefik   │ (SSL Let's Encrypt / Proxy Reverso Borda)
-                        └──────┬──────┘
-                               │
-                               ▼
-                        ┌─────────────┐
-                        │   Go API    │ (Coletor HTTP sub-milissegundo)
-                        │  Tracking   │ (Set-Cookie _vid 1st-party + Anti-Bot)
-                        └──────┬──────┘
-                               │ XADD stream:events:raw
-                               ▼
-                        ┌─────────────┐
-                        │    Redis    │ (Stream / Buffer de Ingestão Resiliente)
-                        └──────┬──────┘
-                               │
-                  ┌────────────┴────────────┐
-                  ▼                         ▼
-       ┌─────────────────────┐   ┌─────────────────────┐
-       │  Go Batch Ingester  │   │    Go Dispatcher    │
-       │ (Flush a cada 2s /  │   │ (Pool de Workers    │
-       │  2.000 eventos)     │   │  com Retry & CAPI)  │
-       └──────────┬──────────┘   └──────────┬──────────┘
-                  │                         │
-         ┌────────┴────────┐      ┌─────────┼─────────┬─────────┐
-         ▼                 ▼      ▼         ▼         ▼         ▼
-   ┌───────────┐    ┌──────────┐┌────┐  ┌──────┐  ┌────────┐  ┌─────┐
-   │PostgreSQL │    │ClickHouse││Meta│  │Google│  │LinkedIn│  │ CRM │
-   │Identidade │    │ Eventos  ││CAPI│  │ Ads  │  │  CAPI  │  │ n8n │
-   │& Metadados│    │ (OLAP)   │└────┘  └──────┘  └────────┘  └─────┘
-   └───────────┘    └──────────┘
+                      INTERNET / SITES DOS CLIENTES / GTM
+                                       │
+                                       ▼
+                       ┌───────────────────────────────┐
+                       │   First-Party Ingress Gateway │ (SSL Let's Encrypt Automático)
+                       │       (Subdomínio CNAME)      │ (ex: track.cliente.com.br)
+                       └───────────────┬───────────────┘
+                                       │
+                                       ▼
+                       ┌───────────────────────────────┐
+                       │          Go API Coletor       │ (Latência sub-milissegundo)
+                       │        (cmd/api :8080)        │ (Anti-Bot + Identidade Cookieless)
+                       └───────────────┬───────────────┘
+                                       │ XADD stream:events:raw
+                                       ▼
+                       ┌───────────────────────────────┐
+                       │          Redis 7.2            │ (Buffer de Streaming Resiliente)
+                       └───────────────┬───────────────┘
+                                       │
+                         ┌─────────────┴─────────────┐
+                         ▼                           ▼
+              ┌─────────────────────┐     ┌─────────────────────┐
+              │  Go Batch Ingester  │     │    Go Dispatcher    │
+              │  (Flush a cada 2s / │     │  (Pool Concorrente  │
+              │   2.000 eventos)    │     │   com Retry & CAPI) │
+              └──────────┬──────────┘     └──────────┬──────────┘
+                         │                           │
+                ┌────────┴────────┐        ┌─────────┼─────────┬─────────┐
+                ▼                 ▼        ▼         ▼         ▼         ▼
+          ┌───────────┐    ┌──────────┐  ┌────┐   ┌──────┐  ┌────────┐ ┌─────┐
+          │PostgreSQL │    │ClickHouse│  │Meta│   │Google│  │LinkedIn│ │ CRM │
+          │Identidade │    │ Analítico│  │CAPI│   │ Ads  │  │  CAPI  │ │ n8n │
+          │& Metadados│    │  (OLAP)  │  └────┘   └──────┘  └────────┘ └─────┘
+          └───────────┘    └──────────┘
 ```
 
 ---
 
-## ✨ Principais Funcionalidades da Plataforma
+## 🌟 Módulos e Interfaces da Aplicação
 
-### 1. Coletor HTTP de Ultra-Baixa Latência (`cmd/api`)
-- **Resposta Instantânea:** Responde em tempo sub-milissegundo com status `HTTP 202 Accepted` e identificador único de evento (`hn_evt_...`).
-- **Cookie de 1ª Parte Canônico (`_vid`):** Gerado com autoridade exclusiva no servidor (`hn_vis_...`), política `SameSite=Lax`, flag `Secure` em produção e validade de 365 dias. Tentativas de fixação arbitrária no cliente são descartadas.
-- **Proteção Contra IP Spoofing:** Validação estrita via lista `TRUSTED_PROXIES`. Cabeçalhos `CF-Connecting-IP`, `X-Real-IP` e `X-Forwarded-For` só são processados quando a conexão TCP física provém de um CIDR autorizado.
-- **Segurança de Borda & Anti-Bot:** Detecção e isolamento de tráfego de robôs, crawlers e automações (`is_bot = 1`) para proteger métricas limpas e evitar desperdício de investimento em anúncios.
-- **Whitelist de Domínios em Tempo Real:** Valida a origem da requisição e gera alertas imediatos em caso de tentativas de envio por domínios não cadastrados.
+### 1. Onboarding Guiado & Gestão de Chaves de Acesso
+Assistente interativo de 5 etapas para colocar um novo site em produção em minutos:
 
-### 2. Ingestão Analítica em Lote no ClickHouse (`cmd/ingester`)
-- **Processamento em Lote Thread-Safe:** Consome de Redis Streams e executa *flush* no banco analítico a cada **2.000 eventos** ou **2 segundos**.
-- **Tabela `tracking_events.events`:** Engine colunar `ReplacingMergeTree(created_at)` com particionamento mensal e ordenação analítica por `(site_id, event_name, event_time, visitor_id)`.
-- **Campos Especializados de Ciclo de Vida:** Suporte a `submission_id`, `form_lifecycle_state` e `field_source`.
-- **Retenção Automatizada (TTL):** Política configurável de expurgo automático de eventos antigos.
+<div align="center">
+  <img src="docs/images/02_configuracoes_site_snippet.png" alt="Configurações do Site e Snippets" width="100%" />
+</div>
 
-### 3. Grafo de Identidade e Atribuição First-Touch (`internal/identity`)
-- **Proteção do Primeiro Toque:** O primeiro contato do visitante com o site (URL, Landing Page, Referrer, UTMs e Click IDs) é gravado de forma imutável no PostgreSQL.
-- **Normalização e Pseudonimização:** Normalização rigorosa de e-mails e telefones, armazenados sob hash criptográfico HMAC-SHA256 utilizando `HMAC_PEPPER` de aplicação perante a LGPD.
-
-### 4. Dispatcher Server-Side Concorrente (`cmd/dispatcher`)
-- **Pool de Conexões HTTP Keep-Alive:** Despacho paralelo com retry exponencial para máxima taxa de entrega.
-- **Integrações Nativas Server-Side:**
-  - **Meta Conversions API (CAPI):** Despacho direto com hashes SHA-256 (`em`, `ph`), deduplicação de `event_id` com o Meta Pixel, cookies `_fbp`/`_fbc` e suporte a código de teste (`test_event_code`).
-  - **Google Ads Offline / Enhanced Conversions:** Envio de dados enriquecidos com hashes de contato e suporte a `gclid`, `gbraid` e `wbraid`.
-  - **Google Analytics 4 Measurement Protocol:** Suporte completo com rota de validação de schema `/debug/mp/collect`.
-  - **LinkedIn Conversions API (Direct CAPI):** Suporte nativo à API Rest.li 2.0 do LinkedIn com **cálculo dinâmico da versão ativa da API** (prevenindo erros de versão expirada) e diagnóstico semântico humanizado de falhas na interface.
-  - **Webhooks de CRM / n8n:** Disparo de payloads enriquecidos contendo contato do lead, dados do *Primeiro Toque* (*First Touch*) e da *Conversão* (*Conversion Touch*).
-
-### 5. SDK JavaScript de Borda (`sdk/tracker.js`)
-- **Ultra-Leve e Zero Dependências:** Vanilla JS puro (< 4 KB gzipped), sem impacto nos Core Web Vitals (LCP/FID).
-- **Suporte Nativo ao GTM:** Compatível com Google Tag Manager, Tag Assistant e variáveis globais.
-- **Eventos Automáticos:** `session_start`, `first_visit`, `page_view`, rolagem de 90% (*Scroll Depth*), cliques em WhatsApp, downloads de arquivos e cliques em links de saída (*Outbound Links*).
-- **Captura Avançada de Formulários (Lifecycle de 3 Estágios):**
-  1. `form_attempt`: tentativa de envio disparada no DOM.
-  2. `form_client_validated`: validação nativa de preenchimento do navegador sem reenvio de dados sensíveis.
-  3. `form_submit_success`: confirmação de sucesso disparada pelo servidor ou eventos dataLayer de construtores (Bricks, Elementor, WPForms, Fluent Forms, Contact Form 7).
-- **Prevenção de Falsas Conversões:** Interceptação automática de erros de builders de formulário para impedir disparos de leads incorretos.
+- **Identificação com Prefixos Tipados:** Chaves criptografadas no formato padronizado `hn_site_...`.
+- **Validador de DNS First-Party:** Instruções passo a passo de apontamento CNAME com feedback em tempo real.
+- **Snippets Resilientes Multiformato:** Código pronto para HTML puro, Google Tag Manager (GTM) e WordPress/Elementor, já equipado com tratamento de erro e telemetria no console.
 
 ---
 
-## 🔒 Governança de Dados e Conformidade LGPD / ANPD
+### 2. Validação & Depuração em Tempo Real (DebugView)
+Transmissão contínua de eventos via **Server-Sent Events (SSE)** com isolamento total entre tráfego de depuração e métricas analíticas:
 
-A plataforma implementa a metodologia **Privacy by Design e Privacy by Default**:
+<div align="center">
+  <img src="docs/images/03_debugview_tempo_real.png" alt="DebugView em Tempo Real" width="100%" />
+</div>
 
-1. **Separação Formal de Papéis:** A infraestrutura atua como **Operador** técnico; o cliente proprietário do site atua como **Controlador** das bases legais e consentimento.
-2. **Consentimento Granular:** Suporte às categorias `necessary`, `analytics` e `marketing`. A persistência de parâmetros de anúncio e o despacho externo para Meta/Google/LinkedIn permanecem bloqueados até o consentimento ativo do titular.
-3. **Respeito ao Global Privacy Control (GPC):** Reconhece cabeçalhos `Sec-GPC: 1` e a flag JS `navigator.globalPrivacyControl`, revogando automaticamente categorias de marketing.
-4. **Anonimização de IP:** Mascaramento do último octeto em conexões IPv4 (`187.33.241.0/24`) e mascaramento dos últimos 80 bits em IPv6 (`/48`).
-5. **Hard Blocklist de Campos Sensíveis:** O SDK recusa terminantemente a leitura de campos de senha (`password`), cartões de crédito (`cc-*`), tokens CSRF, campos ocultos (`hidden`) e anexos de arquivos.
-6. **Mascaramento em Logs e Telas:** O DebugView em tempo real e os logs operacionais mascaram todos os dados de contato (`jo***@exemplo.com.br`, `21*****88`, `J*** S***`).
-7. **Atendimento a Direitos do Titular (Art. 18 LGPD):** Rotinas completas de localização e eliminação de registros por `visitor_id` ou HMAC de e-mail/telefone no PostgreSQL e ClickHouse.
+- **Linha do Tempo Visual:** Acompanhamento instantâneo de disparos (`page_view`, `session_start`, `form_attempt`, `whatsapp_click`).
+- **Inspeção Profunda de Propriedades:** Visualização do `visitor_id`, `session_id`, parâmetros de UTM, geolocalização e sinais de hardware do dispositivo.
+- **Simulador de Eventos Sintéticos:** Ferramenta integrada para injetar eventos de teste e verificar integrações sem necessitar de acessos reais.
 
 ---
 
-## 📊 Dashboard Analítico Completo (`/dashboard`)
+### 3. Central de Envios Server-Side (CAPI Wizard)
+Painel unificado para conexão e homologação das APIs de conversão server-side:
 
-O painel administrativo possui interface moderna em Dark Mode / Glassmorphism, com sidebar retrátil (atalho: `Ctrl + B`) e 9 módulos de inteligência:
+<div align="center">
+  <img src="docs/images/04_central_envios_capi_modal.png" alt="Central de Envios CAPI" width="85%" />
+</div>
 
-1. **📊 Visão Geral (Overview):** KPIs em tempo real (Eventos, Visitantes Únicos, Sessões, Conversões, Taxa de Conversão e Tráfego de Robôs Interceptados), gráfico de série temporal, distribuição de dispositivos e top origens.
-2. **📄 Páginas Monitoradas:** Tabela de URLs canônicas com visualizações, visitantes únicos, tempo médio de retenção e conversões por página.
-3. **🎯 Leads & Conversões:** Lista detalhada de conversões com auditoria de integridade de tráfego pago (OK, Aviso ou Crítico), modal com a jornada completa do visitante e botão de exportação em CSV (compatível com Excel via UTF-8 BOM e delimitador `;`).
-4. **🌐 Origem & Campanhas:** Relatório detalhado cruzando `utm_source`, `utm_medium`, `utm_campaign`, `gclid` e `fbclid`.
-5. **🛤️ Funis & Atribuição:** Funil de 4 etapas (Visualização de Página ➔ Rolagem Profunda ➔ Intenção/Formulário ➔ Conversão Confirmada) com taxas de abandono; Análise de Atribuição Multitouch comparando *First Touch* vs *Last Touch*.
-6. **⚡ DebugView (Ao Vivo):** Transmissão de eventos em tempo real via Server-Sent Events (SSE), linha do tempo cronológica, filtros por tipo e origem (Produção vs Debug), simulador de eventos de teste sintéticos e limpeza de buffer.
-7. **🚀 Envios & CAPI (Wizard):** Assistente passo a passo para configuração de Meta CAPI, Google Ads, GA4 MP, LinkedIn CAPI e Webhook CRM, com botões de teste (*Ping*) e diagnósticos semânticos em tempo real.
-8. **📚 Guia de Instalação SDK:** Manual interativo de implementação, snippets prontos para GTM, mapeamento de eventos e guia da API `window.hnTrack`.
-9. **⚙️ Configurações & Domínios:** Gestão de Chaves de API com telemetria e revogação imediata, whitelist de domínios permitidos e central de alertas de segurança com aprovação em 1 clique.
+- **Meta Conversions API (CAPI):** Despacho direto de conversões com normalização e hashing SHA-256 de dados do titular (`em`, `ph`), deduplicação com Meta Pixel e código de teste de eventos.
+- **Google Ads Enhanced Conversions:** Envio de dados enriquecidos com suporte a `gclid`, `gbraid` e `wbraid`.
+- **Google Analytics 4 Measurement Protocol:** Suporte completo ao MP do GA4 com validação de payload em tempo real.
+- **LinkedIn Conversions API (Rest.li 2.0):** Cálculo dinâmico da versão ativa da API (prevenindo quebras por depreciação) e tratamento semântico de erros B2B.
+
+---
+
+### 4. Pipeline de Roteamento de Eventos & Governança LGPD
+Mecanismo visual de controle de tráfego, conformidade legal e roteamento seletivo de eventos:
+
+<div align="center">
+  <img src="docs/images/05_event_routing_governanca.png" alt="Pipeline de Roteamento e Governança LGPD" width="100%" />
+</div>
+
+- **Gatekeeper LGPD em Linha:** Filtragem automatizada por categoria de consentimento (`necessary`, `analytics`, `marketing`).
+- **Respeito ao Global Privacy Control (GPC):** Reconhece cabeçalhos `Sec-GPC: 1` e desativa automaticamente o despacho para terceiros caso o visitante opte pelo não rastreamento.
+- **Anonimização de IP:** Truncamento automático de IPv4 (`/24`) e IPv6 (`/48`) antes da persistência no banco colunar.
+- **Proteção de Campos Sensíveis:** Bloqueio no SDK de campos como senhas, cartões de crédito e tokens de segurança.
+
+---
+
+## 🩺 Ferramenta CLI de Diagnóstico Pré-Voo (`scripts/check_gateway.sh`)
+
+Para garantir que o subdomínio First-Party de um novo cliente está 100% operacional antes de publicar as tags no GTM ou em produção, a aplicação inclui um utilitário CLI de verificação em 4 etapas:
+
+```bash
+./scripts/check_gateway.sh track.spspower.com.br
+```
+
+### Exemplo de Saída:
+```text
+======================================================================
+🩺 HN GATEWAY DOCTOR: Diagnóstico Pré-Voo de First-Party Domain
+======================================================================
+Alvo: track.spspower.com.br
+
+[1/4] Verificando Resolução DNS...
+  ✔ CNAME detectado: trackeamento.hnperformancedigital.com.br.
+  ✔ Resolução de IP OK: 178.253.250.73
+
+[2/4] Verificando Handshake TLS & Certificado SSL...
+  Subject: subject=CN=trackeamento.hnperformancedigital.com.br
+  Issuer : issuer=C=US, O=Let's Encrypt, CN=YR2
+  ✔ Certificado SSL emitido por Autoridade Certificadora válida!
+  Validade até: Jan 7 17:06:49 2027 GMT
+
+[3/4] Testando Acesso ao SDK Tracker via HTTPS...
+  ✔ Status HTTP 200 OK: O script /sdk/tracker.js foi entregue com sucesso!
+
+======================================================================
+🎉 SUCESSO: O domínio track.spspower.com.br está 100% OPERACIONAL e seguro!
+Pode ser utilizado no Google Tag Manager sem risco de bloqueio TLS.
+```
 
 ---
 
 ## 💻 Instalação da Tag no Site do Cliente
 
-Adicione o script no `<head>` ou no final do `<body>` do site:
+### Snippet Padrão Recomendado (HTML / GTM)
+Insira a tag no `<head>` ou utilize uma Tag HTML Personalizada no Google Tag Manager:
 
 ```html
-<!-- HN Performance Server-Side Tracking Tag -->
-<script 
-  src="https://trackeamento.hnperformancedigital.com.br/sdk/tracker.js" 
-  data-site-key="hn_live_key_0123456789abcdef01234567" 
+<!-- HN Performance First-Party Ingress Snippet (Cookieless & Resiliente) -->
+<script
+  src="https://track.seudominio.com.br/sdk/tracker.js"
+  data-site-key="hn_site_seu_token_ativo_aqui"
+  onerror="console.error('[HN Tracking] Erro ao carregar tracker.js. Verifique DNS e certificado SSL.');"
   async>
 </script>
 ```
 
-### Disparo Manual via JavaScript:
+### Disparo Manual de Conversões Qualificadas (JavaScript):
 ```javascript
-// Exemplo: Disparo de Conversão Qualificada
 window.hnTrack('purchase', {
   user_data: {
     email: 'cliente@exemplo.com.br',
@@ -148,21 +198,13 @@ window.hnTrack('purchase', {
 });
 ```
 
-### Gestão de Consentimento LGPD (Integração com CMPs):
+### Gestão de Consentimento LGPD (Integração com Banners de Cookies):
 ```javascript
-// Disparado imediatamente após a escolha do usuário no banner de cookies
 window.hnTrack('consent', {
   necessary: true,
   analytics: true,
   marketing: false // Desativa persistência de UTMs e despacho para Meta/Google
 });
-```
-
-### Marcação Explícita de Formulários (Opcional):
-```html
-<input type="email" data-hn-field="email" placeholder="Seu melhor e-mail">
-<input type="tel" data-hn-field="phone" placeholder="Seu WhatsApp">
-<input type="text" data-hn-field="name" placeholder="Seu nome completo">
 ```
 
 ---
@@ -171,14 +213,14 @@ window.hnTrack('consent', {
 
 | Componente | Tecnologia | Versão | Função Principal |
 | :--- | :--- | :--- | :--- |
-| **Linguagem** | Go (Golang) | 1.24+ | Backend compilado de ultra-alta performance e concorrência nativa. |
-| **Framework Web** | Fiber v2 / fasthttp | v2.52 | Roteamento HTTP com latência sub-milissegundo e baixo consumo de memória. |
-| **Banco Analítico** | ClickHouse Server | 24+ | Banco de dados colunar OLAP para agregação de milhões de eventos com compressão extrema. |
-| **Banco Relacional** | PostgreSQL | 16+ | Metadados transacionais, usuários, sessões, chaves de API e grafo de identidade. |
-| **Fila / Streaming** | Redis | 7+ | Ingestão bufferizada via Redis Streams (`stream:events:raw`) e Pub/Sub em tempo real. |
-| **Proxy Reverso** | Traefik | v3 | Roteamento de borda com geração e renovação automática de certificados SSL Let's Encrypt. |
+| **Linguagem Backend** | Go (Golang) | 1.24+ | Microsserviços compilados de concorrência massiva e latência sub-milissegundo. |
+| **Framework HTTP** | Fiber v2 / fasthttp | v2.52 | Roteamento HTTP de ultra-alta performance com suporte a keep-alive e proxies. |
+| **Banco Analítico** | ClickHouse Server | 24+ | Armazenamento colunar OLAP para agregação de milhões de eventos por segundo. |
+| **Banco Transacional** | PostgreSQL | 16+ | Grafo de identidade de visitantes, metadados de sites, chaves de API e tenants. |
+| **Streaming & Buffer** | Redis | 7.2 | Buffer de ingestão de eventos via Redis Streams (`stream:events:raw`). |
+| **Ingress & Proxy** | Traefik v3 / Caddy v2 | v2/v3 | Terminação TLS sob demanda com Let's Encrypt para N subdomínios de clientes. |
 | **SDK Frontend** | Vanilla JavaScript | ES5/ES6 | Script ultraleve (< 4 KB), sem dependências externas, compatível com GTM. |
-| **Containers** | Docker & Compose | 2+ | Empacotamento unificado de microsserviços. |
+| **Orquestração** | Docker & Compose | 2+ | Empacotamento unificado de containers e gerenciamento via Portainer. |
 
 ---
 
@@ -196,11 +238,11 @@ window.hnTrack('consent', {
 
 3. **Acesse as interfaces da aplicação:**
    - **Status da API:** [http://localhost:8080/health](http://localhost:8080/health)
-   - **Dashboard Administrativo:** [http://localhost:8080/dashboard](http://localhost:8080/dashboard) (Login padrão: `admin` / senha configurada no `.env`)
+   - **Dashboard Administrativo:** [http://localhost:8080/dashboard](http://localhost:8080/dashboard) (Credenciais no `.env`)
    - **Guia do SDK:** [http://localhost:8080/docs](http://localhost:8080/docs)
    - **Script do SDK:** [http://localhost:8080/sdk/tracker.js](http://localhost:8080/sdk/tracker.js)
 
-4. **Executar a suíte de testes automatizados:**
+4. **Executar a suíte completa de testes:**
    ```bash
    go test -v -race ./...
    ```
@@ -211,8 +253,9 @@ window.hnTrack('consent', {
 
 - [Manual Técnico e Guia de Verificação Interna (Auditoria e Telas)](docs/MANUAL_DE_VERIFICACAO_INTERNA.md)
 - [Especificação de Governança de Dados e Privacidade LGPD / ANPD](docs/PRIVACY_AND_DATA_GOVERNANCE.md)
-- [Guia Operacional e Contexto de Arquitetura para Agentes de IA](docs/CONTEXTO_AGENTES.md)
-- [Guia e Procedimentos de Deploy em Produção](DEPLOY.md)
+- [Manual de Deploy de Novos Clientes via Imagem Docker Hub](docs/DEPLOY_NOVO_CLIENTE_DOCKERHUB.md)
+- [Contexto de Arquitetura e Diretrizes para Agentes de IA](docs/CONTEXTO_AGENTES.md)
+- [Procedimentos e Guia de Deploy em Produção](DEPLOY.md)
 
 ---
 

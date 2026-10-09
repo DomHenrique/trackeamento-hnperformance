@@ -141,13 +141,42 @@ services:
     networks:
       - tracking_internal
 
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: tracking_caddy
+    restart: unless-stopped
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - tracking_internal
+      - rede_gridd
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=rede_gridd"
+      # TCP Passthrough HTTPS para que o Caddy gerencie o TLS On-Demand com Let's Encrypt
+      - "traefik.tcp.routers.tracking-caddy.entrypoints=websecure"
+      - "traefik.tcp.routers.tracking-caddy.rule=HostSNI(`track.spspower.com.br`) || HostSNIRegexp(`^track\\..+`)"
+      - "traefik.tcp.routers.tracking-caddy.tls.passthrough=true"
+      - "traefik.tcp.routers.tracking-caddy.service=tracking-caddy-service"
+      - "traefik.tcp.services.tracking-caddy-service.loadbalancer.server.port=443"
+      # Roteamento HTTP para validação ACME HTTP-01 e redirecionamento
+      - "traefik.http.routers.tracking-caddy-http.entrypoints=web"
+      - "traefik.http.routers.tracking-caddy-http.rule=Host(`track.spspower.com.br`) || HostRegexp(`^track\\..+`)"
+      - "traefik.http.routers.tracking-caddy-http.service=tracking-caddy-http-service"
+      - "traefik.http.services.tracking-caddy-http-service.loadbalancer.server.port=80"
+
 volumes:
   tracking_redis_data:
   tracking_postgres_data:
   tracking_clickhouse_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   tracking_internal:
     driver: bridge
   rede_gridd:
     external: true
+

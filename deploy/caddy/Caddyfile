@@ -1,0 +1,40 @@
+{
+    # Global On-Demand TLS: emite e renova certificados SSL automaticamente (Let's Encrypt / ZeroSSL)
+    # apenas para subdomínios autorizados pela API da HN Performance
+    on_demand_tls {
+        ask http://api:8080/api/v1/internal/validate-domain
+        interval 2m
+        burst 10
+    }
+}
+
+# Ingress Gateway para todos os subdomínios First-Party de clientes (ex: track.spspower.com.br)
+:443 {
+    tls {
+        on_demand
+    }
+
+    # Compressão otimizada para o SDK JavaScript
+    encode zstd gzip
+
+    # Headers de segurança
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        -Server
+    }
+
+    # Proxy para o container Go da API de Coleta
+    reverse_proxy api:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+    }
+}
+
+# Redirecionamento automático HTTP -> HTTPS e validação ACME HTTP-01
+:80 {
+    redir https://{host}{uri} permanent
+}

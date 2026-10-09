@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"tracking-engine/internal/config"
 )
 
 func TestCleanHost(t *testing.T) {
@@ -163,3 +164,49 @@ func TestExtractOriginDomain(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleCheckCnameAuthorized(t *testing.T) {
+	cfg := &config.Config{
+		TrackingDomain: "trackeamento.hnperformancedigital.com.br",
+	}
+	handler := &Handler{
+		cfg: cfg,
+	}
+
+	app := fiber.New()
+	app.Get("/api/v1/internal/validate-domain", handler.HandleCheckCnameAuthorized)
+
+	// Caso 1: Domínio ausente -> 400
+	req1 := httptest.NewRequest("GET", "/api/v1/internal/validate-domain", nil)
+	resp1, err := app.Test(req1)
+	if err != nil {
+		t.Fatalf("erro ao executar teste: %v", err)
+	}
+	if resp1.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("esperado 400 para domínio ausente, obteve %d", resp1.StatusCode)
+	}
+	_ = resp1.Body.Close()
+
+	// Caso 2: Domínio mestre do tracking configurado -> 200 OK
+	req2 := httptest.NewRequest("GET", "/api/v1/internal/validate-domain?domain=trackeamento.hnperformancedigital.com.br", nil)
+	resp2, err := app.Test(req2)
+	if err != nil {
+		t.Fatalf("erro ao executar teste: %v", err)
+	}
+	if resp2.StatusCode != fiber.StatusOK {
+		t.Errorf("esperado 200 para tracking domain mestre, obteve %d", resp2.StatusCode)
+	}
+	_ = resp2.Body.Close()
+
+	// Caso 3: Domínio de terceiro sem banco (fail-closed) -> 503
+	req3 := httptest.NewRequest("GET", "/api/v1/internal/validate-domain?domain=desconhecido.com", nil)
+	resp3, err := app.Test(req3)
+	if err != nil {
+		t.Fatalf("erro ao executar teste: %v", err)
+	}
+	if resp3.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("esperado 503 para banco indisponível (fail-closed), obteve %d", resp3.StatusCode)
+	}
+	_ = resp3.Body.Close()
+}
+

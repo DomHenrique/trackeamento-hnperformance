@@ -247,6 +247,7 @@ func main() {
 	app.Post("/api/v1/domains/verify-cname", authMiddleware, handler.HandleVerifyCname)
 	app.Post("/api/v1/domains/set-cname", authMiddleware, handler.HandleSetCname)
 	app.Get("/api/v1/domains/check-cname-authorized", handler.HandleCheckCnameAuthorized)
+	app.Get("/api/v1/internal/validate-domain", handler.HandleCheckCnameAuthorized)
 
 	// Endpoints Analíticos (Requer Autenticação)
 	app.Get("/api/v1/analytics/overview", authMiddleware, handler.HandleAnalyticsOverview)
