@@ -520,7 +520,7 @@ func TestHandleCollect_AutomaticEvents(t *testing.T) {
 	testKey := prefixedid.GenerateSiteKey()
 	h.siteKeys.Store(testKey, &SiteMetadata{
 		ID:             "site_auto_events",
-		AllowedDomains: []string{"spspower.com.br"},
+		AllowedDomains: []string{"meudominio.com.br"},
 	})
 
 	events := []struct {
@@ -562,7 +562,7 @@ func TestHandleCollect_AutomaticEvents(t *testing.T) {
 			name:      "Ingestão file_download",
 			eventName: "file_download",
 			customData: map[string]interface{}{
-				"file_name":      "catalogo_sps_2026.pdf",
+				"file_name":      "catalogo_produtos.pdf",
 				"file_extension": "pdf",
 			},
 		},
@@ -573,13 +573,13 @@ func TestHandleCollect_AutomaticEvents(t *testing.T) {
 			body, _ := json.Marshal(map[string]interface{}{
 				"site_key":    testKey,
 				"event_name":  tc.eventName,
-				"url":         "https://spspower.com.br/produtos",
+				"url":         "https://meudominio.com.br/produtos",
 				"custom_data": tc.customData,
 				"is_debug":    true,
 			})
 			req := httptest.NewRequest("POST", "/api/v1/collect", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Origin", "https://spspower.com.br")
+			req.Header.Set("Origin", "https://meudominio.com.br")
 
 			resp, err := app.Test(req)
 			if err != nil {

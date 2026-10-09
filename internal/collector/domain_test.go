@@ -13,9 +13,9 @@ func TestCleanHost(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"https://spspower.com.br", "spspower.com.br"},
-		{"http://spspower.com.br:8080/caminho?a=1", "spspower.com.br"},
-		{"lp.spspower.com.br", "lp.spspower.com.br"},
+		{"https://meudominio.com.br", "meudominio.com.br"},
+		{"http://meudominio.com.br:8080/caminho?a=1", "meudominio.com.br"},
+		{"lp.meudominio.com.br", "lp.meudominio.com.br"},
 		{"https://sub.dominio.com.br:443", "sub.dominio.com.br"},
 		{"", ""},
 	}
@@ -29,7 +29,7 @@ func TestCleanHost(t *testing.T) {
 }
 
 func TestIsDomainAllowed(t *testing.T) {
-	allowed := []string{"spspower.com.br", "hnperformancedigital.com.br"}
+	allowed := []string{"meudominio.com.br", "hnperformancedigital.com.br"}
 
 	tests := []struct {
 		host     string
@@ -37,17 +37,17 @@ func TestIsDomainAllowed(t *testing.T) {
 		expected bool
 	}{
 		// Domínios exatos
-		{"spspower.com.br", false, true},
+		{"meudominio.com.br", false, true},
 		{"hnperformancedigital.com.br", false, true},
 
 		// Subdomínios permitidos automaticamente
-		{"lp.spspower.com.br", false, true},
-		{"checkout.spspower.com.br", false, true},
+		{"lp.meudominio.com.br", false, true},
+		{"checkout.meudominio.com.br", false, true},
 		{"app.sub.hnperformancedigital.com.br", false, true},
 
 		// Tentativas fraudulentas (homógrafos / sufixos sem ponto)
-		{"fakespspower.com.br", false, false},
-		{"spspower.com.br.evil.com", false, false},
+		{"fakemeudominio.com.br", false, false},
+		{"meudominio.com.br.evil.com", false, false},
 		{"outrosite.com.br", false, false},
 		{"", false, false},
 
@@ -78,49 +78,49 @@ func TestExtractOriginDomain(t *testing.T) {
 	}{
 		{
 			name:           "Header Origin de navegador legítimo",
-			originHdr:      "https://spspower.com.br",
+			originHdr:      "https://meudominio.com.br",
 			refererHdr:     "",
 			reqURL:         "https://evil.com/fake",
 			isServerAuth:   false,
 			cnameSubdomain: "",
-			expected:       "spspower.com.br",
+			expected:       "meudominio.com.br",
 		},
 		{
 			name:           "Header Referer quando Origin ausente",
 			originHdr:      "",
-			refererHdr:     "https://lp.spspower.com.br/contato?utm=1",
+			refererHdr:     "https://lp.meudominio.com.br/contato?utm=1",
 			reqURL:         "https://evil.com/fake",
 			isServerAuth:   false,
 			cnameSubdomain: "",
-			expected:       "lp.spspower.com.br",
+			expected:       "lp.meudominio.com.br",
 		},
 		{
 			name:           "Rejeita payload sem headers de navegador, sem server auth e fora do CNAME (Abordagem B)",
 			originHdr:      "",
 			refererHdr:     "",
-			reqURL:         "https://spspower.com.br",
+			reqURL:         "https://meudominio.com.br",
 			isServerAuth:   false,
-			cnameSubdomain: "track.spspower.com.br",
+			cnameSubdomain: "track.meudominio.com.br",
 			expected:       "",
 		},
 		{
 			name:           "Disparo Server-Side autenticado via X-Server-Key aceita payload",
 			originHdr:      "",
 			refererHdr:     "",
-			reqURL:         "https://spspower.com.br/agradecimento",
+			reqURL:         "https://meudominio.com.br/agradecimento",
 			isServerAuth:   true,
 			cnameSubdomain: "",
-			expected:       "spspower.com.br",
+			expected:       "meudominio.com.br",
 		},
 		{
 			name:           "Tráfego recebido via CNAME First-Party verificado aceita payload",
 			originHdr:      "",
 			refererHdr:     "",
-			hostHdr:        "track.spspower.com.br",
-			reqURL:         "https://spspower.com.br/produto",
+			hostHdr:        "track.meudominio.com.br",
+			reqURL:         "https://meudominio.com.br/produto",
 			isServerAuth:   false,
-			cnameSubdomain: "track.spspower.com.br",
-			expected:       "spspower.com.br",
+			cnameSubdomain: "track.meudominio.com.br",
+			expected:       "meudominio.com.br",
 		},
 	}
 

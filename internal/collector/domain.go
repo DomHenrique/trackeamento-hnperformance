@@ -121,12 +121,12 @@ func IsDomainAllowed(host string, allowedDomains []string, isDev bool) bool {
 			continue
 		}
 
-		// Correspondência exata (ex: "spspower.com.br" == "spspower.com.br")
+		// Correspondência exata (ex: "cliente.com.br" == "cliente.com.br")
 		if host == allowed {
 			return true
 		}
 
-		// Subdomínio legítimo (ex: "lp.spspower.com.br" termina com ".spspower.com.br")
+		// Subdomínio legítimo (ex: "lp.cliente.com.br" termina com ".cliente.com.br")
 		if strings.HasSuffix(host, "."+allowed) {
 			return true
 		}

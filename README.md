@@ -31,7 +31,7 @@ O rastreamento tradicional baseado em pixels de terceiros (*3rd-party cookies*) 
 2. **Apple ITP e Safari (iOS 14.5+):** Descarte forçado de cookies analíticos e limitação da vida útil para 24 horas ou 7 dias.
 3. **Desconexão de Atribuição:** A conversão final no WhatsApp ou CRM não conversa com o primeiro clique da campanha que gerou o lead.
 
-O **HN Tracking Engine** neutraliza essas restrições operando como um **Túnel de 1ª Parte (First-Party Gateway)** através de subdomínios dos próprios clientes (ex: `track.spspower.com.br`), calculando a identidade do visitante deterministicamente no servidor e despachando as conversões de forma assíncrona diretamente para as APIs dos canais de mídia (Meta CAPI, Google Ads, GA4 e LinkedIn).
+O **HN Tracking Engine** neutraliza essas restrições operando como um **Túnel de 1ª Parte (First-Party Gateway)** através de subdomínios dos próprios clientes (ex: `track.dominio.com.br`), calculando a identidade do visitante deterministicamente no servidor e despachando as conversões de forma assíncrona diretamente para as APIs dos canais de mídia (Meta CAPI, Google Ads, GA4 e LinkedIn).
 
 ---
 
@@ -137,7 +137,7 @@ Mecanismo visual de controle de tráfego, conformidade legal e roteamento seleti
 Para garantir que o subdomínio First-Party de um novo cliente está 100% operacional antes de publicar as tags no GTM ou em produção, a aplicação inclui um utilitário CLI de verificação em 4 etapas:
 
 ```bash
-./scripts/check_gateway.sh track.spspower.com.br
+./scripts/check_gateway.sh track.seudominio.com.br
 ```
 
 ### Exemplo de Saída:
@@ -145,7 +145,7 @@ Para garantir que o subdomínio First-Party de um novo cliente está 100% operac
 ======================================================================
 🩺 HN GATEWAY DOCTOR: Diagnóstico Pré-Voo de First-Party Domain
 ======================================================================
-Alvo: track.spspower.com.br
+Alvo: track.seudominio.com.br
 
 [1/4] Verificando Resolução DNS...
   ✔ CNAME detectado: trackeamento.hnperformancedigital.com.br.
@@ -161,7 +161,7 @@ Alvo: track.spspower.com.br
   ✔ Status HTTP 200 OK: O script /sdk/tracker.js foi entregue com sucesso!
 
 ======================================================================
-🎉 SUCESSO: O domínio track.spspower.com.br está 100% OPERACIONAL e seguro!
+🎉 SUCESSO: O domínio track.seudominio.com.br está 100% OPERACIONAL e seguro!
 Pode ser utilizado no Google Tag Manager sem risco de bloqueio TLS.
 ```
 

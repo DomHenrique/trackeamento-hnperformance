@@ -8,7 +8,7 @@
     }
 }
 
-# Ingress Gateway para todos os subdomínios First-Party de clientes (ex: track.spspower.com.br)
+# Ingress Gateway para todos os subdomínios First-Party de clientes (ex: track.seudominio.com.br)
 :443 {
     tls {
         on_demand

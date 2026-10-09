@@ -8,7 +8,7 @@
 # Uso:
 #   ./scripts/check_gateway.sh <dominio> [site_key]
 # Exemplo:
-#   ./scripts/check_gateway.sh track.spspower.com.br
+#   ./scripts/check_gateway.sh track.seudominio.com.br
 # ==============================================================================
 
 set -eo pipefail
@@ -25,7 +25,7 @@ SITE_KEY="${2:-}"
 
 if [ -z "$DOMAIN" ]; then
     echo -e "${YELLOW}Uso:${NC} $0 <dominio> [site_key]"
-    echo -e "Exemplo: $0 track.spspower.com.br"
+    echo -e "Exemplo: $0 track.seudominio.com.br"
     exit 1
 fi
 

@@ -157,13 +157,13 @@ services:
       - "traefik.docker.network=rede_gridd"
       # TCP Passthrough HTTPS para que o Caddy gerencie o TLS On-Demand com Let's Encrypt
       - "traefik.tcp.routers.tracking-caddy.entrypoints=websecure"
-      - "traefik.tcp.routers.tracking-caddy.rule=HostSNI(`track.spspower.com.br`) || HostSNIRegexp(`^track\\..+`)"
+      - "traefik.tcp.routers.tracking-caddy.rule=HostSNIRegexp(`^track\\..+`)"
       - "traefik.tcp.routers.tracking-caddy.tls.passthrough=true"
       - "traefik.tcp.routers.tracking-caddy.service=tracking-caddy-service"
       - "traefik.tcp.services.tracking-caddy-service.loadbalancer.server.port=443"
       # Roteamento HTTP para validação ACME HTTP-01 e redirecionamento
       - "traefik.http.routers.tracking-caddy-http.entrypoints=web"
-      - "traefik.http.routers.tracking-caddy-http.rule=Host(`track.spspower.com.br`) || HostRegexp(`^track\\..+`)"
+      - "traefik.http.routers.tracking-caddy-http.rule=HostRegexp(`^track\\..+`)"
       - "traefik.http.routers.tracking-caddy-http.service=tracking-caddy-http-service"
       - "traefik.http.services.tracking-caddy-http-service.loadbalancer.server.port=80"
 
