@@ -21,6 +21,8 @@ import (
 	"tracking-engine/internal/auth"
 	"tracking-engine/internal/collector"
 	"tracking-engine/internal/config"
+	"tracking-engine/internal/identity"
+	"tracking-engine/internal/inbound"
 	"tracking-engine/internal/integhandler"
 	"tracking-engine/internal/storage"
 )
@@ -96,6 +98,15 @@ func main() {
 		handler.InvalidateKey(key)
 	})
 
+	identSvc := identity.NewService(pg, rdb, cfg.HMACPepper)
+	if ch != nil {
+		identSvc.WithClickHouse(ch)
+	}
+	handler.SetOfflineReconciler(func(ctx context.Context, siteID string, norm *inbound.NormalizedCRMEvent, inboundEventID string) error {
+		_, err := identSvc.ReconcileOfflineConversion(ctx, siteID, norm, inboundEventID)
+		return err
+	})
+
 	// 6. Inicializa o app Fiber de ultra-performance
 	app := fiber.New(fiber.Config{
 		ServerHeader:          "HN-Tracking-Engine",
@@ -108,7 +119,7 @@ func main() {
 		Next: func(c *fiber.Ctx) bool {
 			// Não aplicar restrições de mesma origem (CORP/COEP) nos recursos públicos do tracker e ingestão
 			path := c.Path()
-			return strings.HasPrefix(path, "/sdk") || strings.HasPrefix(path, "/api/v1/collect") || path == "/t"
+			return strings.HasPrefix(path, "/sdk") || strings.HasPrefix(path, "/api/v1/collect") || strings.HasPrefix(path, "/api/v1/inbound") || path == "/t"
 		},
 		XSSProtection:             "1; mode=block",
 		ContentTypeNosniff:        "nosniff",
@@ -279,6 +290,11 @@ func main() {
 	app.Get("/api/v1/sites/:site_id/keys", authMiddleware, integHandler.HandleListSiteKeys)
 	app.Post("/api/v1/sites/:site_id/keys", authMiddleware, integHandler.HandleCreateSiteKey)
 	app.Post("/api/v1/sites/:site_id/keys/:key_id/revoke", authMiddleware, integHandler.HandleRevokeSiteKey)
+
+	// Endpoints Inbound de CRM, ERP e Gateways de Pagamento (Presets + Smart Auto-Mapping)
+	app.Post("/api/v1/inbound/crm/:provider", handler.HandleInboundCRMWebhook)
+	app.Post("/api/v1/inbound/crm/custom", handler.HandleInboundCRMWebhook)
+	app.Get("/api/v1/sites/:site_id/inbound-events", authMiddleware, handler.HandleListInboundEvents)
 
 	// Endpoint para servir o SDK JS do Tracker (acesso público para sites clientes)
 	app.Get("/sdk/tracker.js", func(c *fiber.Ctx) error {

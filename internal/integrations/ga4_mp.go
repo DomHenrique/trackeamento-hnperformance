@@ -36,8 +36,17 @@ func (g *GA4MP) SendEvent(ctx context.Context, measurementID, apiSecret string, 
 
 	clientID := strings.TrimPrefix(ev.VisitorID, "v_")
 
+	pageLocation := ev.Attribution.PageURL
+	if pageLocation == "" {
+		if ev.Attribution.LandingPage != "" {
+			pageLocation = ev.Attribution.LandingPage
+		} else {
+			pageLocation = "https://trackeamento.hnperformancedigital.com.br"
+		}
+	}
+
 	params := map[string]interface{}{
-		"page_location": ev.Attribution.PageURL,
+		"page_location": pageLocation,
 		"page_referrer": ev.Attribution.Referrer,
 		"session_id":    ev.SessionID,
 	}
@@ -53,6 +62,16 @@ func (g *GA4MP) SendEvent(ctx context.Context, measurementID, apiSecret string, 
 
 	for k, v := range ev.CustomData {
 		params[k] = v
+	}
+
+	if val, ok := ev.CustomData["value"]; ok {
+		params["value"] = parseNumericValue(val)
+		if _, hasCur := params["currency"]; !hasCur {
+			params["currency"] = "BRL"
+		}
+	}
+	if orderID, ok := ev.CustomData["order_id"].(string); ok && orderID != "" {
+		params["transaction_id"] = orderID
 	}
 
 	ga4Event := GA4Event{
@@ -110,7 +129,7 @@ func mapGA4EventName(name string) string {
 	switch strings.ToLower(name) {
 	case "lead", "form_submit":
 		return "generate_lead"
-	case "purchase":
+	case "purchase", "deal_won", "sale", "lead_sale":
 		return "purchase"
 	case "whatsapp_click":
 		return "click_whatsapp"

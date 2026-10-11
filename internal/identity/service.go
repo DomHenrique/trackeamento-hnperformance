@@ -15,7 +15,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"tracking-engine/internal/attribution"
 	"tracking-engine/internal/collector"
+	"tracking-engine/internal/inbound"
 	"tracking-engine/internal/storage"
 )
 
@@ -400,4 +402,241 @@ func (s *Service) PurgeVisitorData(ctx context.Context, siteID, visitorID string
 	}
 
 	return rows, nil
+}
+
+// OfflineReconcileResult contém o resultado da reconciliação reversa da conversão offline
+type OfflineReconcileResult struct {
+	Matched    bool                    `json:"matched"`
+	VisitorID  string                  `json:"visitor_id"`
+	Event      *collector.EventPayload `json:"event"`
+	FirstTouch map[string]interface{}  `json:"first_touch"`
+}
+
+// ReconcileOfflineConversion executa a reconciliação reversa de identidade buscando histórico no PostgreSQL,
+// gerando o evento canônico e despachando para ClickHouse e canais de publicidade (Meta CAPI, GA4 MP, LinkedIn CAPI).
+func (s *Service) ReconcileOfflineConversion(ctx context.Context, siteID string, norm *inbound.NormalizedCRMEvent, inboundEventID string) (*OfflineReconcileResult, error) {
+	siteUUID, err := uuid.Parse(siteID)
+	if err != nil {
+		return nil, fmt.Errorf("site_id inválido (%s): %w", siteID, err)
+	}
+
+	normEmail := NormalizeEmail(norm.Email)
+	normPhone := NormalizePhone(norm.Phone)
+	hmacEmail := HashHMACSHA256(normEmail, s.pepper)
+	shaEmail := HashSHA256(normEmail)
+	hmacPhone := HashHMACSHA256(normPhone, s.pepper)
+	shaPhone := HashSHA256(normPhone)
+
+	matched := false
+	matchedVisitorID := ""
+	firstTouch := make(map[string]interface{})
+	var attr attribution.Params
+	userData := map[string]interface{}{
+		"email": normEmail,
+		"phone": normPhone,
+	}
+	if norm.Name != "" {
+		userData["name"] = norm.Name
+	}
+
+	if s.pg != nil && s.pg.Pool != nil {
+		var (
+			vid         string
+			landingPage string
+			referrer    string
+			utmSource   string
+			utmMedium   string
+			utmCampaign string
+			utmContent  string
+			utmTerm     string
+			gclid       string
+			fbclid      string
+			ttclid      string
+			name        string
+			rawMetadata []byte
+		)
+
+		query := `
+			SELECT visitor_id, 
+			       COALESCE(first_landing_page, ''), 
+			       COALESCE(first_referrer, ''), 
+			       COALESCE(first_utm_source, ''), 
+			       COALESCE(first_utm_medium, ''), 
+			       COALESCE(first_utm_campaign, ''), 
+			       COALESCE(first_utm_content, ''), 
+			       COALESCE(first_utm_term, ''), 
+			       COALESCE(first_gclid, ''), 
+			       COALESCE(first_fbclid, ''), 
+			       COALESCE(first_ttclid, ''), 
+			       COALESCE(identified_name, ''),
+			       COALESCE(metadata, '{}'::jsonb)
+			FROM visitors
+			WHERE site_id = $1 AND (
+				(visitor_id = $2 AND $2 != '') OR
+				(identified_email_hash IN ($3, $4) AND $3 != '') OR
+				(identified_phone_hash IN ($5, $6) AND $5 != '')
+			)
+			ORDER BY last_seen_at DESC LIMIT 1
+		`
+
+		errScan := s.pg.Pool.QueryRow(ctx, query,
+			siteUUID,
+			norm.VisitorID,
+			hmacEmail, shaEmail,
+			hmacPhone, shaPhone,
+		).Scan(
+			&vid,
+			&landingPage,
+			&referrer,
+			&utmSource,
+			&utmMedium,
+			&utmCampaign,
+			&utmContent,
+			&utmTerm,
+			&gclid,
+			&fbclid,
+			&ttclid,
+			&name,
+			&rawMetadata,
+		)
+
+		if errScan == nil && vid != "" {
+			matched = true
+			matchedVisitorID = vid
+			attr = attribution.Params{
+				LandingPage: landingPage,
+				PageURL:     landingPage,
+				Referrer:    referrer,
+				UTMSource:   utmSource,
+				UTMMedium:   utmMedium,
+				UTMCampaign: utmCampaign,
+				UTMContent:  utmContent,
+				UTMTerm:     utmTerm,
+				GCLID:       gclid,
+				FBCLID:      fbclid,
+				TTCLID:      ttclid,
+			}
+
+			firstTouch["first_landing_page"] = landingPage
+			firstTouch["first_utm_source"] = utmSource
+			firstTouch["first_utm_medium"] = utmMedium
+			firstTouch["first_utm_campaign"] = utmCampaign
+			firstTouch["first_gclid"] = gclid
+			firstTouch["first_fbclid"] = fbclid
+			firstTouch["first_ttclid"] = ttclid
+
+			if name != "" && userData["name"] == nil {
+				userData["name"] = name
+			}
+
+			// Resgata cookies de first-party salvos nos metadados caso existam
+			if len(rawMetadata) > 2 {
+				var metaMap map[string]interface{}
+				if errM := json.Unmarshal(rawMetadata, &metaMap); errM == nil {
+					if fbp, ok := metaMap["_fbp"].(string); ok && fbp != "" {
+						userData["fbp"] = fbp
+					}
+					if fbc, ok := metaMap["_fbc"].(string); ok && fbc != "" {
+						userData["fbc"] = fbc
+					}
+				}
+			}
+		}
+	}
+
+	if !matched {
+		if norm.VisitorID != "" {
+			matchedVisitorID = norm.VisitorID
+		} else {
+			matchedVisitorID = GenerateVisitorID()
+		}
+	}
+
+	// Monta CustomData com atributos financeiros e identificador de transação
+	customData := make(map[string]interface{})
+	if norm.CustomData != nil {
+		for k, v := range norm.CustomData {
+			customData[k] = v
+		}
+	}
+	customData["value"] = norm.Value
+	customData["currency"] = norm.Currency
+	customData["order_id"] = norm.OrderID
+	customData["provider"] = norm.Provider
+	customData["offline_conversion"] = true
+	customData["matched"] = matched
+
+	now := time.Now().UTC()
+	occurredAt := norm.OccurredAt
+	if occurredAt.IsZero() {
+		occurredAt = now
+	}
+
+	eventID := GenerateEventID()
+
+	ev := &collector.EventPayload{
+		EventID:             eventID,
+		SiteID:              siteID,
+		VisitorID:           matchedVisitorID,
+		SessionID:           GenerateSessionID(),
+		EventName:           norm.EventName,
+		EventTime:           occurredAt,
+		IPAddress:           "127.0.0.1",
+		UserAgent:           fmt.Sprintf("TrackingHN-InboundCRM/%s", norm.Provider),
+		DeviceType:          "server",
+		Attribution:         attr,
+		UserData:            userData,
+		CustomData:          customData,
+		Consent:             collector.ConsentState{Marketing: true, Analytics: true},
+		ExplicitLeadConsent: true,
+		CreatedAt:           now,
+	}
+
+	// 1. Enfileiramento no ClickHouse Batch Stream via Redis
+	if s.redis != nil {
+		rawEvBytes, errMarshal := json.Marshal(ev)
+		if errMarshal == nil {
+			_ = s.redis.PushRawEvent(ctx, rawEvBytes)
+		}
+	}
+
+	// 2. Enfileiramento no Pipeline de Despacho (Meta CAPI, GA4 MP, LinkedIn CAPI)
+	if s.redis != nil {
+		dispatchPayload := map[string]interface{}{
+			"event":       ev,
+			"first_touch": firstTouch,
+			"queued_at":   now,
+		}
+		if dBytes, errD := json.Marshal(dispatchPayload); errD == nil {
+			_ = s.redis.PushDispatchEvent(ctx, dBytes)
+		}
+	}
+
+	// 3. Atualização de status da auditoria no PostgreSQL
+	if inboundEventID != "" && s.pg != nil && s.pg.Pool != nil {
+		status := "unmatched"
+		if matched {
+			status = "matched"
+		}
+		inboundUUID, errInbound := uuid.Parse(inboundEventID)
+		if errInbound == nil {
+			_, _ = s.pg.Pool.Exec(ctx, `
+				UPDATE crm_inbound_events
+				SET status = $1,
+				    matched_visitor_id = $2,
+				    processed_at = now()
+				WHERE id = $3
+			`, status, matchedVisitorID, inboundUUID)
+		}
+	}
+
+	log.Printf("[Identity/CRM] Conversão reconciliada: provider=%s site=%s matched=%v vid=%s value=%.2f",
+		norm.Provider, siteID, matched, matchedVisitorID, norm.Value)
+
+	return &OfflineReconcileResult{
+		Matched:    matched,
+		VisitorID:  matchedVisitorID,
+		Event:      ev,
+		FirstTouch: firstTouch,
+	}, nil
 }

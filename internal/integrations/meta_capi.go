@@ -88,14 +88,43 @@ func (m *MetaCAPI) SendEvent(ctx context.Context, pixelID, accessToken, testCode
 	// Mapeia nome do evento para o padrão Meta
 	metaEventName := mapMetaEventName(ev.EventName)
 
+	actionSource := "website"
+	eventSourceURL := ev.Attribution.PageURL
+	if eventSourceURL == "" {
+		if ev.Attribution.LandingPage != "" {
+			eventSourceURL = ev.Attribution.LandingPage
+		} else {
+			actionSource = "system_generated"
+			eventSourceURL = "https://trackeamento.hnperformancedigital.com.br"
+		}
+	}
+
+	customData := make(map[string]interface{})
+	if ev.CustomData != nil {
+		for k, v := range ev.CustomData {
+			customData[k] = v
+		}
+	}
+	if val, ok := customData["value"]; ok {
+		customData["value"] = parseNumericValue(val)
+	}
+	if cur, ok := customData["currency"].(string); !ok || cur == "" {
+		if _, hasVal := customData["value"]; hasVal {
+			customData["currency"] = "BRL"
+		}
+	}
+	if orderID, ok := customData["order_id"].(string); ok && orderID != "" {
+		customData["order_id"] = orderID
+	}
+
 	metaEv := MetaEvent{
 		EventName:      metaEventName,
 		EventTime:      ev.EventTime.Unix(),
 		EventID:        ev.EventID,
-		EventSourceURL: ev.Attribution.PageURL,
-		ActionSource:   "website",
+		EventSourceURL: eventSourceURL,
+		ActionSource:   actionSource,
 		UserData:       userData,
-		CustomData:     ev.CustomData,
+		CustomData:     customData,
 	}
 
 	payload := MetaPayload{
@@ -154,7 +183,7 @@ func mapMetaEventName(name string) string {
 	switch strings.ToLower(name) {
 	case "lead", "form_submit":
 		return "Lead"
-	case "purchase":
+	case "purchase", "deal_won", "sale", "lead_sale":
 		return "Purchase"
 	case "whatsapp_click":
 		return "Contact"

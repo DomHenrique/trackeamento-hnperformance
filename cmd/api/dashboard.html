@@ -1733,6 +1733,25 @@
         .status-badge-active { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
         .status-badge-inactive { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); }
 
+        /* Conectores Inbound CRM & ERP */
+        .connector-card {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .connector-card:hover {
+            background: rgba(30, 41, 59, 0.85);
+            border-color: rgba(99, 102, 241, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        }
+
         /* Accordion Guia Passo a Passo */
         .guide-accordion {
             background: rgba(15, 23, 42, 0.7);
@@ -2876,6 +2895,10 @@
                 <span class="nav-icon">🔀</span>
                 <span class="nav-label">Event Routing & Destinos</span>
             </a>
+            <a class="nav-item" onclick="switchTab('crm', this)" id="nav-crm" data-tooltip="🔌 CRM & ERP Inbound">
+                <span class="nav-icon">🔌</span>
+                <span class="nav-label">CRM & ERP Inbound</span>
+            </a>
 
             <div class="menu-header" style="margin-top: 1rem;">Documentação & Setup</div>
             <a class="nav-item" onclick="openIntegrationsWizard()" data-tooltip="Envios & CAPI (Wizard)">
@@ -3827,6 +3850,275 @@
                             <tbody id="routing-recent-tbody">
                                 <tr>
                                     <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Carregando histórico recente...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: INBOUND CRM & ERP (CLOSED-LOOP ATTRIBUTION) -->
+            <div id="tab-crm" class="tab-pane">
+                <!-- HERO CARD -->
+                <div style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.8)); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h2 style="font-size: 1.25rem; font-weight: 800; color: #fff; margin: 0 0 0.4rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>🔌</span> Conectores Inbound de CRM, ERP & Gateways (Closed-Loop)
+                        </h2>
+                        <p style="font-size: 0.85rem; color: #94a3b8; margin: 0; max-width: 850px; line-height: 1.5;">
+                            Receba notificações de oportunidades ganhas, pedidos faturados e pagamentos confirmados de CRMs, ERPs e gateways. O motor localiza automaticamente a visita original do lead no PostgreSQL via hash de e-mail e telefone, recupera os parâmetros de anúncio (FBCLID, GCLID, UTMs) e despacha conversões monetizadas (Purchase) para Meta CAPI, Google Ads e LinkedIn.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn-refresh" onclick="loadCRMInboundTab()" style="background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); color: #a5b4fc;">
+                            <span>🔄</span> Atualizar Inspector
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI CARDS -->
+                <div class="kpi-grid" style="margin-bottom: 1.5rem;">
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Eventos Recebidos</span>
+                            <span class="kpi-icon">📥</span>
+                        </div>
+                        <div class="kpi-value" id="crm-kpi-total">0</div>
+                        <div class="kpi-sub">Total de webhooks auditados</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Reconciliados (Matched)</span>
+                            <span class="kpi-icon">🔗</span>
+                        </div>
+                        <div class="kpi-value" id="crm-kpi-matched" style="color: var(--success);">0</div>
+                        <div class="kpi-sub">Jornada publicitária resgatada</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Taxa de Atribuição</span>
+                            <span class="kpi-icon">🎯</span>
+                        </div>
+                        <div class="kpi-value" id="crm-kpi-rate" style="color: #67e8f9;">0%</div>
+                        <div class="kpi-sub">Match rate por e-mail/telefone</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Receita Offline Reconciliada</span>
+                            <span class="kpi-icon">💰</span>
+                        </div>
+                        <div class="kpi-value" id="crm-kpi-revenue" style="color: #f59e0b;">R$ 0,00</div>
+                        <div class="kpi-sub">Valor atribuído a campanhas</div>
+                    </div>
+                </div>
+
+                <!-- GALERIA VISUAL DE CONECTORES -->
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h3 class="card-title">Galeria de Conectores Nativos & Smart Auto-Mapping</h3>
+                            <p class="card-subtitle">Clique em um conector para obter a URL de webhook exclusiva configurada com a chave ativa do seu site.</p>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; padding: 1.25rem;">
+                        <!-- RD Station -->
+                        <div class="connector-card" onclick="openCRMModal('rdstation')">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">📊</div>
+                                    <div>
+                                        <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">RD Station</div>
+                                        <div style="font-size: 0.75rem; color: #94a3b8;">Marketing & CRM</div>
+                                    </div>
+                                </div>
+                                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px;">Nativo</span>
+                            </div>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 1rem 0; line-height: 1.4;">
+                                Webhooks de oportunidade ganha, vendas e mudanças de estágio no funil comercial.
+                            </p>
+                            <button class="btn-refresh" style="width: 100%; justify-content: center; background: rgba(255,255,255,0.05); color: #e2e8f0; border-color: rgba(255,255,255,0.1);">
+                                ⚙️ Configurar Webhook
+                            </button>
+                        </div>
+
+                        <!-- HubSpot -->
+                        <div class="connector-card" onclick="openCRMModal('hubspot')">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(249, 115, 22, 0.15); border: 1px solid rgba(249, 115, 22, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">🟧</div>
+                                    <div>
+                                        <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">HubSpot</div>
+                                        <div style="font-size: 0.75rem; color: #94a3b8;">Deals & Workflows</div>
+                                    </div>
+                                </div>
+                                <span class="badge" style="background: rgba(249, 115, 22, 0.2); color: #fb923c; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px;">Nativo</span>
+                            </div>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 1rem 0; line-height: 1.4;">
+                                Disparos de negócio Closed Won com valor financeiro e contatos associados.
+                            </p>
+                            <button class="btn-refresh" style="width: 100%; justify-content: center; background: rgba(255,255,255,0.05); color: #e2e8f0; border-color: rgba(255,255,255,0.1);">
+                                ⚙️ Configurar Webhook
+                            </button>
+                        </div>
+
+                        <!-- Pipedrive -->
+                        <div class="connector-card" onclick="openCRMModal('pipedrive')">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">🟢</div>
+                                    <div>
+                                        <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">Pipedrive</div>
+                                        <div style="font-size: 0.75rem; color: #94a3b8;">Pipeline de Vendas</div>
+                                    </div>
+                                </div>
+                                <span class="badge" style="background: rgba(34, 197, 94, 0.2); color: #4ade80; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px;">Nativo</span>
+                            </div>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 1rem 0; line-height: 1.4;">
+                                Negócios com status 'won', person_id, telefone e título da oportunidade.
+                            </p>
+                            <button class="btn-refresh" style="width: 100%; justify-content: center; background: rgba(255,255,255,0.05); color: #e2e8f0; border-color: rgba(255,255,255,0.1);">
+                                ⚙️ Configurar Webhook
+                            </button>
+                        </div>
+
+                        <!-- ActiveCampaign -->
+                        <div class="connector-card" onclick="openCRMModal('activecampaign')">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">⚡</div>
+                                    <div>
+                                        <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">ActiveCampaign</div>
+                                        <div style="font-size: 0.75rem; color: #94a3b8;">Automações & Deals</div>
+                                    </div>
+                                </div>
+                                <span class="badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px;">Nativo</span>
+                            </div>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 1rem 0; line-height: 1.4;">
+                                Webhooks de deals ganhos e contatos (suporte a JSON e Form UrlEncoded).
+                            </p>
+                            <button class="btn-refresh" style="width: 100%; justify-content: center; background: rgba(255,255,255,0.05); color: #e2e8f0; border-color: rgba(255,255,255,0.1);">
+                                ⚙️ Configurar Webhook
+                            </button>
+                        </div>
+
+                        <!-- Omie ERP -->
+                        <div class="connector-card" onclick="openCRMModal('omie')">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">🏢</div>
+                                    <div>
+                                        <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">Omie ERP</div>
+                                        <div style="font-size: 0.75rem; color: #94a3b8;">Vendas & Faturamento</div>
+                                    </div>
+                                </div>
+                                <span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px;">ERP</span>
+                            </div>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 1rem 0; line-height: 1.4;">
+                                Pedidos de venda faturados (Etapa 50) e recebimentos com razão social e valor.
+                            </p>
+                            <button class="btn-refresh" style="width: 100%; justify-content: center; background: rgba(255,255,255,0.05); color: #e2e8f0; border-color: rgba(255,255,255,0.1);">
+                                ⚙️ Configurar Webhook
+                            </button>
+                        </div>
+
+                        <!-- Asaas Gateway -->
+                        <div class="connector-card" onclick="openCRMModal('asaas')">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">💳</div>
+                                    <div>
+                                        <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">Asaas Gateway</div>
+                                        <div style="font-size: 0.75rem; color: #94a3b8;">PIX, Boleto & Cartão</div>
+                                    </div>
+                                </div>
+                                <span class="badge" style="background: rgba(6, 182, 212, 0.2); color: #22d3ee; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px;">Pagamentos</span>
+                            </div>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 1rem 0; line-height: 1.4;">
+                                Notificações de PAYMENT_RECEIVED e cobranças confirmadas com valor líquido.
+                            </p>
+                            <button class="btn-refresh" style="width: 100%; justify-content: center; background: rgba(255,255,255,0.05); color: #e2e8f0; border-color: rgba(255,255,255,0.1);">
+                                ⚙️ Configurar Webhook
+                            </button>
+                        </div>
+
+                        <!-- Kiwify -->
+                        <div class="connector-card" onclick="openCRMModal('kiwify')">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">🛍️</div>
+                                    <div>
+                                        <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">Kiwify & Checkouts</div>
+                                        <div style="font-size: 0.75rem; color: #94a3b8;">Infoprodutos & E-com</div>
+                                    </div>
+                                </div>
+                                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px;">Checkout</span>
+                            </div>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 1rem 0; line-height: 1.4;">
+                                Pedidos aprovados com extração de comissões, dados do comprador e src/sck.
+                            </p>
+                            <button class="btn-refresh" style="width: 100%; justify-content: center; background: rgba(255,255,255,0.05); color: #e2e8f0; border-color: rgba(255,255,255,0.1);">
+                                ⚙️ Configurar Webhook
+                            </button>
+                        </div>
+
+                        <!-- Universal Custom / n8n / Zapier -->
+                        <div class="connector-card" onclick="openCRMModal('custom')" style="border-color: rgba(234, 179, 8, 0.3); background: rgba(234, 179, 8, 0.05);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                                    <div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.3); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">🌐</div>
+                                    <div>
+                                        <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">Universal / n8n / Zapier</div>
+                                        <div style="font-size: 0.75rem; color: #94a3b8;">Smart Auto-Mapping</div>
+                                    </div>
+                                </div>
+                                <span class="badge" style="background: rgba(234, 179, 8, 0.2); color: #fde047; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px;">Auto-Mapping</span>
+                            </div>
+                            <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 1rem 0; line-height: 1.4;">
+                                Varredura inteligente de JSON arbitrário. Extrai automaticamente contatos, valores e pedidos.
+                            </p>
+                            <button class="btn-refresh" style="width: 100%; justify-content: center; background: rgba(234, 179, 8, 0.15); color: #fef08a; border-color: rgba(234, 179, 8, 0.3);">
+                                ⚙️ Configurar Webhook
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LIVE WEBHOOK INSPECTOR TABLE -->
+                <div class="card">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                        <div>
+                            <h3 class="card-title">Live Webhook Inspector</h3>
+                            <p class="card-subtitle">Auditoria e histórico em tempo real dos webhooks recebidos e status da atribuição reversa.</p>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: #94a3b8; cursor: pointer;">
+                                <input type="checkbox" id="crm-auto-refresh" checked style="cursor: pointer;">
+                                Auto-refresh (5s)
+                            </label>
+                            <button class="btn-refresh" onclick="loadCRMInboundTab()">
+                                <span>🔄</span> Atualizar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Horário</th>
+                                    <th>Provedor</th>
+                                    <th>Status Atribuição</th>
+                                    <th>Contato</th>
+                                    <th>Valor Transação</th>
+                                    <th>ID Pedido</th>
+                                    <th>Visitante Atribuído</th>
+                                    <th style="text-align: right;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="crm-inspector-tbody">
+                                <tr>
+                                    <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                        Carregando auditoria de webhooks...
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -5102,6 +5394,77 @@ if (typeof fbq === 'function' && eventId) {
         </div>
     </div>
 
+    <!-- MODAL: GERADOR DE URL DE WEBHOOK CRM / ERP -->
+    <div id="modal-crm-webhook" class="modal-overlay">
+        <div class="modal-container" style="max-width: 680px;">
+            <div class="modal-header">
+                <h3 id="crm-modal-title"><span>🔌</span> Configurar Webhook CRM</h3>
+                <button class="modal-close-btn" onclick="closeCRMModal()">✕</button>
+            </div>
+
+            <div class="modal-body">
+                <div style="background: rgba(30, 41, 59, 0.6); padding: 0.85rem 1.25rem; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08); margin-bottom: 1.25rem;">
+                    <div style="font-size: 0.85rem; color: #cbd5e1; margin-bottom: 0.25rem;">
+                        Site Selecionado: <strong id="crm-modal-site-name" style="color: #fff;">Carregando...</strong>
+                    </div>
+                    <div style="font-size: 0.78rem; color: #94a3b8;" id="crm-modal-instructions">
+                        Copie a URL de webhook abaixo e cole nas configurações de automação da ferramenta externa.
+                    </div>
+                </div>
+
+                <!-- CAMPO DA URL COM BOTÃO DE COPIAR -->
+                <div style="margin-bottom: 1.25rem;">
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 0.5rem;">
+                        URL Exclusiva de Webhook (POST)
+                    </label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="crm-modal-url" readonly style="flex: 1; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; color: #67e8f9; padding: 0.65rem 0.85rem; font-family: monospace; font-size: 0.82rem;" />
+                        <button class="btn-refresh" id="crm-btn-copy" onclick="copyCRMWebhookUrl()" style="background: rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; white-space: nowrap;">
+                            📋 Copiar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- EXEMPLO DE PAYLOAD / REQUISIÇÃO -->
+                <div style="margin-bottom: 1.25rem;">
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 0.5rem;">
+                        Exemplo de Disparo (cURL / Payload Suportado)
+                    </label>
+                    <pre id="crm-modal-code" style="background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 0.85rem; font-size: 0.75rem; color: #cbd5e1; max-height: 180px; overflow-y: auto; white-space: pre-wrap; font-family: monospace;"></pre>
+                </div>
+
+                <!-- FEEDBACK DO TESTE SINTÉTICO -->
+                <div id="crm-test-feedback" style="display: none; padding: 0.85rem; border-radius: 8px; font-size: 0.85rem; margin-top: 1rem;"></div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-refresh" onclick="closeCRMModal()" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #cbd5e1;">
+                    Fechar
+                </button>
+                <button class="btn-refresh" id="crm-btn-test-trigger" onclick="testCurrentCRMWebhook()" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.4); color: #34d399;">
+                    <span>⚡</span> Disparar Webhook de Teste
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: PAYLOAD INSPECTOR -->
+    <div id="modal-crm-payload" class="modal-overlay">
+        <div class="modal-container" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3><span>📦</span> Detalhes do Payload Recebido</h3>
+                <button class="modal-close-btn" onclick="closeInboundPayloadModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <pre id="crm-payload-json" style="background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 1rem; font-size: 0.78rem; color: #a5f3fc; max-height: 380px; overflow-y: auto; white-space: pre-wrap; font-family: monospace;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-refresh" onclick="closeInboundPayloadModal()" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #cbd5e1;">
+                    Fechar
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script>
         let currentTab = 'overview';
@@ -5174,6 +5537,7 @@ if (typeof fbq === 'function' && eventId) {
                 'funnels': 'Funis & Atribuição Multi-Toque',
                 'debug': '⚡ DebugView • Validação & Depuração de Eventos em Tempo Real',
                 'routing': '🔀 Event Routing & Destinos Server-Side • Pipeline & Governança LGPD',
+                'crm': '🔌 Conectores Inbound CRM, ERP & Gateways • Closed-Loop Attribution',
                 'settings': '⚙️ Configurações do Site • Chaves de API & Snippet de Instalação',
                 'docs': '📚 Guia de Instalação do SDK & Eventos',
                 'domains': '🌐 Gestão de Domínios Autorizados & Auditoria'
@@ -5467,6 +5831,382 @@ if (typeof fbq === 'function' && eventId) {
                     </tr>
                 `;
             }
+        }
+
+        // ==========================================
+        // ABA: INBOUND CRM, ERP & GATEWAYS (CLOSED-LOOP)
+        // ==========================================
+        let crmInboundEventsList = [];
+        let crmAutoRefreshTimer = null;
+        let currentCRMModalProvider = 'rdstation';
+
+        async function loadCRMInboundTab() {
+            const { siteID } = getSelectedSiteAndDomain();
+            if (!siteID || siteID === 'global') {
+                const tbody = document.getElementById('crm-inspector-tbody');
+                if (tbody) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                Selecione um site específico no seletor acima para auditar os webhooks recebidos.
+                            </td>
+                        </tr>
+                    `;
+                }
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/v1/sites/${encodeURIComponent(siteID)}/inbound-events?limit=50`);
+                if (!res.ok) throw new Error('Falha ao carregar auditoria de webhooks');
+                const data = await res.json();
+                crmInboundEventsList = data.events || [];
+
+                // 1. Atualiza KPIs
+                const total = crmInboundEventsList.length;
+                let matchedCount = 0;
+                let totalRevenue = 0;
+
+                crmInboundEventsList.forEach(ev => {
+                    if (ev.status === 'matched') {
+                        matchedCount++;
+                        totalRevenue += (ev.value || 0);
+                    }
+                });
+
+                const rate = total > 0 ? ((matchedCount / total) * 100).toFixed(1) : '0.0';
+
+                const kpiTotal = document.getElementById('crm-kpi-total');
+                if (kpiTotal) kpiTotal.textContent = total.toLocaleString('pt-BR');
+
+                const kpiMatched = document.getElementById('crm-kpi-matched');
+                if (kpiMatched) kpiMatched.textContent = matchedCount.toLocaleString('pt-BR');
+
+                const kpiRate = document.getElementById('crm-kpi-rate');
+                if (kpiRate) kpiRate.textContent = `${rate}%`;
+
+                const kpiRevenue = document.getElementById('crm-kpi-revenue');
+                if (kpiRevenue) {
+                    kpiRevenue.textContent = totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                }
+
+                // 2. Renderiza Tabela Live Webhook Inspector
+                const tbody = document.getElementById('crm-inspector-tbody');
+                if (!tbody) return;
+
+                if (crmInboundEventsList.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                Nenhum webhook de CRM/ERP recebido ainda para este site.<br>
+                                <span style="font-size: 0.8rem; color: #64748b;">Configure a URL acima em seu CRM ou use o botão 'Disparar Webhook de Teste' na galeria de conectores.</span>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                tbody.innerHTML = crmInboundEventsList.map((item, idx) => {
+                    const timeStr = item.created_at ? new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--';
+                    const dateStr = item.created_at ? new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+                    
+                    const provColors = {
+                        'rdstation': { bg: 'rgba(16, 185, 129, 0.15)', text: '#34d399', border: 'rgba(16, 185, 129, 0.3)', label: 'RD Station' },
+                        'hubspot': { bg: 'rgba(249, 115, 22, 0.15)', text: '#fb923c', border: 'rgba(249, 115, 22, 0.3)', label: 'HubSpot' },
+                        'pipedrive': { bg: 'rgba(34, 197, 94, 0.15)', text: '#4ade80', border: 'rgba(34, 197, 94, 0.3)', label: 'Pipedrive' },
+                        'activecampaign': { bg: 'rgba(59, 130, 246, 0.15)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.3)', label: 'ActiveCampaign' },
+                        'omie': { bg: 'rgba(168, 85, 247, 0.15)', text: '#c084fc', border: 'rgba(168, 85, 247, 0.3)', label: 'Omie ERP' },
+                        'asaas': { bg: 'rgba(6, 182, 212, 0.15)', text: '#22d3ee', border: 'rgba(6, 182, 212, 0.3)', label: 'Asaas' },
+                        'kiwify': { bg: 'rgba(16, 185, 129, 0.15)', text: '#34d399', border: 'rgba(16, 185, 129, 0.3)', label: 'Kiwify' },
+                        'custom': { bg: 'rgba(234, 179, 8, 0.15)', text: '#fde047', border: 'rgba(234, 179, 8, 0.3)', label: 'Universal / n8n' }
+                    };
+                    const pInfo = provColors[item.provider] || { bg: 'rgba(148, 163, 184, 0.15)', text: '#cbd5e1', border: 'rgba(148, 163, 184, 0.3)', label: item.provider };
+                    const provBadge = `<span class="badge" style="background: ${pInfo.bg}; color: ${pInfo.text}; border: 1px solid ${pInfo.border}; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.72rem;">${pInfo.label}</span>`;
+
+                    let statusBadge = '<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); font-size: 0.72rem; padding: 2px 8px; border-radius: 4px;">Pendente</span>';
+                    if (item.status === 'matched') {
+                        statusBadge = '<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.72rem; padding: 2px 8px; border-radius: 4px;">✓ Matched</span>';
+                    } else if (item.status === 'unmatched') {
+                        statusBadge = '<span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.72rem; padding: 2px 8px; border-radius: 4px;">⚠ Unmatched</span>';
+                    } else if (item.status === 'error') {
+                        statusBadge = '<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.72rem; padding: 2px 8px; border-radius: 4px;">✕ Erro</span>';
+                    }
+
+                    let contactStr = item.contact_email || item.contact_phone || '—';
+                    if (item.contact_email && item.contact_email.includes('@')) {
+                        const parts = item.contact_email.split('@');
+                        const user = parts[0];
+                        const maskedUser = user.length > 2 ? user[0] + '***' + user[user.length - 1] : user[0] + '***';
+                        contactStr = `${maskedUser}@${parts[1]}`;
+                    }
+
+                    const valStr = item.value ? item.value.toLocaleString('pt-BR', { style: 'currency', currency: item.currency || 'BRL' }) : 'R$ 0,00';
+                    const vidStr = item.matched_visitor_id ? `<span style="font-family: monospace; font-size: 0.75rem; color: #a5b4fc;" title="${escapeHTML(item.matched_visitor_id)}">${escapeHTML(item.matched_visitor_id.substring(0, 16))}...</span>` : '<span style="color: #64748b;">—</span>';
+
+                    return `
+                        <tr>
+                            <td style="font-family: monospace; font-size: 0.78rem; color: var(--text-muted);">${timeStr} <span style="font-size: 0.7rem; color: #64748b;">${dateStr}</span></td>
+                            <td>${provBadge}</td>
+                            <td>${statusBadge}</td>
+                            <td style="font-size: 0.8rem; color: #f1f5f9; font-weight: 500;">${escapeHTML(contactStr)}</td>
+                            <td style="font-weight: 700; color: #fff; font-size: 0.82rem;">${valStr}</td>
+                            <td style="font-family: monospace; font-size: 0.75rem; color: #94a3b8;">${escapeHTML(item.order_id || '—')}</td>
+                            <td>${vidStr}</td>
+                            <td style="text-align: right;">
+                                <button class="btn-refresh" onclick="showInboundPayload(${idx})" style="font-size: 0.72rem; padding: 0.25rem 0.6rem; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: #cbd5e1;">
+                                    🔍 Payload
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                console.error("Erro no Live Webhook Inspector:", err);
+            } finally {
+                clearTimeout(crmAutoRefreshTimer);
+                const autoCheck = document.getElementById('crm-auto-refresh');
+                if (autoCheck && autoCheck.checked && currentTab === 'crm') {
+                    crmAutoRefreshTimer = setTimeout(loadCRMInboundTab, 5000);
+                }
+            }
+        }
+
+        function openCRMModal(provider) {
+            currentCRMModalProvider = provider;
+            const { siteID } = getSelectedSiteAndDomain();
+            const currentSiteObj = (globalSitesList || []).find(s => s.id === siteID);
+            
+            const siteNameEl = document.getElementById('crm-modal-site-name');
+            if (siteNameEl) {
+                siteNameEl.textContent = currentSiteObj ? currentSiteObj.name : 'Site Selecionado';
+            }
+
+            const siteKey = currentSiteObj ? (currentSiteObj.api_key || currentSiteObj.key || '') : 'hn_site_SUA_CHAVE_AQUI';
+
+            const host = window.location.host;
+            const proto = window.location.protocol;
+            const customHost = (currentSiteObj && currentSiteObj.cname_subdomain && currentSiteObj.cname_verified) ? currentSiteObj.cname_subdomain : host;
+
+            const urlPath = provider === 'custom' ? '/api/v1/inbound/crm/custom' : `/api/v1/inbound/crm/${provider}`;
+            const fullUrl = `${proto}//${customHost}${urlPath}?site_key=${siteKey}`;
+
+            const urlInput = document.getElementById('crm-modal-url');
+            if (urlInput) urlInput.value = fullUrl;
+
+            const provTitles = {
+                'rdstation': 'Configurar Webhook RD Station (Marketing & CRM)',
+                'hubspot': 'Configurar Webhook HubSpot (Closed Won Deals)',
+                'pipedrive': 'Configurar Webhook Pipedrive (Won Deals)',
+                'activecampaign': 'Configurar Webhook ActiveCampaign (Deals)',
+                'omie': 'Configurar Webhook Omie ERP (Faturamento & Pedidos)',
+                'asaas': 'Configurar Webhook Asaas Gateway (Cobranças & PIX)',
+                'kiwify': 'Configurar Webhook Kiwify (Vendas Aprovadas)',
+                'custom': 'Configurar Webhook Universal (n8n, Make, Zapier & ERPs)'
+            };
+
+            const provInstructions = {
+                'rdstation': 'No RD Station Marketing, vá em Integrações > Webhooks > Criar Gatilho. Selecione o evento "Oportunidade" ou "Conversão" e cole a URL abaixo com método POST.',
+                'hubspot': 'No HubSpot, crie um Workflow com o trigger "Deal stage is Closed Won", adicione uma ação "Send a webhook" (POST) e cole a URL abaixo.',
+                'pipedrive': 'No Pipedrive, vá em Ajustes > Ferramentas > Webhooks > Adicionar Webhook. Evento: "updated.deal" ou "added.deal" e cole a URL abaixo.',
+                'activecampaign': 'No ActiveCampaign, vá em Configurações > Desenvolvedor > Webhooks > Adicionar Webhook. Selecione "Deal Atualizado" e cole a URL abaixo.',
+                'omie': 'No Omie ERP, acesse Configurações de Integração > Webhooks e assine o tópico "VendaProduto.EtapaAlterada" com a URL abaixo.',
+                'asaas': 'No Painel Asaas, acesse Minha Conta > Integrações > Webhooks para Cobranças. Marque "Pagamento Recebido" e "Pagamento Confirmado".',
+                'kiwify': 'Na Kiwify, acesse Apps > Webhooks > Criar Webhook. Marque o evento "Order Approved" e cole a URL abaixo.',
+                'custom': 'No n8n, Zapier ou em seu ERP interno, crie uma requisição HTTP POST para a URL abaixo enviando os dados da conversão em JSON com campos de email/telefone e valor.'
+            };
+
+            const samplePayloads = {
+                'rdstation': `curl -X POST "${fullUrl}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "leads": [{
+      "email": "lead@empresa.com",
+      "mobile_phone": "11988887777",
+      "opportunity": "true",
+      "value": 2500.00
+    }]
+  }'`,
+                'hubspot': `curl -X POST "${fullUrl}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "dealId": "98765",
+    "dealstage": "closedwon",
+    "amount": 3200.00,
+    "email": "cliente@hubspot.com",
+    "phone": "21999998888"
+  }'`,
+                'pipedrive': `curl -X POST "${fullUrl}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "event": "updated.deal",
+    "current": {
+      "id": 4321,
+      "title": "Venda Fechada",
+      "value": 5000.00,
+      "status": "won",
+      "person_id": {
+        "email": [{"value": "contato@pipedrive.com"}],
+        "phone": [{"value": "31988881234"}]
+      }
+    }
+  }'`,
+                'activecampaign': `curl -X POST "${fullUrl}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "deal": { "id": "123", "status": "1", "value": "1500" },
+    "contact": { "email": "lead@active.com", "phone": "11988880000" }
+  }'`,
+                'omie': `curl -X POST "${fullUrl}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "topic": "VendaProduto.EtapaAlterada",
+    "event": {
+      "idPedido": 78910,
+      "valorTotal": 850.00,
+      "cliente": { "email": "financeiro@cliente.com", "telefone": "1133334444" }
+    }
+  }'`,
+                'asaas': `curl -X POST "${fullUrl}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "event": "PAYMENT_RECEIVED",
+    "payment": {
+      "id": "pay_123456789",
+      "value": 297.00,
+      "customerEmail": "comprador@asaas.com",
+      "customerPhone": "11977778888"
+    }
+  }'`,
+                'kiwify': `curl -X POST "${fullUrl}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "order_id": "ord_887766",
+    "order_status": "paid",
+    "order_value": 197.00,
+    "Customer": { "email": "aluno@kiwify.com", "mobile": "11966665555" }
+  }'`,
+                'custom': `curl -X POST "${fullUrl}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "cliente": { "email": "empresa@cliente.com", "whatsapp": "11999998888" },
+    "negocio": { "valor": 12500.00, "status": "ganho", "pedido_id": "PED-9900" }
+  }'`
+            };
+
+            const titleEl = document.getElementById('crm-modal-title');
+            if (titleEl) titleEl.innerHTML = `<span>🔌</span> ${provTitles[provider] || 'Configurar Webhook CRM'}`;
+
+            const instrEl = document.getElementById('crm-modal-instructions');
+            if (instrEl) instrEl.textContent = provInstructions[provider] || 'Copie a URL de webhook abaixo e configure no seu sistema externo.';
+
+            const codeEl = document.getElementById('crm-modal-code');
+            if (codeEl) codeEl.textContent = samplePayloads[provider] || samplePayloads['custom'];
+
+            const feedback = document.getElementById('crm-test-feedback');
+            if (feedback) feedback.style.display = 'none';
+
+            const modal = document.getElementById('modal-crm-webhook');
+            if (modal) modal.classList.add('active');
+        }
+
+        function closeCRMModal() {
+            const modal = document.getElementById('modal-crm-webhook');
+            if (modal) modal.classList.remove('active');
+        }
+
+        function copyCRMWebhookUrl() {
+            const input = document.getElementById('crm-modal-url');
+            if (!input) return;
+            navigator.clipboard.writeText(input.value).then(() => {
+                const btn = document.getElementById('crm-btn-copy');
+                if (btn) {
+                    const oldHTML = btn.innerHTML;
+                    btn.innerHTML = '✓ Copiado!';
+                    btn.style.color = '#34d399';
+                    setTimeout(() => {
+                        btn.innerHTML = oldHTML;
+                        btn.style.color = '#a5b4fc';
+                    }, 2000);
+                }
+            });
+        }
+
+        async function testCurrentCRMWebhook() {
+            const input = document.getElementById('crm-modal-url');
+            const feedback = document.getElementById('crm-test-feedback');
+            const btn = document.getElementById('crm-btn-test-trigger');
+            if (!input || !feedback) return;
+
+            const url = input.value;
+            if (!url) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Enviando teste...';
+            feedback.style.display = 'block';
+            feedback.style.background = 'rgba(99, 102, 241, 0.15)';
+            feedback.style.border = '1px solid rgba(99, 102, 241, 0.3)';
+            feedback.style.color = '#c7d2fe';
+            feedback.textContent = 'Disparando evento sintético de conversão offline para o webhook...';
+
+            const testPayload = {
+                rdstation: { leads: [{ id: "test_" + Date.now(), email: "teste.lead@hnperformance.com.br", mobile_phone: "11988887777", opportunity: "true", value: 1500.00 }] },
+                hubspot: { dealId: "hs_" + Date.now(), dealstage: "closedwon", amount: 2800.00, email: "teste.hubspot@hnperformance.com.br", phone: "21988887777" },
+                pipedrive: { event: "updated.deal", current: { id: Date.now(), title: "Negócio Teste HN", value: 4500.00, status: "won", person_id: { email: [{ value: "teste.pipedrive@hnperformance.com.br" }], phone: [{ value: "31988887777" }] } } },
+                activecampaign: { deal: { id: "ac_" + Date.now(), status: "1", value: "950" }, contact: { email: "teste.active@hnperformance.com.br", phone: "11988880000" } },
+                omie: { topic: "VendaProduto.EtapaAlterada", event: { idPedido: Date.now(), valorTotal: 1250.00, cliente: { email: "teste.omie@hnperformance.com.br", telefone: "1133334444" } } },
+                asaas: { event: "PAYMENT_RECEIVED", payment: { id: "pay_" + Date.now(), value: 397.00, customerEmail: "teste.asaas@hnperformance.com.br", customerPhone: "11977778888" } },
+                kiwify: { order_id: "kiw_" + Date.now(), order_status: "paid", order_value: 297.00, Customer: { email: "teste.kiwify@hnperformance.com.br", mobile: "11966665555" } },
+                custom: { cliente: { email: "teste.custom@hnperformance.com.br", whatsapp: "11999998888" }, venda: { total_pago: 1850.00, status: "fechado_ganho", pedido_id: "TEST-" + Date.now() } }
+            };
+
+            const bodyToSend = testPayload[currentCRMModalProvider] || testPayload['custom'];
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bodyToSend)
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    feedback.style.background = 'rgba(16, 185, 129, 0.15)';
+                    feedback.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                    feedback.style.color = '#34d399';
+                    feedback.innerHTML = `✓ Webhook aceito com sucesso! (HTTP ${res.status})<br><span style="font-size: 0.75rem; color: #a7f3d0;">ID Inbound: ${data.inbound_id || data.order_id || 'OK'} • O evento já está no Live Webhook Inspector!</span>`;
+                    loadCRMInboundTab();
+                } else {
+                    feedback.style.background = 'rgba(239, 68, 68, 0.15)';
+                    feedback.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                    feedback.style.color = '#f87171';
+                    feedback.textContent = `Erro ${res.status}: ${data.error || 'Falha ao processar webhook'}`;
+                }
+            } catch (e) {
+                feedback.style.background = 'rgba(239, 68, 68, 0.15)';
+                feedback.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                feedback.style.color = '#f87171';
+                feedback.textContent = `Erro de conexão: ${e.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>⚡</span> Disparar Webhook de Teste';
+            }
+        }
+
+        function showInboundPayload(idx) {
+            const ev = crmInboundEventsList[idx];
+            if (!ev) return;
+            const pre = document.getElementById('crm-payload-json');
+            if (pre) {
+                pre.textContent = JSON.stringify(ev.payload || ev, null, 2);
+            }
+            const modal = document.getElementById('modal-crm-payload');
+            if (modal) modal.classList.add('active');
+        }
+
+        function closeInboundPayloadModal() {
+            const modal = document.getElementById('modal-crm-payload');
+            if (modal) modal.classList.remove('active');
         }
 
         // Funções da Aba de Gestão de Domínios
@@ -6358,6 +7098,9 @@ if (typeof fbq === 'function' && eventId) {
             }
             if (currentTab === 'routing') {
                 await loadRoutingTab();
+            }
+            if (currentTab === 'crm') {
+                await loadCRMInboundTab();
             }
             if (currentTab === 'settings') {
                 await loadSiteSettingsTab();
@@ -8517,21 +9260,29 @@ if (typeof fbq === 'function' && eventId) {
             let totalEvents = 0;
             let latestTraffic = null;
             (siteKeysList || []).forEach(k => {
-                if (k.events_count) totalEvents += k.events_count;
+                const count = Number(k.total_events ?? k.total_events_count ?? k.events_count ?? 0) || 0;
+                totalEvents += count;
                 if (k.last_used_at) {
                     const d = new Date(k.last_used_at);
                     if (!latestTraffic || d > latestTraffic) latestTraffic = d;
                 }
             });
 
-            if (totalEvents > 0) {
+            const isTagDetected = totalEvents > 0 || latestTraffic !== null;
+            if (isTagDetected) {
                 completedSteps++;
                 if (step3Card) step3Card.className = 'onboarding-step-card is-done';
                 if (step3Pill) {
                     step3Pill.className = 'onboarding-pill onboarding-pill-done';
                     step3Pill.textContent = '✓ Tag Detectada';
                 }
-                if (step3Desc) step3Desc.textContent = `${totalEvents.toLocaleString()} evento(s) já capturado(s).`;
+                if (step3Desc) {
+                    if (totalEvents > 0) {
+                        step3Desc.textContent = `${totalEvents.toLocaleString('pt-BR')} evento(s) já capturado(s).`;
+                    } else {
+                        step3Desc.textContent = 'Tag instalada e comunicando com o servidor.';
+                    }
+                }
             } else {
                 if (step3Card) step3Card.className = 'onboarding-step-card is-pending';
                 if (step3Pill) {
@@ -8698,7 +9449,7 @@ if (typeof fbq === 'function' && eventId) {
                 // Dates & Telemetry
                 const createdAtFormatted = k.created_at ? new Date(k.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
                 const lastUsedFormatted = k.last_used_at ? new Date(k.last_used_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '<span style="color: var(--text-muted);">Nenhum ainda</span>';
-                const eventsCount = (k.total_events_count || 0).toLocaleString('pt-BR');
+                const eventsCount = (Number(k.total_events ?? k.total_events_count ?? k.events_count ?? 0) || 0).toLocaleString('pt-BR');
 
                 // Actions
                 let actionsHtml = '';

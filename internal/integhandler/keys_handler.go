@@ -11,18 +11,20 @@ import (
 
 // SiteKeyItem representa uma chave com telemetria e status
 type SiteKeyItem struct {
-	ID          string     `json:"id"`
-	SiteID      string     `json:"site_id"`
-	Key         string     `json:"key"`
-	Name        string     `json:"name"`
-	Status      string     `json:"status"`       // 'active', 'inactive', 'revoked'
-	UsageStatus string     `json:"usage_status"` // 'in_use', 'awaiting_traffic', 'revoked'
-	CreatedBy   string     `json:"created_by"`
-	RevokedBy   *string    `json:"revoked_by,omitempty"`
-	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
-	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
-	TotalEvents int64      `json:"total_events"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID               string     `json:"id"`
+	SiteID           string     `json:"site_id"`
+	Key              string     `json:"key"`
+	Name             string     `json:"name"`
+	Status           string     `json:"status"`       // 'active', 'inactive', 'revoked'
+	UsageStatus      string     `json:"usage_status"` // 'in_use', 'awaiting_traffic', 'revoked'
+	CreatedBy        string     `json:"created_by"`
+	RevokedBy        *string    `json:"revoked_by,omitempty"`
+	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
+	LastUsedAt       *time.Time `json:"last_used_at,omitempty"`
+	TotalEvents      int64      `json:"total_events"`
+	TotalEventsCount int64      `json:"total_events_count"`
+	EventsCount      int64      `json:"events_count"`
+	CreatedAt        time.Time  `json:"created_at"`
 }
 
 // CreateKeyRequest payload para criação de nova chave
@@ -71,6 +73,8 @@ func (h *IntegrationsHandler) HandleListSiteKeys(c *fiber.Ctx) error {
 			item.RevokedBy = revokedBy
 			item.RevokedAt = revokedAt
 			item.LastUsedAt = lastUsedAt
+			item.TotalEventsCount = item.TotalEvents
+			item.EventsCount = item.TotalEvents
 
 			// Calcula status inteligente de uso
 			if item.Status == "revoked" {

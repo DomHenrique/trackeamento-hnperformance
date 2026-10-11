@@ -26,12 +26,13 @@ const (
 )
 
 type Handler struct {
-	cfg         *config.Config
-	redis       *storage.RedisClient
-	pg          *storage.PostgresDB
-	ch          *storage.ClickHouseDB
-	identityMgr *VisitorIdentityManager
-	siteKeys    sync.Map // Cache em memória para validação ultra-rápida de site_key
+	cfg               *config.Config
+	redis             *storage.RedisClient
+	pg                *storage.PostgresDB
+	ch                *storage.ClickHouseDB
+	identityMgr       *VisitorIdentityManager
+	siteKeys          sync.Map // Cache em memória para validação ultra-rápida de site_key
+	offlineReconciler OfflineReconcileFunc
 }
 
 func NewHandler(cfg *config.Config, rdb *storage.RedisClient, pg *storage.PostgresDB, ch *storage.ClickHouseDB) *Handler {
@@ -363,6 +364,19 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 				_ = h.redis.PushDebugBuffer(bgCtx, sID, pData)
 			}
 		}(debugData, siteID)
+	}
+
+	// Atualiza telemetria da chave de acesso assincronamente a cada evento coletado
+	if siteKey != "" && h.pg != nil && h.pg.Pool != nil {
+		go func(sk string) {
+			upCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_, _ = h.pg.Pool.Exec(upCtx, `
+				UPDATE site_api_keys 
+				SET last_used_at = now(), total_events_count = total_events_count + 1 
+				WHERE key = $1
+			`, sk)
+		}(siteKey)
 	}
 
 	// Responde 202 Accepted com confirmação explícita e identificador único
