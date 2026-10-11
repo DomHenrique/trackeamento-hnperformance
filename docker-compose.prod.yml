@@ -19,7 +19,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - tracking_postgres_data:/var/lib/postgresql/data
-      - ./migrations/postgres:/docker-entrypoint-initdb.d
     networks:
       - tracking_internal
 
@@ -33,7 +32,6 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
     volumes:
       - tracking_clickhouse_data:/var/lib/clickhouse
-      - ./migrations/clickhouse:/docker-entrypoint-initdb.d
     ulimits:
       nofile:
         soft: 262144
@@ -147,8 +145,47 @@ services:
     image: caddy:2.8-alpine
     container_name: tracking_caddy
     restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        cat << 'EOF' > /etc/caddy/Caddyfile
+        {
+            on_demand_tls {
+                ask http://tracking_api:8080/api/v1/domains/check-cname-authorized
+                interval 2m
+                burst 10
+            }
+        }
+
+        :443 {
+            tls {
+                on_demand
+            }
+
+            encode zstd gzip
+
+            header {
+                Strict-Transport-Security "max-age=31536000; includeSubDomains"
+                X-Content-Type-Options "nosniff"
+                -Server
+            }
+
+            reverse_proxy tracking_api:8080 {
+                header_up Host {host}
+                header_up X-Real-IP {remote_host}
+                header_up X-Forwarded-For {remote_host}
+                header_up X-Forwarded-Proto {scheme}
+                header_up X-Forwarded-Host {host}
+            }
+        }
+
+        :80 {
+            redir https://{host}{uri} permanent
+        }
+        EOF
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     volumes:
-      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
