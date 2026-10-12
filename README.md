@@ -182,6 +182,12 @@ Insira a tag no `<head>` ou utilize uma Tag HTML Personalizada no Google Tag Man
 </script>
 ```
 
+> **⚠️ Atenção ao instalar via Google Tag Manager (GTM):**
+> Em sites com banners de consentimento (CookieYes, Cookiebot, Complianz ou Consent Mode v2), tags HTML Personalizadas podem ser pausadas até que o visitante clique em "Aceitar Todos". Para evitar discrepâncias em relação ao GA4 e capturar 100% dos visitantes:
+> 1. Na Tag HTML do GTM, abra **Configurações avançadas** → **Configurações de consentimento** e selecione **"Nenhum consentimento adicional necessário"**.
+> 2. No Acionador, selecione **Consent Initialization - All Pages** (ou **Initialization - All Pages**).
+> 3. *Alternativa recomendada:* Insira o script diretamente no `<head>` do site (WordPress / HTML) para execução nativa First-Party.
+
 ### Disparo Manual de Conversões Qualificadas (JavaScript):
 ```javascript
 window.hnTrack('purchase', {

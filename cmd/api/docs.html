@@ -999,12 +999,13 @@
             <!-- SubTab GTM -->
             <div id="subtab-install-gtm" class="sub-tab-content">
                 <div class="alert-box" style="margin-top: 0;">
-                    <strong>Como instalar no Google Tag Manager:</strong>
+                    <strong>Como instalar no Google Tag Manager (GTM):</strong>
                     <ol style="margin-left: 1.25rem; margin-top: 0.5rem; line-height: 1.6;">
                         <li>No painel do GTM, vá em <b>Tags</b> → <b>Nova</b>.</li>
                         <li>Em <b>Configuração da Tag</b>, selecione <b>HTML Personalizado</b>.</li>
                         <li>Cole o código abaixo no campo HTML.</li>
-                        <li>Em <b>Acionamento</b>, selecione <b>Initialization - All Pages</b> (ou <b>All Pages</b>).</li>
+                        <li>Em <b>Acionamento</b>, selecione <b>Consent Initialization - All Pages</b> (ou <b>Initialization - All Pages</b>).</li>
+                        <li><b>⚠️ Configuração de Consentimento (LGPD / Cookie Banner):</b> Em <b>Configurações avançadas</b> → <b>Configurações de consentimento</b>, selecione <b>"Nenhum consentimento adicional necessário"</b>. Isso impede que banners de cookies (ex: CookieYes, Cookiebot, Complianz) suspendam a tag antes do aceite, assegurando paridade de tráfego com o GA4.</li>
                         <li>Clique em <b>Salvar</b> e depois em <b>Publicar</b>.</li>
                     </ol>
                 </div>

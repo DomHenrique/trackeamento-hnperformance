@@ -4263,6 +4263,14 @@
                             </button>
                         </div>
 
+                        <div id="snippet-gtm-hint-box" style="display: none; margin-top: 0.85rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 0.9rem 1.15rem; font-size: 0.82rem; color: #fde68a; line-height: 1.5;">
+                            <strong style="color: #fbbf24;">⚠️ Orientação Crítica no GTM (Evite Perda de Dados por Banners de Cookie / LGPD):</strong><br>
+                            Em plataformas como CookieYes, Cookiebot ou Complianz, tags HTML Personalizadas são pausadas até o clique em "Aceitar". Para que o SDK First-Party capture 100% dos visitantes (igualando os números ao GA4):<br>
+                            1. Na Tag do GTM, abra <b>Configurações avançadas</b> → <b>Configurações de consentimento</b> e selecione <b>"Nenhum consentimento adicional necessário"</b>.<br>
+                            2. No Acionador, prefira <b>Consent Initialization - All Pages</b> (ou <b>Initialization - All Pages</b>).<br>
+                            3. <i>Alternativa recomendada:</i> Se o site usa WordPress, cole o script diretamente no <code>&lt;head&gt;</code> (aba WordPress) para execução nativa First-Party.
+                        </div>
+
                         <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem;">
                             <button class="btn-refresh" onclick="switchTab('debug', document.getElementById('nav-debug'))" style="background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); color: #a5b4fc;">
                                 <span>⚡</span> Abrir DebugView Ao Vivo
@@ -4464,12 +4472,13 @@
                     <!-- SubTab GTM -->
                     <div id="subtab-docs-install-gtm" class="doc-sub-content">
                         <div class="doc-alert-box" style="margin-top: 0;">
-                            <strong>Como instalar no Google Tag Manager:</strong>
+                            <strong>Como instalar no Google Tag Manager (GTM):</strong>
                             <ol style="margin-left: 1.25rem; margin-top: 0.5rem; line-height: 1.6;">
                                 <li>No painel do GTM, vá em <b>Tags</b> → <b>Nova</b>.</li>
                                 <li>Em <b>Configuração da Tag</b>, selecione <b>HTML Personalizado</b>.</li>
                                 <li>Cole o código abaixo no campo HTML.</li>
-                                <li>Em <b>Acionamento</b>, selecione <b>Initialization - All Pages</b> (ou <b>All Pages</b>).</li>
+                                <li>Em <b>Acionamento</b>, selecione <b>Consent Initialization - All Pages</b> (ou <b>Initialization - All Pages</b>).</li>
+                                <li><b>⚠️ Configuração de Consentimento (LGPD / Cookie Banner):</b> Em <b>Configurações avançadas</b> → <b>Configurações de consentimento</b>, marque a opção <b>"Nenhum consentimento adicional necessário"</b>. Isso impede que plataformas como CookieYes, Cookiebot ou Complianz bloqueiem o script antes do visitante clicar em aceitar, garantindo paridade de dados com o GA4.</li>
                                 <li>Clique em <b>Salvar</b> e depois em <b>Publicar</b>.</li>
                             </ol>
                         </div>
@@ -9393,6 +9402,11 @@ if (typeof fbq === 'function' && eventId) {
             const currentSiteObj = (globalSitesList || []).find(s => s.id === siteId);
             if (currentSiteObj && currentSiteObj.cname_subdomain && currentSiteObj.cname_verified) {
                 origin = `https://${currentSiteObj.cname_subdomain}`;
+            }
+
+            const gtmHintBox = document.getElementById('snippet-gtm-hint-box');
+            if (gtmHintBox) {
+                gtmHintBox.style.display = (currentSettingsSnippetPlatform === 'gtm') ? 'block' : 'none';
             }
 
             let snippet = '';
