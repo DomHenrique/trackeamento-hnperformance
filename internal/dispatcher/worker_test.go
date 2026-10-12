@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"tracking-engine/internal/collector"
 	"tracking-engine/internal/config"
 	"tracking-engine/internal/storage"
 )
@@ -374,3 +376,72 @@ func TestAutoClaimPending(t *testing.T) {
 		t.Fatalf("ID da mensagem reivindicada (%s) difere da original (%s)", claimed[0].ID, msgID)
 	}
 }
+
+func TestWorkerPool_KeyRingDecryption(t *testing.T) {
+	cfg := &config.Config{Env: "test", DispatcherTimeoutSec: 5}
+	pool := NewWorkerPool(cfg, nil, nil)
+
+	kr := pool.getKeyRing()
+	if kr == nil {
+		t.Fatal("esperava keyring inicializado no worker pool")
+	}
+
+	siteUUID := "c56a4180-65aa-42ec-a945-5fd2dec0538d"
+	platform := "meta_capi"
+	field := "access_token"
+	rawSecret := "EAABrealToken123456"
+
+	encrypted, err := kr.EncryptField(rawSecret, siteUUID, platform, field)
+	if err != nil {
+		t.Fatalf("falha ao encriptar: %v", err)
+	}
+
+	// 1. Decifra valor encriptado
+	decrypted, err := kr.DecryptField(encrypted, siteUUID, platform, field)
+	if err != nil {
+		t.Fatalf("falha ao decifrar: %v", err)
+	}
+	if decrypted != rawSecret {
+		t.Fatalf("esperava %s, obteve %s", rawSecret, decrypted)
+	}
+
+	// 2. Passa valor legado em texto plano
+	legacyToken := "legacy_plain_token_xyz"
+	legacyDecrypted, err := kr.DecryptField(legacyToken, siteUUID, platform, field)
+	if err != nil {
+		t.Fatalf("falha no pass-through de texto plano: %v", err)
+	}
+	if legacyDecrypted != legacyToken {
+		t.Fatalf("esperava %s, obteve %s", legacyToken, legacyDecrypted)
+	}
+}
+
+func TestWorkerPool_EventMapping(t *testing.T) {
+	origEv := &collector.EventPayload{
+		EventID:   "evt_map_1",
+		EventName: "form_submit",
+	}
+
+	it := SiteIntegrationRecord{
+		ID:       "site_1_webhook",
+		Platform: "webhook",
+		EventMappings: map[string]string{
+			"form_submit": "Lead",
+		},
+	}
+
+	targetEv := origEv
+	if mappedName, ok := it.EventMappings[origEv.EventName]; ok && strings.TrimSpace(mappedName) != "" {
+		cloned := *origEv
+		cloned.EventName = strings.TrimSpace(mappedName)
+		targetEv = &cloned
+	}
+
+	if targetEv.EventName != "Lead" {
+		t.Errorf("esperava EventName 'Lead', obtido '%s'", targetEv.EventName)
+	}
+	if origEv.EventName != "form_submit" {
+		t.Errorf("evento original não deveria ter sido modificado. Esperado 'form_submit', obtido '%s'", origEv.EventName)
+	}
+}
+

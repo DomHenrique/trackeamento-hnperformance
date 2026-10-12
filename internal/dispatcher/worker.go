@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"tracking-engine/internal/collector"
 	"tracking-engine/internal/config"
+	"tracking-engine/internal/crypto"
 	"tracking-engine/internal/integrations"
 	"tracking-engine/internal/storage"
 )
@@ -32,6 +33,7 @@ type WorkerPool struct {
 	redis      *storage.RedisClient
 	pg         *storage.PostgresDB
 	httpClient *integrations.HTTPClient
+	keyRing    *crypto.KeyRing
 
 	metaCAPI     *integrations.MetaCAPI
 	ga4MP        *integrations.GA4MP
@@ -41,19 +43,45 @@ type WorkerPool struct {
 }
 
 func NewWorkerPool(cfg *config.Config, rdb *storage.RedisClient, pg *storage.PostgresDB) *WorkerPool {
-	client := integrations.NewHTTPClient(time.Duration(cfg.DispatcherTimeoutSec) * time.Second)
+	var timeout time.Duration
+	if cfg != nil {
+		timeout = time.Duration(cfg.DispatcherTimeoutSec) * time.Second
+	}
+	client := integrations.NewHTTPClient(timeout)
+
+	var kr *crypto.KeyRing
+	if cfg != nil && cfg.KeyRing != nil {
+		kr = cfg.KeyRing
+	}
 
 	return &WorkerPool{
 		cfg:          cfg,
 		redis:        rdb,
 		pg:           pg,
 		httpClient:   client,
+		keyRing:      kr,
 		metaCAPI:     integrations.NewMetaCAPI(client),
 		ga4MP:        integrations.NewGA4MP(client),
 		googleAds:    integrations.NewGoogleAds(client),
 		linkedinCAPI: integrations.NewLinkedInCAPI(client),
 		crm:          integrations.NewCRMWebhook(client),
 	}
+}
+
+func (wp *WorkerPool) SetKeyRing(kr *crypto.KeyRing) {
+	wp.keyRing = kr
+}
+
+func (wp *WorkerPool) getKeyRing() *crypto.KeyRing {
+	if wp.keyRing != nil {
+		return wp.keyRing
+	}
+	if wp.cfg != nil && wp.cfg.KeyRing != nil {
+		return wp.cfg.KeyRing
+	}
+	const devHexKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	kr, _ := crypto.NewKeyRingFromJSON(`{"dev": "`+devHexKey+`"}`, "dev")
+	return kr
 }
 
 // Start inicia o pool de goroutines e o loop de leitura da fila de despacho
@@ -259,18 +287,26 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 			callCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 
+			// Clona evento se houver remapeamento de nome configurado para esta plataforma
+			targetEv := ev
+			if mappedName, ok := it.EventMappings[ev.EventName]; ok && strings.TrimSpace(mappedName) != "" {
+				cloned := *ev
+				cloned.EventName = strings.TrimSpace(mappedName)
+				targetEv = &cloned
+			}
+
 			var callErr error
 			switch it.Platform {
 			case "meta_capi":
 				pixelID := it.Credentials["pixel_id"]
 				token := it.Credentials["access_token"]
 				testCode := it.Credentials["test_event_code"]
-				callErr = wp.metaCAPI.SendEvent(callCtx, pixelID, token, testCode, ev)
+				callErr = wp.metaCAPI.SendEvent(callCtx, pixelID, token, testCode, targetEv)
 
 			case "ga4":
 				measurementID := it.Credentials["measurement_id"]
 				apiSecret := it.Credentials["api_secret"]
-				callErr = wp.ga4MP.SendEvent(callCtx, measurementID, apiSecret, ev)
+				callErr = wp.ga4MP.SendEvent(callCtx, measurementID, apiSecret, targetEv)
 
 			case "google_ads":
 				endpointURL := it.Credentials["endpoint_url"]
@@ -282,13 +318,13 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 				if ssrfErr := integrations.ValidateOutboundURL(endpointURL, env); ssrfErr != nil {
 					callErr = fmt.Errorf("envio bloqueado por seguranca anti-ssrf: %w", ssrfErr)
 				} else {
-					callErr = wp.googleAds.SendConversion(callCtx, endpointURL, token, ev)
+					callErr = wp.googleAds.SendConversion(callCtx, endpointURL, token, targetEv)
 				}
 
 			case "linkedin_capi":
 				token := it.Credentials["access_token"]
 				ruleID := it.Credentials["conversion_rule_id"]
-				callErr = wp.linkedinCAPI.SendEvent(callCtx, token, ruleID, ev)
+				callErr = wp.linkedinCAPI.SendEvent(callCtx, token, ruleID, targetEv)
 
 			case "webhook":
 				url := it.Credentials["webhook_url"]
@@ -300,7 +336,7 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 				if ssrfErr := integrations.ValidateOutboundURL(url, env); ssrfErr != nil {
 					callErr = fmt.Errorf("envio bloqueado por seguranca anti-ssrf: %w", ssrfErr)
 				} else {
-					callErr = wp.crm.SendWebhook(callCtx, url, secret, ev, dMsg.FirstTouch)
+					callErr = wp.crm.SendWebhook(callCtx, url, secret, targetEv, dMsg.FirstTouch)
 				}
 			}
 
@@ -377,9 +413,10 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 }
 
 type SiteIntegrationRecord struct {
-	ID          string
-	Platform    string
-	Credentials map[string]string
+	ID            string
+	Platform      string
+	Credentials   map[string]string
+	EventMappings map[string]string
 }
 
 func (wp *WorkerPool) loadSiteIntegrations(ctx context.Context, siteIDStr string) []SiteIntegrationRecord {
@@ -391,7 +428,7 @@ func (wp *WorkerPool) loadSiteIntegrations(ctx context.Context, siteIDStr string
 	}
 
 	rows, err := wp.pg.Pool.Query(ctx, `
-		SELECT id::text, platform, credentials 
+		SELECT id::text, platform, credentials, COALESCE(event_mappings, '{}'::jsonb) 
 		FROM site_integrations 
 		WHERE site_id = $1 AND is_active = true
 	`, siteUUID)
@@ -404,18 +441,54 @@ func (wp *WorkerPool) loadSiteIntegrations(ctx context.Context, siteIDStr string
 		var idStr string
 		var platform string
 		var credsJSON []byte
-		if err := rows.Scan(&idStr, &platform, &credsJSON); err == nil {
-			var credsMap map[string]string
-			_ = json.Unmarshal(credsJSON, &credsMap)
-			if idStr == "" {
-				idStr = fmt.Sprintf("%s_%s", siteIDStr, platform)
-			}
-			results = append(results, SiteIntegrationRecord{
-				ID:          idStr,
-				Platform:    platform,
-				Credentials: credsMap,
-			})
+		var mappingsJSON []byte
+		if err := rows.Scan(&idStr, &platform, &credsJSON, &mappingsJSON); err != nil {
+			log.Printf("[Dispatcher] Erro ao escanear integração para site %s: %v", siteIDStr, err)
+			continue
 		}
+		var credsMap map[string]string
+		if err := json.Unmarshal(credsJSON, &credsMap); err != nil {
+			log.Printf("[Dispatcher] Erro ao deserializar credenciais do site %s plataforma %s: %v", siteIDStr, platform, err)
+			credsMap = make(map[string]string)
+		}
+
+		var mappingsMap map[string]string
+		if len(mappingsJSON) > 0 {
+			if err := json.Unmarshal(mappingsJSON, &mappingsMap); err != nil {
+				log.Printf("[Dispatcher] Erro ao deserializar event_mappings do site %s plataforma %s: %v", siteIDStr, platform, err)
+			}
+		}
+		if mappingsMap == nil {
+			mappingsMap = make(map[string]string)
+		}
+
+		// Decifra transparentemente qualquer credencial cifrada com o KeyRing
+		kr := wp.getKeyRing()
+		if kr != nil {
+			for k, v := range credsMap {
+				if crypto.IsEncrypted(v) {
+					decrypted, err := kr.DecryptField(v, siteUUID.String(), platform, k)
+					if err != nil {
+						log.Printf("[Dispatcher] Falha ao decifrar credencial %s para site %s plataforma %s: %v", k, siteIDStr, platform, err)
+					} else {
+						credsMap[k] = decrypted
+					}
+				}
+			}
+		}
+
+		if idStr == "" {
+			idStr = fmt.Sprintf("%s_%s", siteIDStr, platform)
+		}
+		results = append(results, SiteIntegrationRecord{
+			ID:            idStr,
+			Platform:      platform,
+			Credentials:   credsMap,
+			EventMappings: mappingsMap,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("[Dispatcher] Erro ao iterar integrações para site %s: %v", siteIDStr, err)
 	}
 
 	return results

@@ -249,6 +249,27 @@ window.hnTrack('consent', {
 
 ---
 
+## 🔐 Criptografia de Credenciais em Repouso & Rotação de Chaves
+
+Os tokens de API sensíveis (Meta CAPI, LinkedIn, GA4, Webhooks) são armazenados no PostgreSQL (`site_integrations.credentials`) com cifragem autenticada **AES-256-GCM** em envelope canônico `enc:v1:<kid>:<nonce>:<ciphertext_tag>` e vinculados deterministicamente ao contexto via Additional Authenticated Data (AAD: `site_id|platform|field_name`), impedindo reaproveitamento de credenciais entre sites ou plataformas.
+
+### Configuração de Chaves:
+- `CREDENTIALS_KEYS`: Mapa JSON contendo identificadores `<kid>` e chaves hexadecimais de 32 bytes (64 caracteres hex). Ex: `{"k1": "chave_hex_32_bytes"}`.
+- `CREDENTIALS_CURRENT_KEY`: Identificador do `<kid>` ativo para novas gravações.
+- **Fail-Closed em Produção:** Em `ENV=production`, o serviço aborta a inicialização se as chaves não estiverem configuradas. Em desenvolvimento, um fallback seguro determinístico é utilizado.
+
+### Rotação de Chaves sem Downtime:
+1. Gere uma nova chave: `openssl rand -hex 32`.
+2. Adicione ao JSON em `CREDENTIALS_KEYS`: `{"k1": "chave_antiga", "k2": "chave_nova"}`.
+3. Defina `CREDENTIALS_CURRENT_KEY=k2`.
+4. Execute o utilitário de rotação para recifrar os registros legados com a nova chave:
+   ```bash
+   go run ./cmd/tools/rekey -rekey
+   ```
+   *Dica:* Use a flag `-dry-run` para simular as alterações antes de gravá-las no banco de dados.
+
+---
+
 ## 📖 Documentação Complementar
 
 - [Manual Técnico e Guia de Verificação Interna (Auditoria e Telas)](docs/MANUAL_DE_VERIFICACAO_INTERNA.md)

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -195,4 +196,28 @@ func TestTrustedProxies_RejectWildcard(t *testing.T) {
 		t.Errorf("Esperava menção a 0.0.0.0/0 no erro, obteve: %v", err)
 	}
 }
+
+func TestConfig_CredentialsKeyRingLoad(t *testing.T) {
+	// 1. Testa fallback seguro em development
+	t.Setenv("ENV", "development")
+	t.Setenv("CREDENTIALS_KEYS", "")
+	t.Setenv("CREDENTIALS_CURRENT_KEY", "")
+	cfgDev := Load()
+	if cfgDev.KeyRing == nil {
+		t.Fatal("esperava keyring inicializado com fallback seguro em development")
+	}
+
+	// 2. Testa inicialização com chave explícita
+	validHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	t.Setenv("CREDENTIALS_KEYS", fmt.Sprintf(`{"prod_key": "%s"}`, validHex))
+	t.Setenv("CREDENTIALS_CURRENT_KEY", "prod_key")
+	cfgExplicit := Load()
+	if cfgExplicit.KeyRing == nil {
+		t.Fatal("esperava keyring inicializado a partir de env")
+	}
+	if cfgExplicit.KeyRing.CurrentKID() != "prod_key" {
+		t.Fatalf("esperava kid prod_key, obteve %s", cfgExplicit.KeyRing.CurrentKID())
+	}
+}
+
 

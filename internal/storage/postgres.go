@@ -41,6 +41,7 @@ func NewPostgres(cfg *config.Config) (*PostgresDB, error) {
 	db := &PostgresDB{Pool: pool}
 	db.EnsureSiteAPIKeysTable(ctx)
 	db.EnsureCRMInboundEventsTable(ctx)
+	db.EnsureServerAPIKeysTable(ctx)
 	return db, nil
 }
 
@@ -66,10 +67,51 @@ func (p *PostgresDB) EnsureCRMInboundEventsTable(ctx context.Context) {
 		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 		processed_at TIMESTAMPTZ
 	);
+
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS dedup_key VARCHAR(128);
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS attempts INT NOT NULL DEFAULT 0;
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS max_attempts INT NOT NULL DEFAULT 3;
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now();
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ;
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS occurred_at TIMESTAMPTZ NOT NULL DEFAULT now();
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS value_cents BIGINT NOT NULL DEFAULT 0;
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS contact_email_hash VARCHAR(64);
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS contact_phone_hash VARCHAR(64);
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS contact_phone_blind_index VARCHAR(64);
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS gclid VARCHAR(128);
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS fbclid VARCHAR(128);
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS fbp VARCHAR(128);
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS fbc VARCHAR(128);
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS ttclid VARCHAR(128);
+	ALTER TABLE crm_inbound_events ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '30 days');
+
+	UPDATE crm_inbound_events
+	SET dedup_key = COALESCE(
+		NULLIF(order_id, '') || '_' || event_name,
+		'legacy_' || id::text
+	)
+	WHERE dedup_key IS NULL;
+
+	UPDATE crm_inbound_events
+	SET value_cents = ROUND(value * 100)::bigint
+	WHERE value_cents = 0 AND value > 0;
+
+	DO $$
+	BEGIN
+		ALTER TABLE crm_inbound_events ALTER COLUMN dedup_key SET NOT NULL;
+	EXCEPTION WHEN OTHERS THEN
+		NULL;
+	END $$;
+
 	CREATE INDEX IF NOT EXISTS idx_crm_inbound_events_site_id ON crm_inbound_events(site_id);
 	CREATE INDEX IF NOT EXISTS idx_crm_inbound_events_created_at ON crm_inbound_events(created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_crm_inbound_events_status ON crm_inbound_events(status);
 	CREATE INDEX IF NOT EXISTS idx_crm_inbound_events_order ON crm_inbound_events(site_id, provider, order_id);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_inbound_events_dedup ON crm_inbound_events(site_id, dedup_key);
+	CREATE INDEX IF NOT EXISTS idx_crm_inbound_events_worker ON crm_inbound_events(status, next_attempt_at) WHERE status IN ('pending', 'processing');
+	CREATE INDEX IF NOT EXISTS idx_crm_inbound_events_lease ON crm_inbound_events(status, lease_expires_at) WHERE status = 'processing';
+	CREATE INDEX IF NOT EXISTS idx_crm_inbound_events_expires_at ON crm_inbound_events(expires_at);
 	`
 	_, _ = p.Pool.Exec(ctx, schema)
 }
@@ -97,11 +139,46 @@ func (p *PostgresDB) EnsureSiteAPIKeysTable(ctx context.Context) {
 	CREATE INDEX IF NOT EXISTS idx_site_api_keys_site_id ON site_api_keys(site_id);
 	CREATE INDEX IF NOT EXISTS idx_site_api_keys_status ON site_api_keys(status);
 
+	UPDATE site_api_keys SET name = 'Chave de Acesso' WHERE name IS NULL OR TRIM(name) = '';
+	UPDATE site_api_keys SET created_by = 'sistema' WHERE created_by IS NULL OR TRIM(created_by) = '';
+	ALTER TABLE site_api_keys ALTER COLUMN name SET NOT NULL;
+	ALTER TABLE site_api_keys ALTER COLUMN name SET DEFAULT 'Chave de Acesso';
+	ALTER TABLE site_api_keys ALTER COLUMN created_by SET NOT NULL;
+	ALTER TABLE site_api_keys ALTER COLUMN created_by SET DEFAULT 'sistema';
+
 	INSERT INTO site_api_keys (site_id, key, name, status, created_by, created_at, updated_at)
 	SELECT id, api_key, 'Chave Primária (Legada)', 'active', 'sistema', created_at, updated_at
 	FROM sites
 	WHERE api_key IS NOT NULL AND api_key != ''
 	ON CONFLICT (key) DO NOTHING;
+	`
+	_, _ = p.Pool.Exec(ctx, schema)
+}
+
+func (p *PostgresDB) EnsureServerAPIKeysTable(ctx context.Context) {
+	if p.Pool == nil {
+		return
+	}
+	schema := `
+	CREATE TABLE IF NOT EXISTS server_api_keys (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		key_hash VARCHAR(64) UNIQUE NOT NULL,
+		key_prefix VARCHAR(16) NOT NULL,
+		name VARCHAR(100) NOT NULL DEFAULT 'Chave de Servidor',
+		scopes TEXT[] NOT NULL DEFAULT '{"crm:inbound","erp:conversions"}',
+		status VARCHAR(20) NOT NULL DEFAULT 'active',
+		created_by VARCHAR(100) NOT NULL DEFAULT 'sistema',
+		revoked_by VARCHAR(100),
+		revoked_at TIMESTAMPTZ,
+		last_used_at TIMESTAMPTZ,
+		total_requests_count BIGINT NOT NULL DEFAULT 0,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+	);
+	CREATE INDEX IF NOT EXISTS idx_server_api_keys_hash ON server_api_keys(key_hash);
+	CREATE INDEX IF NOT EXISTS idx_server_api_keys_site_id ON server_api_keys(site_id);
+	CREATE INDEX IF NOT EXISTS idx_server_api_keys_status ON server_api_keys(status);
 	`
 	_, _ = p.Pool.Exec(ctx, schema)
 }

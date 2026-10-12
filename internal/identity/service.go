@@ -169,21 +169,37 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 
 	// 1. Verifica se visitante já existe para este site específico
 	var existingVisitor struct {
-		ID             uuid.UUID
-		FirstGCLID     *string
-		FirstFBCLID    *string
-		FirstUTMSource *string
-		EmailHash      *string
-		PhoneHash      *string
+		ID               uuid.UUID
+		FirstLandingPage *string
+		FirstReferrer    *string
+		FirstUTMSource   *string
+		FirstUTMMedium   *string
+		FirstUTMCampaign *string
+		FirstUTMContent  *string
+		FirstUTMTerm     *string
+		FirstGCLID       *string
+		FirstFBCLID      *string
+		FirstTTCLID      *string
+		EmailHash        *string
+		PhoneHash        *string
 	}
 
-	query := `SELECT id, first_gclid, first_fbclid, first_utm_source, identified_email_hash, identified_phone_hash 
+	query := `SELECT id, first_landing_page, first_referrer, first_utm_source, first_utm_medium, first_utm_campaign, 
+	                 first_utm_content, first_utm_term, first_gclid, first_fbclid, first_ttclid, 
+	                 identified_email_hash, identified_phone_hash 
               FROM visitors WHERE site_id = $1 AND visitor_id = $2`
 	err = s.pg.Pool.QueryRow(ctx, query, siteUUID, visitorID).Scan(
 		&existingVisitor.ID,
+		&existingVisitor.FirstLandingPage,
+		&existingVisitor.FirstReferrer,
+		&existingVisitor.FirstUTMSource,
+		&existingVisitor.FirstUTMMedium,
+		&existingVisitor.FirstUTMCampaign,
+		&existingVisitor.FirstUTMContent,
+		&existingVisitor.FirstUTMTerm,
 		&existingVisitor.FirstGCLID,
 		&existingVisitor.FirstFBCLID,
-		&existingVisitor.FirstUTMSource,
+		&existingVisitor.FirstTTCLID,
 		&existingVisitor.EmailHash,
 		&existingVisitor.PhoneHash,
 	)
@@ -220,11 +236,42 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 			rawName, emailHash, phoneHash,
 		)
 
-		firstTouchMap["landing_page"] = ev.Attribution.LandingPage
-		firstTouchMap["utm_source"] = ev.Attribution.UTMSource
-		firstTouchMap["utm_campaign"] = ev.Attribution.UTMCampaign
-		firstTouchMap["gclid"] = ev.Attribution.GCLID
-		firstTouchMap["fbclid"] = ev.Attribution.FBCLID
+		if ev.Attribution.LandingPage != "" {
+			firstTouchMap["landing_page"] = ev.Attribution.LandingPage
+		}
+		if ev.Attribution.Referrer != "" {
+			firstTouchMap["referrer"] = ev.Attribution.Referrer
+		}
+		if ev.Attribution.UTMSource != "" {
+			firstTouchMap["utm_source"] = ev.Attribution.UTMSource
+		}
+		if ev.Attribution.UTMMedium != "" {
+			firstTouchMap["utm_medium"] = ev.Attribution.UTMMedium
+		}
+		if ev.Attribution.UTMCampaign != "" {
+			firstTouchMap["utm_campaign"] = ev.Attribution.UTMCampaign
+		}
+		if ev.Attribution.UTMContent != "" {
+			firstTouchMap["utm_content"] = ev.Attribution.UTMContent
+		}
+		if ev.Attribution.UTMTerm != "" {
+			firstTouchMap["utm_term"] = ev.Attribution.UTMTerm
+		}
+		if ev.Attribution.GCLID != "" {
+			firstTouchMap["gclid"] = ev.Attribution.GCLID
+		}
+		if ev.Attribution.GBRAID != "" {
+			firstTouchMap["gbraid"] = ev.Attribution.GBRAID
+		}
+		if ev.Attribution.WBRAID != "" {
+			firstTouchMap["wbraid"] = ev.Attribution.WBRAID
+		}
+		if ev.Attribution.FBCLID != "" {
+			firstTouchMap["fbclid"] = ev.Attribution.FBCLID
+		}
+		if ev.Attribution.TTCLID != "" {
+			firstTouchMap["ttclid"] = ev.Attribution.TTCLID
+		}
 	} else if err == nil {
 		// 3. Visitante Existente: Atualiza last_seen_at e unifica dados de contato caso novos
 		updateSQL := `
@@ -237,19 +284,45 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 		`
 		_, _ = s.pg.Pool.Exec(ctx, updateSQL, siteUUID, visitorID, rawName, emailHash, phoneHash)
 
-		if existingVisitor.FirstGCLID != nil {
+		if existingVisitor.FirstLandingPage != nil && *existingVisitor.FirstLandingPage != "" {
+			firstTouchMap["landing_page"] = *existingVisitor.FirstLandingPage
+		}
+		if existingVisitor.FirstReferrer != nil && *existingVisitor.FirstReferrer != "" {
+			firstTouchMap["referrer"] = *existingVisitor.FirstReferrer
+		}
+		if existingVisitor.FirstUTMSource != nil && *existingVisitor.FirstUTMSource != "" {
+			firstTouchMap["utm_source"] = *existingVisitor.FirstUTMSource
+		}
+		if existingVisitor.FirstUTMMedium != nil && *existingVisitor.FirstUTMMedium != "" {
+			firstTouchMap["utm_medium"] = *existingVisitor.FirstUTMMedium
+		}
+		if existingVisitor.FirstUTMCampaign != nil && *existingVisitor.FirstUTMCampaign != "" {
+			firstTouchMap["utm_campaign"] = *existingVisitor.FirstUTMCampaign
+		}
+		if existingVisitor.FirstUTMContent != nil && *existingVisitor.FirstUTMContent != "" {
+			firstTouchMap["utm_content"] = *existingVisitor.FirstUTMContent
+		}
+		if existingVisitor.FirstUTMTerm != nil && *existingVisitor.FirstUTMTerm != "" {
+			firstTouchMap["utm_term"] = *existingVisitor.FirstUTMTerm
+		}
+		if existingVisitor.FirstGCLID != nil && *existingVisitor.FirstGCLID != "" {
 			firstTouchMap["gclid"] = *existingVisitor.FirstGCLID
 		}
-		if existingVisitor.FirstFBCLID != nil {
+		if existingVisitor.FirstFBCLID != nil && *existingVisitor.FirstFBCLID != "" {
 			firstTouchMap["fbclid"] = *existingVisitor.FirstFBCLID
 		}
-		if existingVisitor.FirstUTMSource != nil {
-			firstTouchMap["utm_source"] = *existingVisitor.FirstUTMSource
+		if existingVisitor.FirstTTCLID != nil && *existingVisitor.FirstTTCLID != "" {
+			firstTouchMap["ttclid"] = *existingVisitor.FirstTTCLID
 		}
 	}
 
+	var ftToSend map[string]interface{}
+	if len(firstTouchMap) > 0 {
+		ftToSend = firstTouchMap
+	}
+
 	// 4. Roteia para despacho server-side se for evento qualificado
-	return s.checkAndRouteDispatch(ctx, ev, firstTouchMap)
+	return s.checkAndRouteDispatch(ctx, ev, ftToSend)
 }
 
 // checkAndRouteDispatch verifica se o evento é uma conversão e envia para a fila de despacho do Meta/Google/CRM

@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/valyala/fasthttp"
 	"tracking-engine/internal/attribution"
@@ -23,6 +25,9 @@ import (
 const (
 	VisitorCookieName = "_vid"
 	OneYearSeconds    = 365 * 24 * 60 * 60
+
+	RedisKeyTelemetryCounts = "telemetry:site_keys:counts"
+	RedisKeyTelemetryTimes  = "telemetry:site_keys:times"
 )
 
 type Handler struct {
@@ -31,17 +36,37 @@ type Handler struct {
 	pg                *storage.PostgresDB
 	ch                *storage.ClickHouseDB
 	identityMgr       *VisitorIdentityManager
-	siteKeys          sync.Map // Cache em memória para validação ultra-rápida de site_key
+	siteKeys          sync.Map // Cache em memória para validação ultra-rápida de site_key com TTL
+	serverKeys        sync.Map // Cache em memória para validação de chaves de servidor hn_sec_ com TTL
+	keyThrottle       sync.Map // Throttle em memória para timestamp de telemetria
 	offlineReconciler OfflineReconcileFunc
+	inboundWorker     *InboundWorker
+	inboundPersister  InboundPersisterFunc
 }
 
 func NewHandler(cfg *config.Config, rdb *storage.RedisClient, pg *storage.PostgresDB, ch *storage.ClickHouseDB) *Handler {
-	return &Handler{
+	h := &Handler{
 		cfg:         cfg,
 		redis:       rdb,
 		pg:          pg,
 		ch:          ch,
 		identityMgr: NewVisitorIdentityManager(rdb),
+	}
+	h.inboundWorker = NewInboundWorker(pg, rdb, nil)
+	return h
+}
+
+// StartInboundWorker inicia o processador assíncrono durável de webhooks de CRM/ERP
+func (h *Handler) StartInboundWorker(ctx context.Context) {
+	if h.inboundWorker != nil {
+		h.inboundWorker.Start(ctx)
+	}
+}
+
+// StopInboundWorker finaliza graciosamente o consumidor de CRM/ERP
+func (h *Handler) StopInboundWorker() {
+	if h.inboundWorker != nil {
+		h.inboundWorker.Stop()
 	}
 }
 
@@ -366,17 +391,9 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		}(debugData, siteID)
 	}
 
-	// Atualiza telemetria da chave de acesso assincronamente a cada evento coletado
-	if siteKey != "" && h.pg != nil && h.pg.Pool != nil {
-		go func(sk string) {
-			upCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-			_, _ = h.pg.Pool.Exec(upCtx, `
-				UPDATE site_api_keys 
-				SET last_used_at = now(), total_events_count = total_events_count + 1 
-				WHERE key = $1
-			`, sk)
-		}(siteKey)
+	// Atualiza telemetria da chave de acesso de forma desacoplada
+	if siteKey != "" {
+		h.RecordKeyUsage(siteKey)
 	}
 
 	// Responde 202 Accepted com confirmação explícita e identificador único
@@ -387,14 +404,22 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 }
 
 func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMetadata, bool) {
-	// 1. Tenta memória
+	// 1. Tenta memória com verificação de TTL
 	if val, ok := h.siteKeys.Load(siteKey); ok {
-		meta := val.(*SiteMetadata)
-		return meta, meta != nil && meta.ID != ""
+		if cached, ok := val.(*CachedSiteKey); ok {
+			if time.Now().Before(cached.ExpiresAt) {
+				return cached.Metadata, cached.Metadata != nil && cached.Metadata.ID != ""
+			}
+			// Expirou pelo TTL de 5 minutos: remove para revalidar com o banco
+			h.siteKeys.Delete(siteKey)
+		} else if meta, ok := val.(*SiteMetadata); ok {
+			return meta, meta != nil && meta.ID != ""
+		}
 	}
 
 	// 2. Tenta PostgreSQL se disponível
 	if h.pg != nil && h.pg.Pool != nil {
+		var keyID string
 		var siteID string
 		var isActive bool
 		var rawPrivacy []byte
@@ -402,11 +427,11 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 
 		// 2.1 Primeiro tenta na tabela site_api_keys (suporte a múltiplas chaves e revogação)
 		err := h.pg.Pool.QueryRow(ctx, `
-			SELECT k.site_id::text, (k.status = 'active' AND s.is_active = true), COALESCE(s.privacy_settings, '{}'::jsonb), COALESCE(s.cname_subdomain, '')
+			SELECT k.id::text, k.site_id::text, (k.status = 'active' AND s.is_active = true), COALESCE(s.privacy_settings, '{}'::jsonb), COALESCE(s.cname_subdomain, '')
 			FROM site_api_keys k
 			JOIN sites s ON s.id = k.site_id
 			WHERE k.key = $1
-		`, siteKey).Scan(&siteID, &isActive, &rawPrivacy, &cnameSub)
+		`, siteKey).Scan(&keyID, &siteID, &isActive, &rawPrivacy, &cnameSub)
 
 		// 2.2 Fallback retroativo para sites.api_key caso ainda não esteja em site_api_keys
 		if err != nil {
@@ -440,27 +465,21 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 
 			meta := &SiteMetadata{
 				ID:              siteID,
+				KeyID:           keyID,
 				AllowedDomains:  domains,
 				PrivacySettings: privacy,
 				CnameSubdomain:  cnameSub,
 			}
-			h.siteKeys.Store(siteKey, meta)
+			h.siteKeys.Store(siteKey, &CachedSiteKey{
+				KeyID:     keyID,
+				Metadata:  meta,
+				ExpiresAt: time.Now().Add(5 * time.Minute),
+			})
 
-			// Atualiza telemetria da chave assincronamente sem bloquear a requisição
-			go func(sk string) {
-				upCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				_, _ = h.pg.Pool.Exec(upCtx, `
-					UPDATE site_api_keys 
-					SET last_used_at = now(), total_events_count = total_events_count + 1 
-					WHERE key = $1
-				`, sk)
-			}(siteKey)
+			// Contabiliza telemetria desacoplada
+			h.RecordKeyUsage(siteKey)
 
 			return meta, true
-		}
-		if err != nil {
-			fmt.Printf("[Collector] Erro ao validar site_key '%s': %v\n", siteKey, err)
 		}
 	}
 
@@ -476,6 +495,176 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 	}
 
 	return nil, false
+}
+
+// RecordKeyUsage registra o uso da chave de acesso no Redis Hash sem abrir transação ou bloquear o Postgres
+func (h *Handler) RecordKeyUsage(siteKey string) {
+	if siteKey == "" {
+		return
+	}
+
+	if h.redis != nil && h.redis.Client != nil {
+		go func(sk string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			_ = h.redis.Client.HIncrBy(ctx, RedisKeyTelemetryCounts, sk, 1).Err()
+
+			// Throttle de timestamp: grava no Redis apenas a cada 30 segundos por chave
+			now := time.Now()
+			lastVal, ok := h.keyThrottle.Load(sk)
+			if !ok || now.Sub(lastVal.(time.Time)) >= 30*time.Second {
+				h.keyThrottle.Store(sk, now)
+				_ = h.redis.Client.HSet(ctx, RedisKeyTelemetryTimes, sk, now.Unix()).Err()
+			}
+		}(siteKey)
+	}
+}
+
+// StartTelemetryFlushWorker executa periodicamente o descarregamento das métricas do Redis para o PostgreSQL
+func (h *Handler) StartTelemetryFlushWorker(ctx context.Context, interval time.Duration) {
+	if h.redis == nil || h.redis.Client == nil || h.pg == nil || h.pg.Pool == nil {
+		return
+	}
+	if interval <= 0 {
+		interval = 15 * time.Second
+	}
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		workerID := uuid.New().String()[:8]
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				h.FlushTelemetryToPostgres(ctx, workerID)
+			}
+		}
+	}()
+}
+
+// FlushTelemetryToPostgres renomeia atomicamente o Hash no Redis e atualiza o PostgreSQL em lote com GREATEST
+func (h *Handler) FlushTelemetryToPostgres(ctx context.Context, workerID string) {
+	if h.redis == nil || h.redis.Client == nil || h.pg == nil || h.pg.Pool == nil {
+		return
+	}
+
+	flushCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	procCountsKey := fmt.Sprintf("telemetry:site_keys:counts:proc:%s", workerID)
+	procTimesKey := fmt.Sprintf("telemetry:site_keys:times:proc:%s", workerID)
+
+	// 1. RENAME atômico de contadores
+	err := h.redis.Client.Rename(flushCtx, RedisKeyTelemetryCounts, procCountsKey).Err()
+	if err != nil {
+		return
+	}
+
+	hasTimes := false
+	if errTimes := h.redis.Client.Rename(flushCtx, RedisKeyTelemetryTimes, procTimesKey).Err(); errTimes == nil {
+		hasTimes = true
+	}
+
+	// 2. Lê contadores acumulados
+	counts, err := h.redis.Client.HGetAll(flushCtx, procCountsKey).Result()
+	if err != nil || len(counts) == 0 {
+		_ = h.redis.Client.Del(flushCtx, procCountsKey).Err()
+		if hasTimes {
+			_ = h.redis.Client.Del(flushCtx, procTimesKey).Err()
+		}
+		return
+	}
+
+	// Lê timestamps acumulados (se existirem)
+	var times map[string]string
+	if hasTimes {
+		times, _ = h.redis.Client.HGetAll(flushCtx, procTimesKey).Result()
+	}
+
+	// 3. Batch UPDATE no PostgreSQL com GREATEST
+	for siteKey, countStr := range counts {
+		cnt, errParse := strconv.ParseInt(countStr, 10, 64)
+		if errParse != nil || cnt <= 0 {
+			continue
+		}
+
+		targetTime := time.Now()
+		if hasTimes && times != nil {
+			if tsStr, ok := times[siteKey]; ok {
+				if sec, errSec := strconv.ParseInt(tsStr, 10, 64); errSec == nil && sec > 0 {
+					targetTime = time.Unix(sec, 0)
+				}
+			}
+		}
+
+		_, errUp := h.pg.Pool.Exec(flushCtx, `
+			UPDATE site_api_keys
+			SET total_events_count = total_events_count + $1,
+			    last_used_at = GREATEST(COALESCE(last_used_at, '1970-01-01'::timestamptz), $2)
+			WHERE key = $3
+		`, cnt, targetTime, siteKey)
+		if errUp != nil {
+			log.Printf("[Collector Telemetry] Erro no flush da chave %s: %v", siteKey, errUp)
+		}
+	}
+
+	// 4. Limpa chaves temporárias processadas
+	_ = h.redis.Client.Del(flushCtx, procCountsKey).Err()
+	if hasTimes {
+		_ = h.redis.Client.Del(flushCtx, procTimesKey).Err()
+	}
+}
+
+// StartKeyInvalidationSubscriber escuta o canal pubsub:key_invalidation e purga chaves revogadas
+func (h *Handler) StartKeyInvalidationSubscriber(ctx context.Context) {
+	if h.redis == nil || h.redis.Client == nil {
+		return
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			pubsub := h.redis.Client.Subscribe(ctx, "pubsub:key_invalidation")
+			// Ao inicializar ou reconectar o subscriber: esvazia o cache in-process inteiro
+			h.ClearSiteKeysCache()
+
+			ch := pubsub.Channel()
+			for msg := range ch {
+				var payload struct {
+					Action string `json:"action"`
+					KeyID  string `json:"key_id"`
+					SiteID string `json:"site_id"`
+				}
+				if err := json.Unmarshal([]byte(msg.Payload), &payload); err == nil {
+					if payload.KeyID != "" {
+						h.InvalidateKeyByID(payload.KeyID)
+					}
+					if payload.SiteID != "" {
+						h.InvalidateSiteCache(payload.SiteID)
+					}
+				}
+			}
+
+			_ = pubsub.Close()
+			// Ao detectar desconexão: esvazia o cache imediatamente para proteção
+			h.ClearSiteKeysCache()
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
+			}
+		}
+	}()
 }
 
 func detectDeviceType(ua string) string {

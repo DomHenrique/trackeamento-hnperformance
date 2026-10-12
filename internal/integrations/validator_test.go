@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"net"
 	"testing"
 )
 
@@ -93,5 +94,67 @@ func TestIsRestrictedIP(t *testing.T) {
 	// Garante que nil retorna restrito
 	if !isRestrictedIP(nil) {
 		t.Errorf("isRestrictedIP(nil) deveria ser true")
+	}
+
+	restrictedIPs := []string{
+		"127.0.0.1",
+		"10.0.0.1",
+		"172.16.0.1",
+		"192.168.1.1",
+		"169.254.169.254",
+		"100.64.0.1",
+		"0.0.0.0",
+		"240.0.0.1",
+		"198.18.0.1",
+		"::1",
+		"::",
+		"fc00::1",
+		"fe80::1",
+		"::ffff:127.0.0.1",
+		"::ffff:10.0.0.1",
+		"::ffff:169.254.169.254",
+	}
+
+	for _, ipStr := range restrictedIPs {
+		ip := net.ParseIP(ipStr)
+		if !isRestrictedIP(ip) {
+			t.Errorf("isRestrictedIP(%s) deveria ser true", ipStr)
+		}
+	}
+
+	publicIPs := []string{
+		"8.8.8.8",
+		"1.1.1.1",
+		"157.240.1.35",
+		"2606:4700:4700::1111",
+	}
+
+	for _, ipStr := range publicIPs {
+		ip := net.ParseIP(ipStr)
+		if isRestrictedIP(ip) {
+			t.Errorf("isRestrictedIP(%s) deveria ser false para IP publico", ipStr)
+		}
+	}
+}
+
+func TestValidateOutboundAddress(t *testing.T) {
+	// Produção: bloqueia IP restrito
+	if err := ValidateOutboundAddress("tcp", "127.0.0.1:8080", "production", ""); err == nil {
+		t.Errorf("ValidateOutboundAddress deveria bloquear 127.0.0.1 em producao")
+	}
+
+	// Desenvolvimento: permite 127.0.0.1
+	if err := ValidateOutboundAddress("tcp", "127.0.0.1:8080", "development", ""); err != nil {
+		t.Errorf("ValidateOutboundAddress deveria permitir 127.0.0.1 em dev: %v", err)
+	}
+
+	// Produção com allowlist: permite IP autorizado
+	if err := ValidateOutboundAddress("tcp", "172.20.0.5:8080", "production", "172.20.0.5:8080"); err != nil {
+		t.Errorf("ValidateOutboundAddress deveria permitir IP da allowlist: %v", err)
+	}
+
+	// Produção com allowlist diferente: bloqueia
+	if err := ValidateOutboundAddress("tcp", "172.20.0.6:8080", "production", "172.20.0.5:8080"); err == nil {
+		t.Errorf("ValidateOutboundAddress deveria bloquear IP que nao esta na allowlist")
 	}
 }

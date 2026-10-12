@@ -3,11 +3,13 @@ package integrations
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
+	"syscall"
 	"time"
 )
 
@@ -16,12 +18,26 @@ type HTTPClient struct {
 }
 
 func NewHTTPClient(timeout time.Duration) *HTTPClient {
+	dialer := &net.Dialer{
+		Timeout:   5 * time.Second,
+		KeepAlive: 30 * time.Second,
+		Control: func(network, address string, c syscall.RawConn) error {
+			env := os.Getenv("ENV")
+			if env == "" {
+				if flag.Lookup("test.v") != nil {
+					env = "test"
+				} else {
+					env = "development"
+				}
+			}
+			allowedHosts := os.Getenv("OUTBOUND_ALLOWED_HOSTS")
+			return ValidateOutboundAddress(network, address, env, allowedHosts)
+		},
+	}
+
 	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   5 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
+		Proxy:               nil, // Explicitamente desativa proxies para validar o IP real de destino
+		DialContext:         dialer.DialContext,
 		MaxIdleConns:        200,
 		MaxIdleConnsPerHost: 50,
 		IdleConnTimeout:     90 * time.Second,
@@ -33,17 +49,8 @@ func NewHTTPClient(timeout time.Duration) *HTTPClient {
 			Transport: transport,
 			Timeout:   timeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return fmt.Errorf("limite maximo de redirecionamentos atingido (10)")
-				}
-				env := os.Getenv("ENV")
-				if env == "" {
-					env = "production"
-				}
-				if err := ValidateOutboundURL(req.URL.String(), env); err != nil {
-					return fmt.Errorf("redirecionamento bloqueado por politica anti-ssrf: %w", err)
-				}
-				return nil
+				// Integrações e webhooks não devem seguir redirects automáticos
+				return http.ErrUseLastResponse
 			},
 		},
 	}
@@ -91,6 +98,15 @@ func (h *HTTPClient) PostWithRetry(ctx context.Context, url string, headers map[
 			return respBody, respCode, nil
 		}
 
+		// Se status for 3xx (redirecionamento bloqueado), erro imediato e não retryable
+		if respCode >= 300 && respCode < 400 {
+			loc := resp.Header.Get("Location")
+			if loc != "" {
+				return respBody, respCode, fmt.Errorf("redirecionamento HTTP %d para '%s' nao suportado para integracoes (atualize a url configurada)", respCode, loc)
+			}
+			return respBody, respCode, fmt.Errorf("redirecionamento HTTP %d nao suportado para integracoes", respCode)
+		}
+
 		// Se for erro de cliente 4xx (exceto 429 Too Many Requests), não adianta tentar novamente
 		if respCode >= 400 && respCode < 500 && respCode != 429 {
 			return respBody, respCode, fmt.Errorf("erro cliente HTTP %d: %s", respCode, string(respBody))
@@ -126,6 +142,14 @@ func (h *HTTPClient) PostRaw(ctx context.Context, url string, headers map[string
 	respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
 	if readErr != nil {
 		return nil, resp.StatusCode, readErr
+	}
+
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		loc := resp.Header.Get("Location")
+		if loc != "" {
+			return respBody, resp.StatusCode, fmt.Errorf("redirecionamento HTTP %d para '%s' nao suportado para integracoes (atualize a url configurada)", resp.StatusCode, loc)
+		}
+		return respBody, resp.StatusCode, fmt.Errorf("redirecionamento HTTP %d nao suportado para integracoes", resp.StatusCode)
 	}
 
 	return respBody, resp.StatusCode, nil

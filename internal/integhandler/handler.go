@@ -4,29 +4,52 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"tracking-engine/internal/config"
+	"tracking-engine/internal/crypto"
 	"tracking-engine/internal/integrations"
 	"tracking-engine/internal/storage"
 )
+
+const defaultDevKeyHex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 type IntegrationsHandler struct {
 	cfg          *config.Config
 	pg           *storage.PostgresDB
 	redis        *storage.RedisClient
+	keyRing      *crypto.KeyRing
 	onKeyRevoked func(key string)
 }
 
 func NewIntegrationsHandler(cfg *config.Config, pg *storage.PostgresDB, rdb *storage.RedisClient) *IntegrationsHandler {
-	return &IntegrationsHandler{
+	h := &IntegrationsHandler{
 		cfg:   cfg,
 		pg:    pg,
 		redis: rdb,
 	}
+	return h
+}
+
+func (h *IntegrationsHandler) SetKeyRing(kr *crypto.KeyRing) {
+	h.keyRing = kr
+}
+
+func (h *IntegrationsHandler) getKeyRing() *crypto.KeyRing {
+	if h.keyRing != nil {
+		return h.keyRing
+	}
+	if h.cfg != nil && h.cfg.KeyRing != nil {
+		return h.cfg.KeyRing
+	}
+	// Fallback determinístico para desenvolvimento e testes
+	kr, _ := crypto.NewKeyRingFromJSON(`{"dev": "`+defaultDevKeyHex+`"}`, "dev")
+	return kr
 }
 
 func (h *IntegrationsHandler) SetOnKeyRevoked(fn func(key string)) {
@@ -43,10 +66,40 @@ type IntegrationItem struct {
 	UpdatedAt   *time.Time        `json:"updated_at,omitempty"`
 }
 
+// PlatformAllowedCredentials define a whitelist estrita de campos de credenciais por plataforma
+var PlatformAllowedCredentials = map[string]map[string]bool{
+	"meta_capi": {
+		"pixel_id":        true,
+		"access_token":    true,
+		"test_event_code": true,
+	},
+	"google_ads": {
+		"endpoint_url":      true,
+		"api_token":         true,
+		"conversion_action": true,
+	},
+	"ga4": {
+		"measurement_id": true,
+		"api_secret":     true,
+	},
+	"linkedin_capi": {
+		"access_token":        true,
+		"conversion_rule_id": true,
+	},
+	"webhook": {
+		"url":          true,
+		"webhook_url":  true,
+		"secret_token": true,
+		"secret":       true,
+		"headers":      true,
+	},
+}
+
 // SaveIntegrationRequest payload para criar ou atualizar as credenciais
 type SaveIntegrationRequest struct {
-	IsActive      bool              `json:"is_active"`
+	IsActive      *bool             `json:"is_active"`
 	Credentials   map[string]string `json:"credentials"`
+	DeleteKeys    []string          `json:"delete_keys"`
 	EventMappings map[string]string `json:"event_mappings,omitempty"`
 }
 
@@ -87,7 +140,8 @@ func (h *IntegrationsHandler) HandleGetIntegrations(c *fiber.Ctx) error {
 		WHERE site_id = $1
 	`, siteUUID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		log.Printf("[Integrations] Falha ao consultar integrações do site %s: %v", siteUUID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao carregar integrações do site"})
 	}
 	defer rows.Close()
 
@@ -98,34 +152,57 @@ func (h *IntegrationsHandler) HandleGetIntegrations(c *fiber.Ctx) error {
 		var credsBytes []byte
 		var updatedAt time.Time
 
-		if err := rows.Scan(&platform, &isActive, &credsBytes, &updatedAt); err == nil {
-			var creds map[string]string
-			_ = json.Unmarshal(credsBytes, &creds)
+		if err := rows.Scan(&platform, &isActive, &credsBytes, &updatedAt); err != nil {
+			log.Printf("[Integrations] Erro no scan de integração para site %s: %v", siteUUID, err)
+			continue
+		}
 
-			maskedCreds := make(map[string]string)
-			hasToken := false
+		var creds map[string]string
+		if err := json.Unmarshal(credsBytes, &creds); err != nil {
+			log.Printf("[Integrations] Erro ao deserializar credenciais do site %s plataforma %s: %v", siteUUID, platform, err)
+			creds = make(map[string]string)
+		}
 
-			for k, v := range creds {
-				if isSensitiveKey(k) {
-					if v != "" {
-						hasToken = true
-						maskedCreds[k] = maskToken(v)
-					} else {
-						maskedCreds[k] = ""
-					}
+		maskedCreds := make(map[string]string)
+		hasToken := false
+		kr := h.getKeyRing()
+
+		for k, v := range creds {
+			if kr != nil && crypto.IsEncrypted(v) {
+				decrypted, err := kr.DecryptField(v, siteUUID.String(), platform, k)
+				if err != nil {
+					log.Printf("[Integrations] Falha ao decifrar credencial %s para site %s: %v", k, siteUUID, err)
 				} else {
-					maskedCreds[k] = v
+					v = decrypted
 				}
 			}
 
-			integrationsMap[platform] = IntegrationItem{
-				Platform:    platform,
-				IsActive:    isActive,
-				Credentials: maskedCreds,
-				HasToken:    hasToken,
-				UpdatedAt:   &updatedAt,
+			if isSensitiveKey(k) {
+				if v != "" {
+					hasToken = true
+					maskedCreds[k] = maskToken(v)
+				} else {
+					maskedCreds[k] = ""
+				}
+			} else if isURLKey(k) {
+				maskedCreds[k] = maskSensitiveQueryParams(v)
+			} else {
+				maskedCreds[k] = v
 			}
 		}
+
+		integrationsMap[platform] = IntegrationItem{
+			Platform:    platform,
+			IsActive:    isActive,
+			Credentials: maskedCreds,
+			HasToken:    hasToken,
+			UpdatedAt:   &updatedAt,
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("[Integrations] Erro ao iterar linhas de integrações para site %s: %v", siteUUID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao iterar integrações"})
 	}
 
 	// Garante que as principais plataformas estejam sempre no objeto de retorno
@@ -170,37 +247,99 @@ func (h *IntegrationsHandler) HandleSaveIntegration(c *fiber.Ctx) error {
 		req.Credentials = make(map[string]string)
 	}
 
+	// Validação de whitelist de chaves em credentials
+	allowed, ok := PlatformAllowedCredentials[platform]
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "plataforma não suportada"})
+	}
+
+	for k := range req.Credentials {
+		if !allowed[k] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fmt.Sprintf("chave %q não é suportada para a plataforma %s", k, platform),
+			})
+		}
+	}
+
+	// Validação de delete_keys e detecção de conflitos
+	for _, delKey := range req.DeleteKeys {
+		delKey = strings.TrimSpace(delKey)
+		if delKey == "" {
+			continue
+		}
+		if !allowed[delKey] {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fmt.Sprintf("chave em delete_keys %q não é suportada para a plataforma %s", delKey, platform),
+			})
+		}
+		if _, exists := req.Credentials[delKey]; exists {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fmt.Sprintf("conflito de chave: %q não pode constar em credentials e delete_keys simultaneamente", delKey),
+			})
+		}
+	}
+
+	// Validação preventiva contra SSRF para plataformas que configuram URLs de destino
+	env := "production"
+	if h.cfg != nil && h.cfg.Env != "" {
+		env = h.cfg.Env
+	}
+
+	if platform == "google_ads" {
+		if endpoint := strings.TrimSpace(req.Credentials["endpoint_url"]); endpoint != "" {
+			if err := integrations.ValidateOutboundURL(endpoint, env); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": fmt.Sprintf("endpoint_url invalido ou restrito: %v", err),
+				})
+			}
+		}
+	} else if platform == "webhook" {
+		webhookURL := strings.TrimSpace(req.Credentials["url"])
+		if webhookURL == "" {
+			webhookURL = strings.TrimSpace(req.Credentials["webhook_url"])
+		}
+		if webhookURL != "" {
+			if err := integrations.ValidateOutboundURL(webhookURL, env); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": fmt.Sprintf("url de webhook invalida ou restrita: %v", err),
+				})
+			}
+		}
+	}
+
 	if h.pg == nil || h.pg.Pool == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "banco de dados indisponível"})
 	}
 
-	// Busca credenciais existentes para não sobrescrever tokens se o usuário não os reenviou
-	var existingCredsJSON []byte
-	row := h.pg.Pool.QueryRow(c.Context(), `
-		SELECT credentials FROM site_integrations WHERE site_id = $1 AND platform = $2
-	`, siteUUID, platform)
+	kr := h.getKeyRing()
 
-	existingCreds := make(map[string]string)
-	if err := row.Scan(&existingCredsJSON); err == nil && len(existingCredsJSON) > 0 {
-		_ = json.Unmarshal(existingCredsJSON, &existingCreds)
-	}
-
-	// Mescla credenciais preservando tokens não alterados (que vêm mascarados ou vazios)
-	finalCreds := make(map[string]string)
-	for k, v := range existingCreds {
-		finalCreds[k] = v
-	}
-
+	// Prepara mapa de credenciais que serão inseridas/atualizadas
+	newCredsToStore := make(map[string]string)
 	for k, v := range req.Credentials {
 		trimmed := strings.TrimSpace(v)
-		if isSensitiveKey(k) && (strings.Contains(trimmed, "••") || trimmed == "") {
-			// Mantém token existente caso o usuário tenha enviado a máscara visual
-			continue
+		if isSensitiveKey(k) {
+			if strings.Contains(trimmed, "••") || trimmed == "" {
+				// Ignora máscara visual ou valor vazio para que o merge do Postgres preserve o token existente
+				continue
+			}
+			// Cifra novo token sensível com AES-256-GCM e AAD contextual
+			if kr != nil {
+				encryptedVal, err := kr.EncryptField(trimmed, siteUUID.String(), platform, k)
+				if err != nil {
+					log.Printf("[Integrations] Falha ao criptografar campo %s para site %s: %v", k, siteUUID, err)
+					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao proteger credenciais"})
+				}
+				newCredsToStore[k] = encryptedVal
+			} else {
+				newCredsToStore[k] = trimmed
+			}
+		} else {
+			// Campos não sensíveis (ex: pixel_id, measurement_id, endpoint_url) salvos em texto claro
+			newCredsToStore[k] = trimmed
 		}
-		finalCreds[k] = trimmed
 	}
 
-	credsJSON, err := json.Marshal(finalCreds)
+	credsJSON, err := json.Marshal(newCredsToStore)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "erro ao serializar credenciais"})
 	}
@@ -210,26 +349,42 @@ func (h *IntegrationsHandler) HandleSaveIntegration(c *fiber.Ctx) error {
 		eventMappingsJSON = []byte("{}")
 	}
 
+	// Garante que deleteKeys seja sempre um slice instanciado (nunca nil) para evitar o comportamento NULL no Postgres
+	deleteKeys := req.DeleteKeys
+	if deleteKeys == nil {
+		deleteKeys = []string{}
+	}
+
 	query := `
 		INSERT INTO site_integrations (site_id, platform, is_active, credentials, event_mappings, updated_at)
-		VALUES ($1, $2, $3, $4, $5, now())
+		VALUES ($1, $2, COALESCE($3, true), $4::jsonb, $5::jsonb, now())
 		ON CONFLICT (site_id, platform)
 		DO UPDATE SET 
-			is_active = EXCLUDED.is_active,
-			credentials = EXCLUDED.credentials,
-			event_mappings = EXCLUDED.event_mappings,
+			is_active = COALESCE(EXCLUDED.is_active, site_integrations.is_active),
+			credentials = (COALESCE(site_integrations.credentials, '{}'::jsonb) - COALESCE($6::text[], '{}')) || EXCLUDED.credentials,
+			event_mappings = CASE 
+				WHEN EXCLUDED.event_mappings = '{}'::jsonb AND site_integrations.event_mappings <> '{}'::jsonb 
+				THEN site_integrations.event_mappings 
+				ELSE EXCLUDED.event_mappings 
+			END,
 			updated_at = now()
 	`
 
-	_, err = h.pg.Pool.Exec(c.Context(), query, siteUUID, platform, req.IsActive, credsJSON, eventMappingsJSON)
+	_, err = h.pg.Pool.Exec(c.Context(), query, siteUUID, platform, req.IsActive, credsJSON, eventMappingsJSON, deleteKeys)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao salvar integração: " + err.Error()})
+		log.Printf("[Integrations] Falha ao salvar integração para site %s plataforma %s: %v", siteUUID, platform, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao salvar integração"})
+	}
+
+	isActiveResp := true
+	if req.IsActive != nil {
+		isActiveResp = *req.IsActive
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message":  "Integração salva com sucesso",
 		"platform": platform,
-		"active":   req.IsActive,
+		"active":   isActiveResp,
 	})
 }
 
@@ -264,6 +419,21 @@ func (h *IntegrationsHandler) HandleTestIntegration(c *fiber.Ctx) error {
 					if currentVal, exists := creds[k]; !exists || strings.TrimSpace(currentVal) == "" || strings.Contains(currentVal, "••") {
 						creds[k] = v
 					}
+				}
+			}
+		}
+	}
+
+	// Decifra transparentemente qualquer credencial cifrada antes de invocar a chamada de teste
+	kr := h.getKeyRing()
+	if kr != nil {
+		for k, v := range creds {
+			if crypto.IsEncrypted(v) {
+				decrypted, err := kr.DecryptField(v, siteUUID.String(), platform, k)
+				if err != nil {
+					log.Printf("[Integrations] Falha ao decifrar credencial %s para teste no site %s: %v", k, siteUUID, err)
+				} else {
+					creds[k] = decrypted
 				}
 			}
 		}
@@ -388,13 +558,47 @@ func isSensitiveKey(k string) bool {
 	return strings.Contains(lower, "token") || strings.Contains(lower, "secret") || strings.Contains(lower, "password") || strings.Contains(lower, "key")
 }
 
+func isURLKey(k string) bool {
+	lower := strings.ToLower(k)
+	return strings.Contains(lower, "url") || strings.Contains(lower, "endpoint")
+}
+
+func maskSensitiveQueryParams(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return rawURL
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.RawQuery == "" {
+		return rawURL
+	}
+	q := u.Query()
+	sensitiveParams := []string{"token", "key", "secret", "sig", "signature", "api_key", "apikey", "auth"}
+	modified := false
+	for _, param := range sensitiveParams {
+		for queryKey := range q {
+			if strings.EqualFold(queryKey, param) {
+				val := q.Get(queryKey)
+				if val != "" {
+					q.Set(queryKey, maskToken(val))
+					modified = true
+				}
+			}
+		}
+	}
+	if modified {
+		u.RawQuery = q.Encode()
+		return u.String()
+	}
+	return rawURL
+}
+
 func maskToken(t string) string {
-	if len(t) <= 8 {
+	if len(t) < 16 {
 		return "••••••••"
 	}
-	prefix := t[:4]
 	suffix := t[len(t)-4:]
-	return fmt.Sprintf("%s••••••••%s", prefix, suffix)
+	return fmt.Sprintf("••••••••%s", suffix)
 }
 
 // HandleGetRoutingSummary retorna o sumário diário de telemetria de roteamento para um site ou global
@@ -402,6 +606,10 @@ func (h *IntegrationsHandler) HandleGetRoutingSummary(c *fiber.Ctx) error {
 	siteID := strings.TrimSpace(c.Params("site_id"))
 	if siteID == "" || siteID == "all" || siteID == "global" {
 		siteID = "global"
+	} else {
+		if _, err := uuid.Parse(siteID); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "site_id inválido"})
+		}
 	}
 
 	if h.redis == nil {
@@ -418,7 +626,8 @@ func (h *IntegrationsHandler) HandleGetRoutingSummary(c *fiber.Ctx) error {
 
 	summary, err := h.redis.GetRoutingSummary(c.Context(), siteID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		log.Printf("[Integrations] Falha ao obter sumário de roteamento para site %s: %v", siteID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao obter métricas de roteamento"})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(summary)
@@ -429,6 +638,10 @@ func (h *IntegrationsHandler) HandleGetRoutingRecent(c *fiber.Ctx) error {
 	siteID := strings.TrimSpace(c.Params("site_id"))
 	if siteID == "" || siteID == "all" || siteID == "global" {
 		siteID = "global"
+	} else {
+		if _, err := uuid.Parse(siteID); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "site_id inválido"})
+		}
 	}
 
 	limit := int64(30)
@@ -442,7 +655,8 @@ func (h *IntegrationsHandler) HandleGetRoutingRecent(c *fiber.Ctx) error {
 
 	recent, err := h.redis.GetRecentRoutingDecisions(c.Context(), siteID, limit)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		log.Printf("[Integrations] Falha ao obter decisões recentes de roteamento para site %s: %v", siteID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao carregar decisões recentes"})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(recent)

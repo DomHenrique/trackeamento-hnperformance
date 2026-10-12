@@ -15,9 +15,17 @@ import (
 
 type SiteMetadata struct {
 	ID              string
+	KeyID           string
 	AllowedDomains  []string
 	PrivacySettings *PrivacySettings
 	CnameSubdomain  string
+}
+
+// CachedSiteKey representa o registro de chave em cache com expiração estrita por TTL
+type CachedSiteKey struct {
+	KeyID     string
+	Metadata  *SiteMetadata
+	ExpiresAt time.Time
 }
 
 // ExtractOriginDomain extrai o domínio limpo da requisição conforme a Abordagem B.
@@ -228,10 +236,31 @@ func (h *Handler) HandleListAlerts(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(alerts)
 }
 
-// InvalidateSiteCache invalida a entrada em memória correspondente ao siteID
+// InvalidateSiteCache invalida todas as entradas em memória correspondentes ao siteID
 func (h *Handler) InvalidateSiteCache(siteID string) {
 	h.siteKeys.Range(func(key, val interface{}) bool {
-		if meta, ok := val.(*SiteMetadata); ok && meta.ID == siteID {
+		if cached, ok := val.(*CachedSiteKey); ok {
+			if cached.Metadata != nil && cached.Metadata.ID == siteID {
+				h.siteKeys.Delete(key)
+			}
+		} else if meta, ok := val.(*SiteMetadata); ok && meta.ID == siteID {
+			h.siteKeys.Delete(key)
+		}
+		return true
+	})
+}
+
+// InvalidateKeyByID invalida a chave no cache em memória correspondente ao key_id (UUID)
+func (h *Handler) InvalidateKeyByID(keyID string) {
+	if keyID == "" {
+		return
+	}
+	h.siteKeys.Range(func(key, val interface{}) bool {
+		if cached, ok := val.(*CachedSiteKey); ok {
+			if cached.KeyID == keyID || (cached.Metadata != nil && cached.Metadata.KeyID == keyID) {
+				h.siteKeys.Delete(key)
+			}
+		} else if meta, ok := val.(*SiteMetadata); ok && meta.KeyID == keyID {
 			h.siteKeys.Delete(key)
 		}
 		return true
@@ -241,6 +270,14 @@ func (h *Handler) InvalidateSiteCache(siteID string) {
 // InvalidateKey invalida uma chave de API específica do cache em memória
 func (h *Handler) InvalidateKey(key string) {
 	h.siteKeys.Delete(key)
+}
+
+// ClearSiteKeysCache limpa completamente o cache em memória de chaves de site
+func (h *Handler) ClearSiteKeysCache() {
+	h.siteKeys.Range(func(key, val interface{}) bool {
+		h.siteKeys.Delete(key)
+		return true
+	})
 }
 
 

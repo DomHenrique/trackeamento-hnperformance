@@ -2,6 +2,8 @@ package prefixedid
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"math/big"
 	"strings"
 )
@@ -9,6 +11,7 @@ import (
 const (
 	// Prefixos Institucionais Type-Prefixed IDs
 	PrefixSite       = "hn_site_"
+	PrefixServer     = "hn_sec_"
 	PrefixVisitor    = "hn_vis_"
 	PrefixSession    = "hn_ses_"
 	PrefixEvent      = "hn_evt_"
@@ -146,10 +149,52 @@ func IsValidVisitorID(id string) bool {
 // ExtractIDType extrai e retorna o prefixo semântico do ID
 func ExtractIDType(id string) string {
 	clean := SanitizeKey(id)
-	for _, prefix := range []string{PrefixSite, PrefixVisitor, PrefixSession, PrefixEvent, PrefixClient, PrefixLegacySite} {
+	for _, prefix := range []string{PrefixSite, PrefixServer, PrefixVisitor, PrefixSession, PrefixEvent, PrefixClient, PrefixLegacySite} {
 		if strings.HasPrefix(clean, prefix) {
 			return prefix
 		}
 	}
 	return "unknown"
+}
+
+// GenerateServerKey gera uma credencial de servidor com alta entropia e prefixo hn_sec_
+func GenerateServerKey() string {
+	return GenerateID(PrefixServer, 32)
+}
+
+// HashServerKey calcula o hash criptográfico SHA-256 em representação hexadecimal
+func HashServerKey(rawKey string) string {
+	clean := SanitizeKey(rawKey)
+	if clean == "" {
+		return ""
+	}
+	h := sha256.Sum256([]byte(clean))
+	return hex.EncodeToString(h[:])
+}
+
+// MaskServerKey gera uma representação visual segura da chave de servidor para auditoria na UI
+func MaskServerKey(rawKey string) string {
+	clean := SanitizeKey(rawKey)
+	if len(clean) <= 11 {
+		return clean
+	}
+	return clean[:11] + "..."
+}
+
+// IsValidServerKey valida se uma chave segue o padrão de credencial de servidor hn_sec_
+func IsValidServerKey(key string) bool {
+	clean := SanitizeKey(key)
+	if !strings.HasPrefix(clean, PrefixServer) {
+		return false
+	}
+	body := clean[len(PrefixServer):]
+	if len(body) < 16 || len(body) > 64 {
+		return false
+	}
+	for _, r := range body {
+		if !strings.ContainsRune(idAlphabet, r) {
+			return false
+		}
+	}
+	return true
 }

@@ -93,9 +93,17 @@ func main() {
 
 	// 5. Inicializa o Handler do Coletor e de Integrações
 	handler := collector.NewHandler(cfg, rdb, pg, ch)
+	handler.StartKeyInvalidationSubscriber(context.Background())
+	handler.StartServerKeyInvalidationSubscriber(context.Background())
+	handler.StartTelemetryFlushWorker(context.Background(), 15*time.Second)
+
 	integHandler := integhandler.NewIntegrationsHandler(cfg, pg, rdb)
+	if cfg.KeyRing != nil {
+		integHandler.SetKeyRing(cfg.KeyRing)
+	}
 	integHandler.SetOnKeyRevoked(func(key string) {
 		handler.InvalidateKey(key)
+		handler.InvalidateKeyByID(key)
 	})
 
 	identSvc := identity.NewService(pg, rdb, cfg.HMACPepper)
@@ -106,6 +114,7 @@ func main() {
 		_, err := identSvc.ReconcileOfflineConversion(ctx, siteID, norm, inboundEventID)
 		return err
 	})
+	handler.StartInboundWorker(context.Background())
 
 	// 6. Inicializa o app Fiber de ultra-performance
 	app := fiber.New(fiber.Config{
@@ -291,9 +300,15 @@ func main() {
 	app.Post("/api/v1/sites/:site_id/keys", authMiddleware, integHandler.HandleCreateSiteKey)
 	app.Post("/api/v1/sites/:site_id/keys/:key_id/revoke", authMiddleware, integHandler.HandleRevokeSiteKey)
 
-	// Endpoints Inbound de CRM, ERP e Gateways de Pagamento (Presets + Smart Auto-Mapping)
-	app.Post("/api/v1/inbound/crm/:provider", handler.HandleInboundCRMWebhook)
-	app.Post("/api/v1/inbound/crm/custom", handler.HandleInboundCRMWebhook)
+	// Endpoints de Gestão de Chaves de Servidor e ERP Inbound (hn_sec_)
+	app.Get("/api/v1/sites/:site_id/server-keys", authMiddleware, integHandler.HandleListServerKeys)
+	app.Post("/api/v1/sites/:site_id/server-keys", authMiddleware, integHandler.HandleCreateServerKey)
+	app.Post("/api/v1/sites/:site_id/server-keys/:key_id/revoke", authMiddleware, integHandler.HandleRevokeServerKey)
+
+	// Endpoints Inbound de CRM, ERP e Gateways de Pagamento (Protegidos com Chave de Servidor hn_sec_)
+	app.Post("/api/v1/inbound/crm/:provider", handler.RequireServerKeyAuth("crm:inbound"), handler.HandleInboundCRMWebhook)
+	app.Post("/api/v1/inbound/crm/custom", handler.RequireServerKeyAuth("crm:inbound"), handler.HandleInboundCRMWebhook)
+	app.Post("/api/v1/sites/:site_id/inbound/events", handler.RequireServerKeyAuth("crm:inbound"), handler.HandleInboundCRMWebhook)
 	app.Get("/api/v1/sites/:site_id/inbound-events", authMiddleware, handler.HandleListInboundEvents)
 
 	// Endpoint para servir o SDK JS do Tracker (acesso público para sites clientes)
@@ -319,5 +334,6 @@ func main() {
 	<-quit
 
 	log.Println("Encerrando Tracking API graciosamente...")
+	handler.StopInboundWorker()
 	_ = app.Shutdown()
 }

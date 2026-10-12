@@ -16,19 +16,26 @@ var (
 
 // NormalizedCRMEvent representa a estrutura canônica de uma conversão externa recebida via webhook de CRM/ERP/Gateway
 type NormalizedCRMEvent struct {
-	Provider    string                 `json:"provider"`              // rdstation, hubspot, pipedrive, activecampaign, omie, asaas, kiwify, custom
-	EventName   string                 `json:"event_name"`            // purchase, deal_won, lead_qualified
-	Email       string                 `json:"email,omitempty"`       // Email do cliente
-	Phone       string                 `json:"phone,omitempty"`       // Telefone/WhatsApp (E.164 ou normalizado)
-	Name        string                 `json:"name,omitempty"`        // Nome do contato
-	Value       float64                `json:"value"`                 // Valor financeiro do negócio/venda
-	Currency    string                 `json:"currency"`              // BRL, USD, etc. (Default: BRL)
-	OrderID     string                 `json:"order_id,omitempty"`    // ID único da transação/deal para idempotência
-	Status      string                 `json:"status,omitempty"`      // Status na ferramenta de origem
-	VisitorID   string                 `json:"visitor_id,omitempty"`  // Opcional: visitor_id capturado pelo form/CRM
-	OccurredAt  time.Time              `json:"occurred_at"`           // Momento em que a conversão ocorreu
-	RawPayload  map[string]interface{} `json:"raw_payload,omitempty"` // Cópia do payload recebido para auditoria
-	CustomData  map[string]interface{} `json:"custom_data,omitempty"` // Dados adicionais do negócio
+	Provider        string                 `json:"provider"`                   // rdstation, hubspot, pipedrive, activecampaign, omie, asaas, kiwify, custom
+	EventName       string                 `json:"event_name"`                 // purchase, deal_won, lead_qualified
+	ProviderEventID string                 `json:"provider_event_id,omitempty"` // ID único do evento no provedor (se houver)
+	Email           string                 `json:"email,omitempty"`            // Email do cliente
+	Phone           string                 `json:"phone,omitempty"`            // Telefone/WhatsApp (E.164 ou normalizado)
+	Name            string                 `json:"name,omitempty"`             // Nome do contato
+	Value           float64                `json:"value"`                      // Valor financeiro legado (float64)
+	ValueCents      int64                  `json:"value_cents"`                // Valor financeiro rigoroso em centavos/unidade mínima (int64)
+	Currency        string                 `json:"currency"`                   // Código ISO 4217 de 3 letras (BRL, USD, EUR)
+	OrderID         string                 `json:"order_id,omitempty"`         // ID único da transação/deal para idempotência
+	Status          string                 `json:"status,omitempty"`           // Status na ferramenta de origem
+	VisitorID       string                 `json:"visitor_id,omitempty"`       // Opcional: visitor_id capturado pelo form/CRM
+	GCLID           string                 `json:"gclid,omitempty"`            // Google Click ID
+	FBCLID          string                 `json:"fbclid,omitempty"`           // Facebook Click ID
+	FBP             string                 `json:"fbp,omitempty"`              // Facebook Browser ID (_fbp)
+	FBC             string                 `json:"fbc,omitempty"`              // Facebook Click ID (_fbc)
+	TTCLID          string                 `json:"ttclid,omitempty"`           // TikTok Click ID
+	OccurredAt      time.Time              `json:"occurred_at"`                // Momento em que a conversão ocorreu
+	RawPayload      map[string]interface{} `json:"raw_payload,omitempty"`      // Cópia do payload recebido para auditoria
+	CustomData      map[string]interface{} `json:"custom_data,omitempty"`      // Dados adicionais do negócio
 }
 
 // InboundAdapter define a interface que cada conector de CRM/ERP deve satisfazer

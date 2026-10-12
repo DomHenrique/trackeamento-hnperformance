@@ -1,11 +1,17 @@
 package integhandler
 
 import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"log"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"tracking-engine/internal/prefixedid"
 )
 
@@ -32,7 +38,25 @@ type CreateKeyRequest struct {
 	Name string `json:"name"`
 }
 
-// HandleListSiteKeys lista todas as chaves de um site com métricas de uso
+// publishKeyInvalidation publica aviso de invalidação no canal Redis Pub/Sub
+func (h *IntegrationsHandler) publishKeyInvalidation(ctx context.Context, keyID, siteID string) {
+	if h.redis == nil || h.redis.Client == nil {
+		return
+	}
+	payload, err := json.Marshal(map[string]string{
+		"action":  "revoke",
+		"key_id":  keyID,
+		"site_id": siteID,
+	})
+	if err != nil {
+		return
+	}
+	pubCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_ = h.redis.Client.Publish(pubCtx, "pubsub:key_invalidation", string(payload)).Err()
+}
+
+// HandleListSiteKeys lista todas as chaves de um site com métricas de uso em modo fail-closed
 func (h *IntegrationsHandler) HandleListSiteKeys(c *fiber.Ctx) error {
 	siteIDStr := strings.TrimSpace(c.Params("site_id"))
 	siteUUID, err := uuid.Parse(siteIDStr)
@@ -51,7 +75,8 @@ func (h *IntegrationsHandler) HandleListSiteKeys(c *fiber.Ctx) error {
 		ORDER BY created_at DESC
 	`, siteUUID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		log.Printf("[SiteKeys] Erro ao listar chaves do site %s: %v", siteUUID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao listar chaves do site"})
 	}
 	defer rows.Close()
 
@@ -69,32 +94,40 @@ func (h *IntegrationsHandler) HandleListSiteKeys(c *fiber.Ctx) error {
 			&item.CreatedBy, &revokedBy, &revokedAt, &lastUsedAt,
 			&item.TotalEvents, &item.CreatedAt,
 		)
-		if err == nil {
-			item.RevokedBy = revokedBy
-			item.RevokedAt = revokedAt
-			item.LastUsedAt = lastUsedAt
-			item.TotalEventsCount = item.TotalEvents
-			item.EventsCount = item.TotalEvents
-
-			// Calcula status inteligente de uso
-			if item.Status == "revoked" {
-				item.UsageStatus = "revoked"
-			} else if lastUsedAt != nil && now.Sub(*lastUsedAt) < 7*24*time.Hour {
-				item.UsageStatus = "in_use"
-			} else if lastUsedAt != nil {
-				item.UsageStatus = "inactive_traffic"
-			} else {
-				item.UsageStatus = "awaiting_traffic"
-			}
-
-			keys = append(keys, item)
+		if err != nil {
+			log.Printf("[SiteKeys] Erro no scan de chave do site %s: %v", siteUUID, err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao processar dados das chaves de acesso"})
 		}
+
+		item.RevokedBy = revokedBy
+		item.RevokedAt = revokedAt
+		item.LastUsedAt = lastUsedAt
+		item.TotalEventsCount = item.TotalEvents
+		item.EventsCount = item.TotalEvents
+
+		// Calcula status inteligente de uso
+		if item.Status == "revoked" {
+			item.UsageStatus = "revoked"
+		} else if lastUsedAt != nil && now.Sub(*lastUsedAt) < 7*24*time.Hour {
+			item.UsageStatus = "in_use"
+		} else if lastUsedAt != nil {
+			item.UsageStatus = "inactive_traffic"
+		} else {
+			item.UsageStatus = "awaiting_traffic"
+		}
+
+		keys = append(keys, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("[SiteKeys] Erro ao iterar linhas de chaves do site %s: %v", siteUUID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao iterar chaves do site"})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(keys)
 }
 
-// HandleCreateSiteKey gera uma nova chave para o site com auditoria do usuário
+// HandleCreateSiteKey gera uma nova chave para o site com validação estrita, quota e auditoria
 func (h *IntegrationsHandler) HandleCreateSiteKey(c *fiber.Ctx) error {
 	siteIDStr := strings.TrimSpace(c.Params("site_id"))
 	siteUUID, err := uuid.Parse(siteIDStr)
@@ -103,9 +136,19 @@ func (h *IntegrationsHandler) HandleCreateSiteKey(c *fiber.Ctx) error {
 	}
 
 	var req CreateKeyRequest
-	_ = c.BodyParser(&req)
+	if len(c.Body()) > 0 {
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "payload JSON inválido"})
+		}
+	}
 
 	name := strings.TrimSpace(req.Name)
+	if len(name) > 100 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "o nome da chave não pode exceder 100 caracteres"})
+	}
+	name = strings.ReplaceAll(name, "<", "")
+	name = strings.ReplaceAll(name, ">", "")
+	name = strings.TrimSpace(name)
 	if name == "" {
 		name = "Nova Chave de Acesso"
 	}
@@ -122,6 +165,19 @@ func (h *IntegrationsHandler) HandleCreateSiteKey(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "banco de dados indisponível"})
 	}
 
+	// Validação de cota de segurança: máximo 10 chaves ativas por site
+	var activeCount int
+	err = h.pg.Pool.QueryRow(c.Context(), `
+		SELECT COUNT(*) FROM site_api_keys WHERE site_id = $1 AND status = 'active'
+	`, siteUUID).Scan(&activeCount)
+	if err != nil {
+		log.Printf("[SiteKeys] Erro ao verificar contagem de chaves ativas para site %s: %v", siteUUID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao verificar cota de chaves"})
+	}
+	if activeCount >= 10 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "limite máximo atingido (máximo de 10 chaves ativas por site)"})
+	}
+
 	newKey := prefixedid.GenerateSiteKey()
 	var newID string
 
@@ -132,7 +188,8 @@ func (h *IntegrationsHandler) HandleCreateSiteKey(c *fiber.Ctx) error {
 	`, siteUUID, newKey, name, createdBy).Scan(&newID)
 
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "erro ao criar chave: " + err.Error()})
+		log.Printf("[SiteKeys] Erro ao criar chave para site %s: %v", siteUUID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao criar chave de acesso"})
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
@@ -145,7 +202,7 @@ func (h *IntegrationsHandler) HandleCreateSiteKey(c *fiber.Ctx) error {
 	})
 }
 
-// HandleRevokeSiteKey revoga logicamente uma chave existente
+// HandleRevokeSiteKey revoga logicamente uma chave existente através de CTE atômico
 func (h *IntegrationsHandler) HandleRevokeSiteKey(c *fiber.Ctx) error {
 	siteIDStr := strings.TrimSpace(c.Params("site_id"))
 	keyIDStr := strings.TrimSpace(c.Params("key_id"))
@@ -167,27 +224,63 @@ func (h *IntegrationsHandler) HandleRevokeSiteKey(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "banco de dados indisponível"})
 	}
 
-	// Busca a chave para invalidar cache
-	var rawKey string
-	err := h.pg.Pool.QueryRow(c.Context(), `
-		UPDATE site_api_keys 
-		SET status = 'revoked', revoked_by = $1, revoked_at = now(), updated_at = now()
-		WHERE id = $2 AND site_id = $3
-		RETURNING key
-	`, revokedBy, keyUUID, siteUUID).Scan(&rawKey)
+	// CTE atômico: tenta o UPDATE se não estiver revogada.
+	// Se já estava revogada, a cláusula UNION ALL recupera o registro com already_revoked = true sem sobrescrever auditoria.
+	query := `
+		WITH upd AS (
+			UPDATE site_api_keys 
+			SET status = 'revoked', revoked_by = $1, revoked_at = now(), updated_at = now()
+			WHERE id = $2 AND site_id = $3 AND status <> 'revoked'
+			RETURNING id::text, site_id::text, status, revoked_at, revoked_by
+		)
+		SELECT id, site_id, status, revoked_at, revoked_by, false AS already_revoked FROM upd
+		UNION ALL
+		SELECT id::text, site_id::text, status, revoked_at, revoked_by, true AS already_revoked FROM site_api_keys
+		WHERE id = $2 AND site_id = $3 AND NOT EXISTS (SELECT 1 FROM upd);
+	`
 
+	var id, sID, status string
+	var revokedAt *time.Time
+	var revBy string
+	var alreadyRevoked bool
+
+	err := h.pg.Pool.QueryRow(c.Context(), query, revokedBy, keyUUID, siteUUID).Scan(
+		&id, &sID, &status, &revokedAt, &revBy, &alreadyRevoked,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "chave de acesso não encontrada para este site"})
+	}
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "chave não encontrada ou já revogada"})
+		log.Printf("[SiteKeys] Erro ao revogar chave %s do site %s: %v", keyUUID, siteUUID, err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao processar revogação da chave"})
 	}
 
-	// Se houver callback de invalidação registrado, dispara
+	// Publica invalidação no canal Redis Pub/Sub com payload sanitizado (apenas key_id e site_id)
+	h.publishKeyInvalidation(c.Context(), id, sID)
+
+	// Callback em memória legado (se configurado)
 	if h.onKeyRevoked != nil {
-		h.onKeyRevoked(rawKey)
+		h.onKeyRevoked(id)
+	}
+
+	if alreadyRevoked {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error":      "chave de acesso já se encontra revogada",
+			"id":         id,
+			"site_id":    sID,
+			"status":     "revoked",
+			"revoked_at": revokedAt,
+			"revoked_by": revBy,
+		})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"message":    "Chave revogada com sucesso",
-		"key":        rawKey,
-		"revoked_by": revokedBy,
+		"id":         id,
+		"site_id":    sID,
+		"status":     "revoked",
+		"revoked_at": revokedAt,
+		"revoked_by": revBy,
 	})
 }

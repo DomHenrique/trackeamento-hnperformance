@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"tracking-engine/internal/crypto"
 )
 
 type Config struct {
@@ -45,6 +47,11 @@ type Config struct {
 	TrustedProxiesRaw string
 	TrustedCIDRs      []*net.IPNet
 
+	// Credentials Encryption at Rest
+	CredentialsKeys       string
+	CredentialsCurrentKey string
+	KeyRing               *crypto.KeyRing
+
 	// Ingester
 	IngesterBatchSize int
 	IngesterFlushSec  int
@@ -62,18 +69,47 @@ type Config struct {
 }
 
 func Load() *Config {
+	env := getEnv("ENV", "development")
 	rawTrustedProxies := getEnv("TRUSTED_PROXIES", "")
+
+	credsKeys := getEnv("CREDENTIALS_KEYS", "")
+	credsCurrentKey := getEnv("CREDENTIALS_CURRENT_KEY", "")
+
+	var kr *crypto.KeyRing
+	if credsKeys != "" && credsCurrentKey != "" {
+		parsedKR, err := crypto.NewKeyRingFromJSON(credsKeys, credsCurrentKey)
+		if err != nil {
+			if env == "production" {
+				log.Fatalf("[FATAL] Falha crítica ao inicializar KeyRing de credenciais em produção: %v", err)
+			} else {
+				log.Printf("[WARN] KeyRing de credenciais inválido em %s (%v), usando fallback seguro", env, err)
+			}
+		} else {
+			kr = parsedKR
+		}
+	} else if env == "production" {
+		log.Fatalf("[FATAL] CREDENTIALS_KEYS e CREDENTIALS_CURRENT_KEY são obrigatórios em produção (fail-closed)")
+	}
+
+	if kr == nil && env != "production" {
+		const devHexKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+		kr, _ = crypto.NewKeyRingFromJSON(`{"dev": "`+devHexKey+`"}`, "dev")
+	}
+
 	return &Config{
-		Env:            getEnv("ENV", "development"),
+		Env:            env,
 		TrackingDomain: getEnv("TRACKING_DOMAIN", "localhost"),
 		HTTPPort:       getEnv("HTTP_PORT", "8080"),
 		AdminUser:     getEnv("ADMIN_USER", "admin"),
 		AdminPassword: getEnv("ADMIN_PASSWORD", "hn_admin_secret_pass_2026"),
 
-		ServerKey:         getEnv("SERVER_API_KEY", "hn_server_internal_secret_key"),
-		HMACPepper:        getEnv("HMAC_PEPPER", "hn_pepper_secret_salt_2026"),
-		TrustedProxiesRaw: rawTrustedProxies,
-		TrustedCIDRs:      ParseCIDRList(rawTrustedProxies),
+		ServerKey:             getEnv("SERVER_API_KEY", "hn_server_internal_secret_key"),
+		HMACPepper:            getEnv("HMAC_PEPPER", "hn_pepper_secret_salt_2026"),
+		TrustedProxiesRaw:     rawTrustedProxies,
+		TrustedCIDRs:          ParseCIDRList(rawTrustedProxies),
+		CredentialsKeys:       credsKeys,
+		CredentialsCurrentKey: credsCurrentKey,
+		KeyRing:               kr,
 
 		RedisAddr:           getEnv("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword:       getEnv("REDIS_PASSWORD", "redis_secret_pass"),
