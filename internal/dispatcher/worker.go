@@ -527,7 +527,7 @@ func isPermanentError(err error) bool {
 		return false
 	}
 
-	// Erros HTTP 4xx (exceto 429) são falhas permanentes de configuração/credenciais/parâmetros
+	// Erros HTTP 4xx (exceto 429) e falhas de validação de payload são falhas permanentes de configuração/credenciais/parâmetros
 	if strings.Contains(errStr, "400") ||
 		strings.Contains(errStr, "401") ||
 		strings.Contains(errStr, "403") ||
@@ -539,7 +539,11 @@ func isPermanentError(err error) bool {
 		strings.Contains(errStr, "invalid token") ||
 		strings.Contains(errStr, "anti-ssrf") ||
 		strings.Contains(errStr, "proibido") ||
-		strings.Contains(errStr, "erro cliente http") {
+		strings.Contains(errStr, "erro cliente http") ||
+		strings.Contains(errStr, "validação pré-despacho") ||
+		strings.Contains(errStr, "validacao pre-despacho") ||
+		strings.Contains(errStr, "identificador de usuário") ||
+		strings.Contains(errStr, "identificador de usuario") {
 		return true
 	}
 

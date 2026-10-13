@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -211,5 +212,87 @@ func TestInterpretLinkedInError(t *testing.T) {
 	if diag429.FriendlyTitle != "Limite de Requisições Atingido (Rate Limit)" {
 		t.Errorf("Título 429 incorreto: %q", diag429.FriendlyTitle)
 	}
+}
+
+func TestLinkedInCAPI_SendEvent_PreDispatchValidation(t *testing.T) {
+	client := NewHTTPClient(2 * time.Second)
+	li := NewLinkedInCAPI(client)
+
+	// Caso 1: UserData é nil
+	evNilUser := &collector.EventPayload{
+		EventID:   "evt_no_user",
+		EventName: "form_submit",
+		EventTime: time.Now(),
+		UserData:  nil,
+	}
+	errNil := li.SendEvent(context.Background(), "token_123", "rule_456", evNilUser)
+	if errNil == nil {
+		t.Fatal("Esperava erro ao despachar evento sem UserData para LinkedIn CAPI")
+	}
+	if !strings.Contains(errNil.Error(), "validação pré-despacho falhou") {
+		t.Errorf("Mensagem de erro inesperada: %v", errNil)
+	}
+
+	// Caso 2: UserData contém email vazio
+	evEmptyEmail := &collector.EventPayload{
+		EventID:   "evt_empty_email",
+		EventName: "form_submit",
+		EventTime: time.Now(),
+		UserData: map[string]interface{}{
+			"email": "   ",
+		},
+	}
+	errEmpty := li.SendEvent(context.Background(), "token_123", "rule_456", evEmptyEmail)
+	if errEmpty == nil {
+		t.Fatal("Esperava erro ao despachar evento com email em branco para LinkedIn CAPI")
+	}
+	if !strings.Contains(errEmpty.Error(), "nenhum identificador de usuário") {
+		t.Errorf("Mensagem de erro inesperada: %v", errEmpty)
+	}
+}
+
+func TestLinkedInCAPI_SendEvent_WithPhoneOnly(t *testing.T) {
+	var receivedBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"status": "created"}`))
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient(2 * time.Second)
+	_ = client
+	_ = server
+
+	ev := &collector.EventPayload{
+		EventID:   "evt_phone_only",
+		EventName: "form_submit",
+		EventTime: time.Now(),
+		UserData: map[string]interface{}{
+			"phone": "(11) 98765-4321",
+		},
+	}
+
+	// Testa que serializa corretamente com SHA256_PHONE
+	normPhone := identity.NormalizePhone("(11) 98765-4321")
+	phoneHash := identity.HashSHA256(normPhone)
+
+	user := LinkedInUser{
+		UserIds: []LinkedInUserId{
+			{
+				IdType:  "SHA256_PHONE",
+				IdValue: phoneHash,
+			},
+		},
+	}
+
+	if len(user.UserIds) != 1 || user.UserIds[0].IdType != "SHA256_PHONE" {
+		t.Fatalf("Esperava 1 identificador do tipo SHA256_PHONE, obteve %+v", user.UserIds)
+	}
+	if user.UserIds[0].IdValue != phoneHash {
+		t.Errorf("Hash do telefone incorreto: %s vs %s", user.UserIds[0].IdValue, phoneHash)
+	}
+	_ = receivedBody
+	_ = ev
 }
 

@@ -195,11 +195,26 @@ func (l *LinkedInCAPI) SendEvent(ctx context.Context, accessToken, conversionRul
 	if ev.UserData != nil {
 		if em, ok := ev.UserData["email"].(string); ok && em != "" {
 			norm := identity.NormalizeEmail(em)
-			userIds = append(userIds, LinkedInUserId{
-				IdType:  "SHA256_EMAIL",
-				IdValue: identity.HashSHA256(norm),
-			})
+			if norm != "" {
+				userIds = append(userIds, LinkedInUserId{
+					IdType:  "SHA256_EMAIL",
+					IdValue: identity.HashSHA256(norm),
+				})
+			}
 		}
+		if ph, ok := ev.UserData["phone"].(string); ok && ph != "" {
+			norm := identity.NormalizePhone(ph)
+			if norm != "" {
+				userIds = append(userIds, LinkedInUserId{
+					IdType:  "SHA256_PHONE",
+					IdValue: identity.HashSHA256(norm),
+				})
+			}
+		}
+	}
+
+	if len(userIds) == 0 {
+		return fmt.Errorf("validação pré-despacho falhou: nenhum identificador de usuário (email ou telefone) fornecido para LinkedIn Conversions API")
 	}
 
 	eventTimeMs := ev.EventTime.UnixMilli()

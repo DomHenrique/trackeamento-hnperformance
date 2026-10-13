@@ -107,6 +107,11 @@ func TestIsPermanentError(t *testing.T) {
 			err:         errors.New("OAuth: invalid token specified"),
 			isPermanent: true,
 		},
+		{
+			name:        "Validação pré-despacho sem identificador (permanent)",
+			err:         errors.New("validação pré-despacho falhou: nenhum identificador de usuário (email ou telefone) fornecido para LinkedIn Conversions API"),
+			isPermanent: true,
+		},
 	}
 
 	for _, tt := range tests {

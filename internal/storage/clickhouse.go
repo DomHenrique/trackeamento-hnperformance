@@ -461,21 +461,7 @@ func (c *ClickHouseDB) GetLeadsReport(ctx context.Context, siteID, domainFilter,
 
 	since := ParseDateRange(rangeStr)
 	domainFilter = strings.TrimSpace(domainFilter)
-	query := `
-		SELECT 
-			toString(event_id), toString(site_id), toString(visitor_id), event_name, event_time, 
-			page_url, landing_page, 
-			utm_source, utm_medium, utm_campaign, 
-			gclid, fbclid, device_type, ip_address, custom_data_json
-		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
-		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
-		  AND event_name IN ('lead', 'whatsapp_click', 'purchase') 
-		  AND event_time >= ? 
-		  AND is_bot = 0
-		ORDER BY event_time DESC
-		LIMIT ?
-	`
+	query := LeadsReportQuery
 	rows, err := c.Conn.Query(ctx, query, siteID, siteID, domainFilter, domainFilter, since, limit)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao consultar leads: %w", err)
@@ -491,33 +477,53 @@ func (c *ClickHouseDB) GetLeadsReport(ctx context.Context, siteID, domainFilter,
 			&l.UTMSource, &l.UTMMedium, &l.UTMCampaign,
 			&l.GCLID, &l.FBCLID, &l.DeviceType, &l.IPAddress, &l.CustomDataJSON,
 		); err == nil {
-			// Auditoria de integridade de mídia paga
-			l.MissingAlerts = make([]string, 0)
-			hasUTM := l.UTMSource != "" || l.UTMCampaign != ""
-			hasClickID := l.GCLID != "" || l.FBCLID != ""
-
-			if !hasUTM {
-				l.MissingAlerts = append(l.MissingAlerts, "Sem Campanha/UTMs")
-			}
-			if !hasClickID {
-				l.MissingAlerts = append(l.MissingAlerts, "Sem Click ID Ads")
-			}
-			if l.PageURL == "" && l.LandingPage == "" {
-				l.MissingAlerts = append(l.MissingAlerts, "Sem URL de Origem")
-			}
-
-			if len(l.MissingAlerts) == 0 {
-				l.IntegrityLevel = "ok"
-			} else if !hasUTM && !hasClickID {
-				l.IntegrityLevel = "warning_high"
-			} else {
-				l.IntegrityLevel = "warning_medium"
-			}
-
+			AuditLeadIntegrity(&l)
 			leads = append(leads, l)
 		}
 	}
 	return leads, nil
+}
+
+// LeadsReportQuery define a query SQL analítica para consulta cronológica de leads e conversões
+const LeadsReportQuery = `
+		SELECT 
+			toString(event_id), toString(site_id), toString(visitor_id), event_name, event_time, 
+			page_url, landing_page, 
+			utm_source, utm_medium, utm_campaign, 
+			gclid, fbclid, device_type, ip_address, custom_data_json
+		FROM tracking_events.events
+		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+		  AND (event_name IN ('lead', 'whatsapp_click', 'purchase') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = '')))
+		  AND event_time >= ? 
+		  AND is_bot = 0
+		ORDER BY event_time DESC
+		LIMIT ?
+`
+
+// AuditLeadIntegrity realiza a auditoria de parâmetros de campanha e click IDs de uma conversão
+func AuditLeadIntegrity(l *LeadRecord) {
+	l.MissingAlerts = make([]string, 0)
+	hasUTM := l.UTMSource != "" || l.UTMCampaign != ""
+	hasClickID := l.GCLID != "" || l.FBCLID != ""
+
+	if !hasUTM {
+		l.MissingAlerts = append(l.MissingAlerts, "Sem Campanha/UTMs")
+	}
+	if !hasClickID {
+		l.MissingAlerts = append(l.MissingAlerts, "Sem Click ID Ads")
+	}
+	if l.PageURL == "" && l.LandingPage == "" {
+		l.MissingAlerts = append(l.MissingAlerts, "Sem URL de Origem")
+	}
+
+	if len(l.MissingAlerts) == 0 {
+		l.IntegrityLevel = "ok"
+	} else if !hasUTM && !hasClickID {
+		l.IntegrityLevel = "warning_high"
+	} else {
+		l.IntegrityLevel = "warning_medium"
+	}
 }
 
 // GetFunnelAnalysis calcula a retenção e taxas de abandono (drop-off) em 4 etapas do funil
