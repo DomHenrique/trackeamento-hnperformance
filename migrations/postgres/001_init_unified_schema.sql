@@ -65,10 +65,38 @@ ALTER TABLE sites ADD COLUMN IF NOT EXISTS privacy_settings JSONB NOT NULL DEFAU
     }
 }'::jsonb;
 
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS canonical_settings JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS sitemap_url VARCHAR(500);
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS last_sitemap_sync_at TIMESTAMPTZ;
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS sitemap_status VARCHAR(50) DEFAULT 'idle';
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS sitemap_total_urls INT DEFAULT 0;
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS last_sitemap_error TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_sites_api_key ON sites(api_key);
 CREATE INDEX IF NOT EXISTS idx_sites_client_id ON sites(client_id);
 CREATE INDEX IF NOT EXISTS idx_sites_privacy_settings ON sites USING gin (privacy_settings);
+CREATE INDEX IF NOT EXISTS idx_sites_canonical_settings ON sites USING gin (canonical_settings);
 CREATE INDEX IF NOT EXISTS idx_sites_cname_subdomain ON sites(LOWER(cname_subdomain)) WHERE cname_subdomain IS NOT NULL;
+
+-- 3.1 Catálogo e Inventário de Páginas por Site
+CREATE TABLE IF NOT EXISTS site_page_catalog (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    page_key TEXT NOT NULL,
+    canonical_url TEXT NOT NULL,
+    title VARCHAR(500) DEFAULT '',
+    in_sitemap BOOLEAN NOT NULL DEFAULT false,
+    source VARCHAR(50) NOT NULL DEFAULT 'traffic',
+    status VARCHAR(50) NOT NULL DEFAULT 'monitored',
+    last_seen_in_sitemap_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_site_page_catalog UNIQUE (site_id, page_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_page_catalog_site_id ON site_page_catalog(site_id);
+CREATE INDEX IF NOT EXISTS idx_site_page_catalog_in_sitemap ON site_page_catalog(site_id, in_sitemap);
+CREATE INDEX IF NOT EXISTS idx_site_page_catalog_page_key ON site_page_catalog(site_id, page_key);
 
 -- 4. Domínios Autorizados por Site (Anti-Hijacking)
 CREATE TABLE IF NOT EXISTS site_allowed_domains (

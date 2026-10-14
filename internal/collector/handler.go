@@ -39,6 +39,7 @@ type Handler struct {
 	siteKeys          sync.Map // Cache em memória para validação ultra-rápida de site_key com TTL
 	serverKeys        sync.Map // Cache em memória para validação de chaves de servidor hn_sec_ com TTL
 	keyThrottle       sync.Map // Throttle em memória para timestamp de telemetria
+	pageCatalogCache  sync.Map // Throttle em memória para auto-registro de páginas no catálogo
 	offlineReconciler OfflineReconcileFunc
 	inboundWorker     *InboundWorker
 	inboundPersister  InboundPersisterFunc
@@ -298,6 +299,19 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		}
 	}
 
+	canonicalURL := req.CanonicalURL
+	if canonicalURL == "" && req.CustomData != nil {
+		if cURL, ok := req.CustomData["canonical_url"].(string); ok {
+			canonicalURL = cURL
+		}
+	}
+
+	canSettings := siteMeta.CanonicalSettings
+	if canSettings == nil {
+		canSettings = DefaultCanonicalSettings(siteMeta.Domain)
+	}
+	pageKey := canSettings.ValidateAndResolveCanonical(pageURL, canonicalURL, siteMeta.AllowedDomains...)
+
 	payload := EventPayload{
 		EventID:            eventID,
 		SiteID:             siteID,
@@ -310,6 +324,8 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		UserAgent:          ua,
 		DeviceType:         deviceType,
 		Attribution:        attrParams,
+		PageKey:            pageKey,
+		CanonicalURL:       canonicalURL,
 		UserData:           req.UserData,
 		CustomData:         req.CustomData,
 		SubmissionID:       submissionID,
@@ -391,6 +407,27 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		}(debugData, siteID)
 	}
 
+	// Auto-cadastra página descoberta por tráfego real no catálogo do site de forma assíncrona
+	if pageKey != "" && siteID != "" && h.pg != nil && h.pg.Pool != nil {
+		cacheKey := siteID + ":" + pageKey
+		if _, seen := h.pageCatalogCache.Load(cacheKey); !seen {
+			h.pageCatalogCache.Store(cacheKey, time.Now())
+			title := ""
+			if req.CustomData != nil {
+				if t, ok := req.CustomData["title"].(string); ok {
+					title = t
+				} else if t, ok := req.CustomData["page_title"].(string); ok {
+					title = t
+				}
+			}
+			go func(sID, pKey, cURL, t string) {
+				bgCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+				_ = h.autoRegisterTrafficPage(bgCtx, sID, pKey, cURL, t)
+			}(siteID, pageKey, canonicalURL, title)
+		}
+	}
+
 	// Atualiza telemetria da chave de acesso de forma desacoplada
 	if siteKey != "" {
 		h.RecordKeyUsage(siteKey)
@@ -424,18 +461,20 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 		var isActive bool
 		var rawPrivacy []byte
 		var cnameSub string
+		var rawCanonical []byte
+		var primaryDomain string
 
 		// 2.1 Primeiro tenta na tabela site_api_keys (suporte a múltiplas chaves e revogação)
 		err := h.pg.Pool.QueryRow(ctx, `
-			SELECT k.id::text, k.site_id::text, (k.status = 'active' AND s.is_active = true), COALESCE(s.privacy_settings, '{}'::jsonb), COALESCE(s.cname_subdomain, '')
+			SELECT k.id::text, k.site_id::text, (k.status = 'active' AND s.is_active = true), COALESCE(s.privacy_settings, '{}'::jsonb), COALESCE(s.cname_subdomain, ''), COALESCE(s.canonical_settings, '{}'::jsonb), s.domain
 			FROM site_api_keys k
 			JOIN sites s ON s.id = k.site_id
 			WHERE k.key = $1
-		`, siteKey).Scan(&keyID, &siteID, &isActive, &rawPrivacy, &cnameSub)
+		`, siteKey).Scan(&keyID, &siteID, &isActive, &rawPrivacy, &cnameSub, &rawCanonical, &primaryDomain)
 
 		// 2.2 Fallback retroativo para sites.api_key caso ainda não esteja em site_api_keys
 		if err != nil {
-			err = h.pg.Pool.QueryRow(ctx, "SELECT id::text, is_active, COALESCE(privacy_settings, '{}'::jsonb), COALESCE(cname_subdomain, '') FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive, &rawPrivacy, &cnameSub)
+			err = h.pg.Pool.QueryRow(ctx, "SELECT id::text, is_active, COALESCE(privacy_settings, '{}'::jsonb), COALESCE(cname_subdomain, ''), COALESCE(canonical_settings, '{}'::jsonb), domain FROM sites WHERE api_key = $1", siteKey).Scan(&siteID, &isActive, &rawPrivacy, &cnameSub, &rawCanonical, &primaryDomain)
 		}
 
 		if err == nil && isActive {
@@ -463,12 +502,22 @@ func (h *Handler) validateSiteKey(ctx context.Context, siteKey string) (*SiteMet
 				_ = json.Unmarshal(rawPrivacy, privacy)
 			}
 
+			canSettings := DefaultCanonicalSettings(primaryDomain)
+			if len(rawCanonical) > 2 {
+				_ = json.Unmarshal(rawCanonical, canSettings)
+			}
+			if canSettings.CanonicalHost == "" && primaryDomain != "" {
+				canSettings.CanonicalHost = cleanHost(primaryDomain)
+			}
+
 			meta := &SiteMetadata{
-				ID:              siteID,
-				KeyID:           keyID,
-				AllowedDomains:  domains,
-				PrivacySettings: privacy,
-				CnameSubdomain:  cnameSub,
+				ID:                siteID,
+				KeyID:             keyID,
+				Domain:            primaryDomain,
+				AllowedDomains:    domains,
+				PrivacySettings:   privacy,
+				CanonicalSettings: canSettings,
+				CnameSubdomain:    cnameSub,
 			}
 			h.siteKeys.Store(siteKey, &CachedSiteKey{
 				KeyID:     keyID,

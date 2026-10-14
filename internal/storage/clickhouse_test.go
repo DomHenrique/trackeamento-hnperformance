@@ -107,3 +107,35 @@ func TestAuditLeadIntegrity(t *testing.T) {
 		})
 	}
 }
+
+func TestMonitoredPagesReportQuery_CanonicalAndTitleHardening(t *testing.T) {
+	// 1. Testa a query de agregação de páginas
+	queryPages := MonitoredPagesQueryPages
+
+	if !strings.Contains(queryPages, "if(page_key != '', page_key,") {
+		t.Errorf("MonitoredPagesQueryPages deve utilizar fallback para page_key canônica")
+	}
+
+	if !strings.Contains(queryPages, "argMaxIf(") {
+		t.Errorf("MonitoredPagesQueryPages deve usar argMaxIf para extração resiliente de título")
+	}
+
+	if !strings.Contains(queryPages, "length(trimBoth(JSONExtractString(custom_data_json, 'page_title'))) > 0") {
+		t.Errorf("MonitoredPagesQueryPages deve verificar que page_title não é vazio no argMaxIf")
+	}
+
+	if !strings.Contains(queryPages, "is_bot = 0") {
+		t.Errorf("MonitoredPagesQueryPages deve filtrar bots")
+	}
+
+	// 2. Testa a query de série temporal
+	queryTS := MonitoredPagesQueryTS
+
+	if !strings.Contains(queryTS, "if(page_key != '', page_key,") {
+		t.Errorf("MonitoredPagesQueryTS deve utilizar fallback para page_key canônica")
+	}
+
+	if !strings.Contains(queryTS, "is_bot = 0") {
+		t.Errorf("MonitoredPagesQueryTS deve filtrar bots")
+	}
+}

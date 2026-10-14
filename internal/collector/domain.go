@@ -14,11 +14,13 @@ import (
 )
 
 type SiteMetadata struct {
-	ID              string
-	KeyID           string
-	AllowedDomains  []string
-	PrivacySettings *PrivacySettings
-	CnameSubdomain  string
+	ID                string
+	KeyID             string
+	Domain            string
+	AllowedDomains    []string
+	PrivacySettings   *PrivacySettings
+	CanonicalSettings *CanonicalSettings
+	CnameSubdomain    string
 }
 
 // CachedSiteKey representa o registro de chave em cache com expiração estrita por TTL
@@ -282,12 +284,13 @@ func (h *Handler) ClearSiteKeysCache() {
 
 
 type SiteItem struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	Domain         string   `json:"domain"`
-	AllowedDomains []string `json:"allowed_domains"`
-	CnameSubdomain string   `json:"cname_subdomain,omitempty"`
-	CnameVerified  bool     `json:"cname_verified"`
+	ID                string             `json:"id"`
+	Name              string             `json:"name"`
+	Domain            string             `json:"domain"`
+	AllowedDomains    []string           `json:"allowed_domains"`
+	CnameSubdomain    string             `json:"cname_subdomain,omitempty"`
+	CnameVerified     bool               `json:"cname_verified"`
+	CanonicalSettings *CanonicalSettings `json:"canonical_settings,omitempty"`
 }
 
 // HandleListSites retorna a lista de sites ativos para o dropdown da UI (sem expor credenciais/api_key)
@@ -300,11 +303,12 @@ func (h *Handler) HandleListSites(c *fiber.Ctx) error {
 		SELECT s.id::text, s.name, s.domain,
 		       COALESCE(ARRAY_AGG(d.domain) FILTER (WHERE d.domain IS NOT NULL AND d.is_active = true), '{}') AS allowed_domains,
 		       COALESCE(s.cname_subdomain, '') AS cname_subdomain,
-		       COALESCE(s.cname_verified, false) AS cname_verified
+		       COALESCE(s.cname_verified, false) AS cname_verified,
+		       COALESCE(s.canonical_settings, '{}'::jsonb) AS canonical_settings
 		FROM sites s
 		LEFT JOIN site_allowed_domains d ON d.site_id = s.id
 		WHERE s.is_active = true
-		GROUP BY s.id, s.name, s.domain, s.cname_subdomain, s.cname_verified
+		GROUP BY s.id, s.name, s.domain, s.cname_subdomain, s.cname_verified, s.canonical_settings
 		ORDER BY s.name ASC
 	`)
 	if err != nil {
@@ -315,11 +319,67 @@ func (h *Handler) HandleListSites(c *fiber.Ctx) error {
 	sites := make([]SiteItem, 0)
 	for rows.Next() {
 		var s SiteItem
-		if err := rows.Scan(&s.ID, &s.Name, &s.Domain, &s.AllowedDomains, &s.CnameSubdomain, &s.CnameVerified); err == nil {
+		var rawCanonical []byte
+		if err := rows.Scan(&s.ID, &s.Name, &s.Domain, &s.AllowedDomains, &s.CnameSubdomain, &s.CnameVerified, &rawCanonical); err == nil {
+			canSettings := DefaultCanonicalSettings(s.Domain)
+			if len(rawCanonical) > 2 {
+				_ = json.Unmarshal(rawCanonical, canSettings)
+			}
+			if canSettings.CanonicalHost == "" && s.Domain != "" {
+				canSettings.CanonicalHost = cleanHost(s.Domain)
+			}
+			s.CanonicalSettings = canSettings
 			sites = append(sites, s)
 		}
 	}
 	return c.Status(fiber.StatusOK).JSON(sites)
+}
+
+// HandleUpdateCanonicalSettings permite atualizar as regras canônicas do site
+func (h *Handler) HandleUpdateCanonicalSettings(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Params("id"))
+	if siteID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "id do site e obrigatorio"})
+	}
+
+	var req CanonicalSettings
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "dados invalidos"})
+	}
+
+	req.CanonicalHost = cleanHost(req.CanonicalHost)
+	for i, a := range req.HostAliases {
+		req.HostAliases[i] = cleanHost(a)
+	}
+
+	payloadJSON, err := json.Marshal(req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "erro ao serializar configuracoes"})
+	}
+
+	if h.pg == nil || h.pg.Pool == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "banco de dados indisponivel"})
+	}
+
+	tag, err := h.pg.Pool.Exec(c.Context(), `
+		UPDATE sites
+		SET canonical_settings = $1, updated_at = now()
+		WHERE id = $2
+	`, payloadJSON, siteID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("erro ao atualizar configuracoes canonicas: %v", err)})
+	}
+	if tag.RowsAffected() == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "site nao encontrado"})
+	}
+
+	// Invalida cache de chaves para aplicar as regras imediatamente
+	h.ClearSiteKeysCache()
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message":            "configuracoes canonicas atualizadas com sucesso",
+		"canonical_settings": req,
+	})
 }
 
 // HandleCreateSite registra um novo site gerando automaticamente uma chave padronizada hn_site_
@@ -598,12 +658,14 @@ func (h *Handler) resolveSiteByHost(ctx context.Context, host string) (*SiteMeta
 		var siteID string
 		var isActive bool
 		var rawPrivacy []byte
+		var rawCanonical []byte
+		var primaryDomain string
 
 		err := h.pg.Pool.QueryRow(ctx, `
-			SELECT id::text, is_active, COALESCE(privacy_settings, '{}'::jsonb)
+			SELECT id::text, is_active, COALESCE(privacy_settings, '{}'::jsonb), COALESCE(canonical_settings, '{}'::jsonb), domain
 			FROM sites
 			WHERE LOWER(cname_subdomain) = $1
-		`, clean).Scan(&siteID, &isActive, &rawPrivacy)
+		`, clean).Scan(&siteID, &isActive, &rawPrivacy, &rawCanonical, &primaryDomain)
 
 		if err == nil && isActive {
 			domains := []string{}
@@ -631,11 +693,21 @@ func (h *Handler) resolveSiteByHost(ctx context.Context, host string) (*SiteMeta
 				_ = json.Unmarshal(rawPrivacy, privacy)
 			}
 
+			canSettings := DefaultCanonicalSettings(primaryDomain)
+			if len(rawCanonical) > 2 {
+				_ = json.Unmarshal(rawCanonical, canSettings)
+			}
+			if canSettings.CanonicalHost == "" && primaryDomain != "" {
+				canSettings.CanonicalHost = cleanHost(primaryDomain)
+			}
+
 			meta := &SiteMetadata{
-				ID:              siteID,
-				AllowedDomains:  domains,
-				PrivacySettings: privacy,
-				CnameSubdomain:  clean,
+				ID:                siteID,
+				Domain:            primaryDomain,
+				AllowedDomains:    domains,
+				PrivacySettings:   privacy,
+				CanonicalSettings: canSettings,
+				CnameSubdomain:    clean,
 			}
 			h.siteKeys.Store("host:"+clean, meta)
 			return meta, true

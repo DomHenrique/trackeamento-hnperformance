@@ -324,6 +324,26 @@
         };
     }
 
+    function getCanonicalUrl() {
+        try {
+            var el = document.querySelector('link[rel="canonical"]');
+            if (!el) return '';
+            var href = el.getAttribute('href') || el.href || '';
+            if (!href || typeof href !== 'string') return '';
+            href = href.trim();
+            if (!href) return '';
+            // Se for URL relativa, converte para URL absoluta usando o navegador
+            if (href.indexOf('://') === -1 && href.indexOf('//') !== 0) {
+                var a = document.createElement('a');
+                a.href = href;
+                return a.href;
+            }
+            return href;
+        } catch (e) {
+            return '';
+        }
+    }
+
     // 5. Função Principal de Disparo de Eventos
     function trackEvent(eventName, userData, customData) {
         if (!siteKey) {
@@ -364,6 +384,11 @@
             customData.explicit_lead_consent = true;
         }
 
+        var canonicalUrl = (customData && customData.canonical_url) ? customData.canonical_url : (eventName === 'page_view' ? getCanonicalUrl() : '');
+        if (canonicalUrl && !customData.canonical_url) {
+            customData.canonical_url = canonicalUrl;
+        }
+
         var payload = {
             site_key: siteKey,
             event_name: eventName,
@@ -371,6 +396,7 @@
             session_id: sessionId,
             visitor_id: visitorId || undefined,
             url: window.location.href,
+            canonical_url: canonicalUrl || undefined,
             referrer: document.referrer || '',
             user_data: userData,
             custom_data: customData,
@@ -433,9 +459,11 @@
                 session_id: sessionId
             });
         }
+        var canUrl = getCanonicalUrl();
         trackEvent('page_view', {}, {
             page_title: document.title || '',
-            page_location: window.location.href
+            page_location: window.location.href,
+            canonical_url: canUrl || undefined
         });
     }
 

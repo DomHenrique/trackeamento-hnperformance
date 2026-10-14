@@ -25,9 +25,10 @@ type EventRequest struct {
 	EventName     string                 `json:"event_name"`
 	EventID       string                 `json:"event_id,omitempty"` // Se passado pelo frontend para deduplicação com Meta Pixel
 	SessionID     string                 `json:"session_id,omitempty"`
-	URL           string                 `json:"url,omitempty"`
-	PageURL       string                 `json:"page_url,omitempty"`
-	Referrer      string                 `json:"referrer,omitempty"`
+	URL                string                 `json:"url,omitempty"`
+	PageURL            string                 `json:"page_url,omitempty"`
+	CanonicalURL       string                 `json:"canonical_url,omitempty"`
+	Referrer           string                 `json:"referrer,omitempty"`
 	UserData           map[string]interface{} `json:"user_data,omitempty"`   // email, phone, name
 	CustomData         map[string]interface{} `json:"custom_data,omitempty"` // value, currency, etc.
 	SubmissionID       string                 `json:"submission_id,omitempty"`
@@ -51,6 +52,8 @@ type EventPayload struct {
 	UserAgent          string                 `json:"user_agent"`
 	DeviceType         string                 `json:"device_type"`
 	Attribution        attribution.Params     `json:"attribution"`
+	PageKey            string                 `json:"page_key,omitempty"`
+	CanonicalURL       string                 `json:"canonical_url,omitempty"`
 	UserData           map[string]interface{} `json:"user_data,omitempty"`
 	CustomData         map[string]interface{} `json:"custom_data,omitempty"`
 	SubmissionID       string                 `json:"submission_id,omitempty"`

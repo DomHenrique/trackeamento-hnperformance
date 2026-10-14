@@ -44,7 +44,9 @@ func NewClickHouse(cfg *config.Config) (*ClickHouseDB, error) {
 		fmt.Printf("Aviso: ping no ClickHouse falhou (%v). O serviço continuará tentando.\n", err)
 	}
 
-	return &ClickHouseDB{Conn: conn}, nil
+	chDB := &ClickHouseDB{Conn: conn}
+	chDB.EnsureCanonicalColumns(ctx)
+	return chDB, nil
 }
 
 func (c *ClickHouseDB) Close() error {
@@ -88,6 +90,8 @@ type PageItem struct {
 	Conversions    uint64    `json:"conversions"`
 	ConversionRate float64   `json:"conversion_rate"`
 	LastSeenAt     time.Time `json:"last_seen_at"`
+	InSitemap      bool      `json:"in_sitemap"`
+	Source         string    `json:"source"`
 }
 
 type MonitoredPagesTimePoint struct {
@@ -99,11 +103,15 @@ type MonitoredPagesTimePoint struct {
 }
 
 type MonitoredPagesSummary struct {
-	TotalActivePages  uint64  `json:"total_active_pages"`
-	TotalPageviews    uint64  `json:"total_pageviews"`
-	TotalVisitors     uint64  `json:"total_visitors"`
-	TotalConversions  uint64  `json:"total_conversions"`
-	AvgConversionRate float64 `json:"avg_conversion_rate"`
+	TotalActivePages      uint64  `json:"total_active_pages"`
+	TotalPageviews        uint64  `json:"total_pageviews"`
+	TotalVisitors         uint64  `json:"total_visitors"`
+	TotalConversions      uint64  `json:"total_conversions"`
+	AvgConversionRate     float64 `json:"avg_conversion_rate"`
+	SitemapTotalPages     int     `json:"sitemap_total_pages"`
+	SitemapCoveredPages   int     `json:"sitemap_covered_pages"`
+	SitemapCoverageRate   float64 `json:"sitemap_coverage_rate"`
+	ZeroTrafficPagesCount int     `json:"zero_traffic_pages_count"`
 }
 
 type MonitoredPagesReport struct {
@@ -333,6 +341,45 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, domainF
 	return stats, nil
 }
 
+// MonitoredPagesQueryTS consulta série temporal de páginas ativas e conversões
+const MonitoredPagesQueryTS = `
+	SELECT 
+		toStartOfInterval(event_time, INTERVAL 1 DAY) AS dt,
+		uniqExact(if(page_key != '', page_key, splitByChar('#', cutQueryString(if(page_url != '', page_url, landing_page)))[1])) AS active_pages,
+		countIf(event_name = 'page_view') AS pvs,
+		uniqExact(visitor_id) AS visitors,
+		countIf(event_name IN ('lead', 'whatsapp_click', 'purchase') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS convs
+	FROM tracking_events.events
+	WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+	  AND (domainWithoutWWW(if(page_key != '', page_key, if(page_url != '', page_url, landing_page))) = domainWithoutWWW(?) OR ? = '')
+	  AND event_time >= ? AND is_bot = 0
+	GROUP BY dt
+	ORDER BY dt ASC
+`
+
+// MonitoredPagesQueryPages consulta páginas consolidadas com chave canônica e extração protegida de títulos
+const MonitoredPagesQueryPages = `
+	SELECT 
+		if(page_key != '', page_key, splitByChar('#', cutQueryString(if(page_url != '', page_url, landing_page)))[1]) AS clean_url,
+		argMaxIf(
+			JSONExtractString(custom_data_json, 'page_title'),
+			event_time,
+			length(trimBoth(JSONExtractString(custom_data_json, 'page_title'))) > 0
+		) AS title,
+		countIf(event_name = 'page_view') AS pvs,
+		uniqExact(visitor_id) AS visitors,
+		countIf(event_name IN ('lead', 'whatsapp_click', 'purchase') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS convs,
+		max(event_time) AS last_seen
+	FROM tracking_events.events
+	WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+	  AND (domainWithoutWWW(if(page_key != '', page_key, if(page_url != '', page_url, landing_page))) = domainWithoutWWW(?) OR ? = '')
+	  AND event_time >= ? AND is_bot = 0
+	GROUP BY clean_url
+	HAVING clean_url != ''
+	ORDER BY pvs DESC
+	LIMIT 200
+`
+
 func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, domainFilter, rangeStr string) (*MonitoredPagesReport, error) {
 	if c.Conn == nil {
 		return nil, fmt.Errorf("clickhouse indisponivel")
@@ -347,21 +394,7 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, doma
 	}
 
 	// 1. Série Temporal Diária de Páginas Ativas & Volume
-	queryTS := `
-		SELECT 
-			toStartOfInterval(event_time, INTERVAL 1 DAY) AS dt,
-			uniqExact(splitByChar('#', cutQueryString(if(page_url != '', page_url, landing_page)))[1]) AS active_pages,
-			countIf(event_name = 'page_view') AS pvs,
-			uniqExact(visitor_id) AS visitors,
-			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS convs
-		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
-		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
-		  AND event_time >= ? AND is_bot = 0
-		GROUP BY dt
-		ORDER BY dt ASC
-	`
-	rowsTS, err := c.Conn.Query(ctx, queryTS, siteID, siteID, domainFilter, domainFilter, since)
+	rowsTS, err := c.Conn.Query(ctx, MonitoredPagesQueryTS, siteID, siteID, domainFilter, domainFilter, since)
 	if err == nil {
 		defer rowsTS.Close()
 		for rowsTS.Next() {
@@ -380,24 +413,7 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, doma
 	}
 
 	// 2. Tabela de Páginas Consolidadas com Canonicalização e Extração de Título
-	queryPages := `
-		SELECT 
-			splitByChar('#', cutQueryString(if(page_url != '', page_url, landing_page)))[1] AS clean_url,
-			argMax(JSONExtractString(custom_data_json, 'page_title'), event_time) AS title,
-			countIf(event_name = 'page_view') AS pvs,
-			uniqExact(visitor_id) AS visitors,
-			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS convs,
-			max(event_time) AS last_seen
-		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
-		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
-		  AND event_time >= ? AND is_bot = 0
-		GROUP BY clean_url
-		HAVING clean_url != ''
-		ORDER BY pvs DESC
-		LIMIT 200
-	`
-	rows, err := c.Conn.Query(ctx, queryPages, siteID, siteID, domainFilter, domainFilter, since)
+	rows, err := c.Conn.Query(ctx, MonitoredPagesQueryPages, siteID, siteID, domainFilter, domainFilter, since)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao consultar paginas: %w", err)
 	}
@@ -884,5 +900,17 @@ func (c *ClickHouseDB) GetVisitorJourney(ctx context.Context, visitorID, siteID 
 	}
 	report.TotalEvents = len(report.Events)
 	return report, nil
+}
+
+// EnsureCanonicalColumns garante que as colunas page_key e canonical_url existam na tabela events
+func (c *ClickHouseDB) EnsureCanonicalColumns(ctx context.Context) {
+	if c.Conn == nil {
+		return
+	}
+	_ = c.Conn.Exec(ctx, `
+		ALTER TABLE tracking_events.events
+		ADD COLUMN IF NOT EXISTS page_key LowCardinality(String) DEFAULT '',
+		ADD COLUMN IF NOT EXISTS canonical_url String DEFAULT '';
+	`)
 }
 

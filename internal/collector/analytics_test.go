@@ -68,5 +68,27 @@ func TestAnalyticsHandlers_ClickHouseNil(t *testing.T) {
 	if respPages.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("expected status 503, got %d", respPages.StatusCode)
 	}
+
+	// Test HandleSitemapSync when Postgres is unavailable
+	app.Post("/api/v1/sites/:id/sitemap-sync", handler.HandleSitemapSync)
+	reqSync := httptest.NewRequest(http.MethodPost, "/api/v1/sites/site_123/sitemap-sync", nil)
+	respSync, err := app.Test(reqSync)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if respSync.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("expected status 503, got %d", respSync.StatusCode)
+	}
+
+	// Test HandleGetSiteCatalog when Postgres is unavailable
+	app.Get("/api/v1/sites/:id/catalog", handler.HandleGetSiteCatalog)
+	reqCatalog := httptest.NewRequest(http.MethodGet, "/api/v1/sites/site_123/catalog", nil)
+	respCatalog, err := app.Test(reqCatalog)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if respCatalog.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("expected status 503, got %d", respCatalog.StatusCode)
+	}
 }
 

@@ -39,6 +39,8 @@ func NewPostgres(cfg *config.Config) (*PostgresDB, error) {
 	}
 
 	db := &PostgresDB{Pool: pool}
+	db.EnsureSitesCanonicalColumn(ctx)
+	db.EnsureSitePageCatalogTable(ctx)
 	db.EnsureSiteAPIKeysTable(ctx)
 	db.EnsureCRMInboundEventsTable(ctx)
 	db.EnsureServerAPIKeysTable(ctx)
@@ -266,5 +268,56 @@ func (p *PostgresDB) BootstrapDeclarativeSite(ctx context.Context, cfg *config.C
 	log.Printf("[BOOTSTRAP] ✅ Site inicial provisionado com sucesso: %s (%s) | Chave: %s", siteName, siteDomain, siteKey)
 	return nil
 }
+
+// EnsureSitesCanonicalColumn assegura idempotentemente a presença da coluna canonical_settings na tabela sites
+func (p *PostgresDB) EnsureSitesCanonicalColumn(ctx context.Context) {
+	if p.Pool == nil {
+		return
+	}
+	_, err := p.Pool.Exec(ctx, `
+		ALTER TABLE sites ADD COLUMN IF NOT EXISTS canonical_settings JSONB NOT NULL DEFAULT '{}'::jsonb;
+	`)
+	if err != nil {
+		log.Printf("[POSTGRES] Aviso: falha ao garantir coluna canonical_settings em sites: %v", err)
+	}
+}
+
+// EnsureSitePageCatalogTable assegura idempotentemente a tabela site_page_catalog e colunas de sitemap em sites
+func (p *PostgresDB) EnsureSitePageCatalogTable(ctx context.Context) {
+	if p.Pool == nil {
+		return
+	}
+	schema := `
+	CREATE TABLE IF NOT EXISTS site_page_catalog (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		page_key TEXT NOT NULL,
+		canonical_url TEXT NOT NULL,
+		title VARCHAR(500) DEFAULT '',
+		in_sitemap BOOLEAN NOT NULL DEFAULT false,
+		source VARCHAR(50) NOT NULL DEFAULT 'traffic',
+		status VARCHAR(50) NOT NULL DEFAULT 'monitored',
+		last_seen_in_sitemap_at TIMESTAMPTZ,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		CONSTRAINT uq_site_page_catalog UNIQUE (site_id, page_key)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_site_page_catalog_site_id ON site_page_catalog(site_id);
+	CREATE INDEX IF NOT EXISTS idx_site_page_catalog_in_sitemap ON site_page_catalog(site_id, in_sitemap);
+	CREATE INDEX IF NOT EXISTS idx_site_page_catalog_page_key ON site_page_catalog(site_id, page_key);
+
+	ALTER TABLE sites ADD COLUMN IF NOT EXISTS sitemap_url VARCHAR(500);
+	ALTER TABLE sites ADD COLUMN IF NOT EXISTS last_sitemap_sync_at TIMESTAMPTZ;
+	ALTER TABLE sites ADD COLUMN IF NOT EXISTS sitemap_status VARCHAR(50) DEFAULT 'idle';
+	ALTER TABLE sites ADD COLUMN IF NOT EXISTS sitemap_total_urls INT DEFAULT 0;
+	ALTER TABLE sites ADD COLUMN IF NOT EXISTS last_sitemap_error TEXT;
+	`
+	_, err := p.Pool.Exec(ctx, schema)
+	if err != nil {
+		log.Printf("[POSTGRES] Aviso: falha ao garantir tabela site_page_catalog e colunas de sitemap: %v", err)
+	}
+}
+
 
 

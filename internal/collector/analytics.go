@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -50,6 +51,73 @@ func (h *Handler) HandleAnalyticsPages(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Erro ao consultar páginas monitoradas: %v", err),
 		})
+	}
+
+	// Enriquece o relatório com o inventário do catálogo e sitemap do PostgreSQL
+	if h.pg != nil && h.pg.Pool != nil {
+		targetSiteID := siteID
+		if targetSiteID == "" && domain != "" {
+			_ = h.pg.Pool.QueryRow(c.Context(), "SELECT id::text FROM sites WHERE domain = $1 LIMIT 1", domain).Scan(&targetSiteID)
+		}
+
+		if targetSiteID != "" {
+			rows, err := h.pg.Pool.Query(c.Context(), `
+				SELECT page_key, in_sitemap, source, COALESCE(title, '')
+				FROM site_page_catalog
+				WHERE site_id = $1
+			`, targetSiteID)
+
+			if err == nil {
+				type catInfo struct {
+					inSitemap bool
+					source    string
+					title     string
+				}
+				catalogMap := make(map[string]catInfo)
+				sitemapTotal := 0
+
+				for rows.Next() {
+					var pk, src, title string
+					var inSite bool
+					if err := rows.Scan(&pk, &inSite, &src, &title); err == nil {
+						catalogMap[pk] = catInfo{inSitemap: inSite, source: src, title: title}
+						if inSite {
+							sitemapTotal++
+						}
+					}
+				}
+				rows.Close()
+
+				sitemapCoveredCount := 0
+				for i := range report.Pages {
+					p := &report.Pages[i]
+					if info, exists := catalogMap[p.PageURL]; exists {
+						p.InSitemap = info.inSitemap
+						p.Source = info.source
+						if p.PageTitle == "" && info.title != "" {
+							p.PageTitle = info.title
+						}
+					} else {
+						p.InSitemap = false
+						p.Source = "traffic"
+					}
+
+					if p.InSitemap && p.Pageviews > 0 {
+						sitemapCoveredCount++
+					}
+				}
+
+				report.Summary.SitemapTotalPages = sitemapTotal
+				report.Summary.SitemapCoveredPages = sitemapCoveredCount
+				if sitemapTotal > 0 {
+					rate := (float64(sitemapCoveredCount) / float64(sitemapTotal)) * 100
+					report.Summary.SitemapCoverageRate = math.Round(rate*100) / 100
+				}
+				if sitemapTotal >= sitemapCoveredCount {
+					report.Summary.ZeroTrafficPagesCount = sitemapTotal - sitemapCoveredCount
+				}
+			}
+		}
 	}
 
 	return c.Status(fiber.StatusOK).JSON(report)

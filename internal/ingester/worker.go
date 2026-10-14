@@ -236,7 +236,8 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 			gclid, gbraid, wbraid, fbclid, ttclid,
 			ip_address, user_agent, device_type,
 			custom_data_json, is_bot, bot_reason, created_at,
-			submission_id, form_lifecycle_state, field_source
+			submission_id, form_lifecycle_state, field_source,
+			page_key, canonical_url
 		)
 	`)
 	if err != nil {
@@ -307,6 +308,18 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 
 		customJSON, _ := json.Marshal(sanitizedCustom)
 
+		pageKey := ev.PageKey
+		if pageKey == "" {
+			targetURL := ev.Attribution.PageURL
+			if targetURL == "" {
+				targetURL = ev.Attribution.LandingPage
+			}
+			if targetURL != "" {
+				defSettings := collector.DefaultCanonicalSettings("")
+				pageKey = defSettings.NormalizeURL(targetURL)
+			}
+		}
+
 		err := batch.Append(
 			eventUUID,
 			siteUUID,
@@ -337,6 +350,8 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 			submissionID,
 			formLifecycleState,
 			fieldSource,
+			pageKey,
+			ev.CanonicalURL,
 		)
 		if err != nil {
 			log.Printf("Aviso: falha ao anexar evento no batch ClickHouse: %v", err)
