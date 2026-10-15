@@ -139,3 +139,34 @@ func TestMonitoredPagesReportQuery_CanonicalAndTitleHardening(t *testing.T) {
 		t.Errorf("MonitoredPagesQueryTS deve filtrar bots")
 	}
 }
+
+func TestOverviewStats_HasTopPagesAndCanonicalConsistency(t *testing.T) {
+	// 1. Valida que OverviewStats possui o campo TopPages
+	stats := OverviewStats{
+		TopPages: []PageItem{
+			{
+				PageTitle: "Página Principal",
+				PageURL:   "https://cliente.com.br/",
+				Pageviews: 150,
+			},
+		},
+	}
+	if len(stats.TopPages) != 1 || stats.TopPages[0].PageTitle != "Página Principal" {
+		t.Fatalf("OverviewStats deve suportar TopPages []PageItem")
+	}
+
+	// 2. Valida que o template canônico compartilhado é utilizado
+	if !strings.Contains(MonitoredPagesQueryBase, "LIMIT %d") {
+		t.Errorf("MonitoredPagesQueryBase deve ser parametrizável com LIMIT %%d")
+	}
+
+	// 3. Valida se a query padrão de 200 páginas é gerada a partir da base
+	if !strings.Contains(MonitoredPagesQueryPages, "LIMIT 200") {
+		t.Errorf("MonitoredPagesQueryPages deve terminar com LIMIT 200")
+	}
+
+	// 4. Valida se a query para overview tem consistência canônica (clean_url e argMaxIf)
+	if !strings.Contains(MonitoredPagesQueryBase, "clean_url") || !strings.Contains(MonitoredPagesQueryBase, "argMaxIf") {
+		t.Errorf("MonitoredPagesQueryBase deve usar clean_url e argMaxIf idênticos para overview e monitored pages")
+	}
+}

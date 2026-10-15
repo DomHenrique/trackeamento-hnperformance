@@ -9,6 +9,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"golang.org/x/sync/errgroup"
 	"tracking-engine/internal/config"
 )
 
@@ -80,6 +81,7 @@ type OverviewStats struct {
 	TimeSeries          []TimePoint       `json:"time_series"`
 	TopSources          []SourceItem      `json:"top_sources"`
 	DeviceBreakdown     map[string]uint64 `json:"device_breakdown"`
+	TopPages            []PageItem        `json:"top_pages"`
 }
 
 type PageItem struct {
@@ -220,127 +222,6 @@ func ParseDateRange(rangeStr string) time.Time {
 	}
 }
 
-func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, domainFilter, rangeStr string) (*OverviewStats, error) {
-	if c.Conn == nil {
-		return nil, fmt.Errorf("clickhouse indisponivel")
-	}
-
-	since := ParseDateRange(rangeStr)
-	domainFilter = strings.TrimSpace(domainFilter)
-	stats := &OverviewStats{
-		TimeSeries:      make([]TimePoint, 0),
-		TopSources:      make([]SourceItem, 0),
-		DeviceBreakdown: make(map[string]uint64),
-	}
-
-	// 1. KPIs Gerais
-	queryKPIs := `
-		SELECT 
-			count(*) AS total_events,
-			uniqExact(visitor_id) AS unique_visitors,
-			countIf(event_name = 'lead' OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS total_leads,
-			countIf(event_name = 'whatsapp_click') AS total_whatsapp,
-			uniqExactIf(visitor_id, event_time >= now() - INTERVAL 5 MINUTE) AS active_5m,
-			uniqExactIf(visitor_id, event_time >= now() - INTERVAL 30 MINUTE) AS active_30m
-		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
-		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
-		  AND event_time >= ? AND is_bot = 0
-	`
-	row := c.Conn.QueryRow(ctx, queryKPIs, siteID, siteID, domainFilter, domainFilter, since)
-	if err := row.Scan(&stats.TotalEvents, &stats.UniqueVisitors, &stats.TotalLeads, &stats.TotalWhatsAppClicks, &stats.ActiveLast5Min, &stats.ActiveLast30Min); err != nil {
-		return nil, fmt.Errorf("falha ao consultar KPIs gerais: %w", err)
-	}
-
-	// 2. Série Temporal (Por Dia)
-	queryTimeSeries := `
-		SELECT 
-			toStartOfInterval(event_time, INTERVAL 1 DAY) AS dt,
-			countIf(event_name = 'page_view') AS pvs,
-			uniqExact(visitor_id) AS visitors,
-			countIf(event_name IN ('lead', 'whatsapp_click', 'purchase') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS convs
-		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
-		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
-		  AND event_time >= ? AND is_bot = 0
-		GROUP BY dt
-		ORDER BY dt ASC
-	`
-	rowsTS, err := c.Conn.Query(ctx, queryTimeSeries, siteID, siteID, domainFilter, domainFilter, since)
-	if err == nil {
-		defer rowsTS.Close()
-		for rowsTS.Next() {
-			var dt time.Time
-			var pvs, visitors, convs uint64
-			if err := rowsTS.Scan(&dt, &pvs, &visitors, &convs); err == nil {
-				stats.TimeSeries = append(stats.TimeSeries, TimePoint{
-					Date:        dt.Format("02/01"),
-					Pageviews:   pvs,
-					Visitors:    visitors,
-					Conversions: convs,
-				})
-			}
-		}
-	}
-
-	// 3. Top Sources / Campanhas
-	querySources := `
-		SELECT 
-			if(utm_source = '', '(direto)', utm_source) AS src,
-			if(utm_medium = '', '(nenhum)', utm_medium) AS med,
-			if(utm_campaign = '', '(sem campanha)', utm_campaign) AS camp,
-			count(*) AS total
-		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
-		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
-		  AND event_time >= ? AND is_bot = 0
-		GROUP BY src, med, camp
-		ORDER BY total DESC
-		LIMIT 10
-	`
-	rowsSrc, err := c.Conn.Query(ctx, querySources, siteID, siteID, domainFilter, domainFilter, since)
-	if err == nil {
-		defer rowsSrc.Close()
-		for rowsSrc.Next() {
-			var src, med, camp string
-			var total uint64
-			if err := rowsSrc.Scan(&src, &med, &camp, &total); err == nil {
-				stats.TopSources = append(stats.TopSources, SourceItem{
-					Source:   src,
-					Medium:   med,
-					Campaign: camp,
-					Count:    total,
-				})
-			}
-		}
-	}
-
-	// 4. Dispositivos
-	queryDevices := `
-		SELECT 
-			if(device_type = '', 'desktop', device_type) AS dev,
-			count(*) AS total
-		FROM tracking_events.events
-		WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
-		  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
-		  AND event_time >= ? AND is_bot = 0
-		GROUP BY dev
-	`
-	rowsDev, err := c.Conn.Query(ctx, queryDevices, siteID, siteID, domainFilter, domainFilter, since)
-	if err == nil {
-		defer rowsDev.Close()
-		for rowsDev.Next() {
-			var dev string
-			var total uint64
-			if err := rowsDev.Scan(&dev, &total); err == nil {
-				stats.DeviceBreakdown[dev] = total
-			}
-		}
-	}
-
-	return stats, nil
-}
-
 // MonitoredPagesQueryTS consulta série temporal de páginas ativas e conversões
 const MonitoredPagesQueryTS = `
 	SELECT 
@@ -357,8 +238,8 @@ const MonitoredPagesQueryTS = `
 	ORDER BY dt ASC
 `
 
-// MonitoredPagesQueryPages consulta páginas consolidadas com chave canônica e extração protegida de títulos
-const MonitoredPagesQueryPages = `
+// MonitoredPagesQueryBase template canônico compartilhado para páginas consolidadas (Visão Geral e Monitoramento)
+const MonitoredPagesQueryBase = `
 	SELECT 
 		if(page_key != '', page_key, splitByChar('#', cutQueryString(if(page_url != '', page_url, landing_page)))[1]) AS clean_url,
 		argMaxIf(
@@ -377,8 +258,212 @@ const MonitoredPagesQueryPages = `
 	GROUP BY clean_url
 	HAVING clean_url != ''
 	ORDER BY pvs DESC
-	LIMIT 200
+	LIMIT %d
 `
+
+// MonitoredPagesQueryPages consulta páginas consolidadas com limite padrão de 200
+var MonitoredPagesQueryPages = fmt.Sprintf(MonitoredPagesQueryBase, 200)
+
+// QueryConsolidatedPages executa a consulta canônica de páginas e retorna PageItem consolidados
+func (c *ClickHouseDB) QueryConsolidatedPages(ctx context.Context, siteID, domainFilter string, since time.Time, limit int) ([]PageItem, error) {
+	if c.Conn == nil {
+		return nil, fmt.Errorf("clickhouse indisponivel")
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	query := fmt.Sprintf(MonitoredPagesQueryBase, limit)
+	rows, err := c.Conn.Query(ctx, query, siteID, siteID, domainFilter, domainFilter, since)
+	if err != nil {
+		return nil, fmt.Errorf("falha ao consultar paginas consolidadas: %w", err)
+	}
+	defer rows.Close()
+
+	var pages []PageItem
+	for rows.Next() {
+		var p PageItem
+		var rawTitle string
+		if err := rows.Scan(&p.PageURL, &rawTitle, &p.Pageviews, &p.Visitors, &p.Conversions, &p.LastSeenAt); err == nil {
+			p.PageTitle = strings.TrimSpace(rawTitle)
+			if p.PageURL != "" {
+				if p.Visitors > 0 {
+					p.ConversionRate = math.Round((float64(p.Conversions)/float64(p.Visitors)*100)*100) / 100
+				}
+				pages = append(pages, p)
+			}
+		}
+	}
+	return pages, nil
+}
+
+func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, domainFilter, rangeStr string) (*OverviewStats, error) {
+	if c.Conn == nil {
+		return nil, fmt.Errorf("clickhouse indisponivel")
+	}
+
+	since := ParseDateRange(rangeStr)
+	domainFilter = strings.TrimSpace(domainFilter)
+	stats := &OverviewStats{
+		TimeSeries:      make([]TimePoint, 0),
+		TopSources:      make([]SourceItem, 0),
+		DeviceBreakdown: make(map[string]uint64),
+		TopPages:        make([]PageItem, 0),
+	}
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	// 1. KPIs Gerais
+	g.Go(func() error {
+		queryKPIs := `
+			SELECT 
+				count(*) AS total_events,
+				uniqExact(visitor_id) AS unique_visitors,
+				countIf(event_name = 'lead' OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS total_leads,
+				countIf(event_name = 'whatsapp_click') AS total_whatsapp,
+				uniqExactIf(visitor_id, event_time >= now() - INTERVAL 5 MINUTE) AS active_5m,
+				uniqExactIf(visitor_id, event_time >= now() - INTERVAL 30 MINUTE) AS active_30m
+			FROM tracking_events.events
+			WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+			  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+			  AND event_time >= ? AND is_bot = 0
+		`
+		row := c.Conn.QueryRow(gctx, queryKPIs, siteID, siteID, domainFilter, domainFilter, since)
+		if err := row.Scan(&stats.TotalEvents, &stats.UniqueVisitors, &stats.TotalLeads, &stats.TotalWhatsAppClicks, &stats.ActiveLast5Min, &stats.ActiveLast30Min); err != nil {
+			return fmt.Errorf("falha ao consultar KPIs gerais: %w", err)
+		}
+		return nil
+	})
+
+	// 2. Série Temporal (Por Dia)
+	var timeSeries []TimePoint
+	g.Go(func() error {
+		queryTimeSeries := `
+			SELECT 
+				toStartOfInterval(event_time, INTERVAL 1 DAY) AS dt,
+				countIf(event_name = 'page_view') AS pvs,
+				uniqExact(visitor_id) AS visitors,
+				countIf(event_name IN ('lead', 'whatsapp_click', 'purchase') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = ''))) AS convs
+			FROM tracking_events.events
+			WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+			  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+			  AND event_time >= ? AND is_bot = 0
+			GROUP BY dt
+			ORDER BY dt ASC
+		`
+		rowsTS, err := c.Conn.Query(gctx, queryTimeSeries, siteID, siteID, domainFilter, domainFilter, since)
+		if err != nil {
+			return nil // Falhas secundárias não devem abortar visão geral
+		}
+		defer rowsTS.Close()
+		for rowsTS.Next() {
+			var dt time.Time
+			var pvs, visitors, convs uint64
+			if err := rowsTS.Scan(&dt, &pvs, &visitors, &convs); err == nil {
+				timeSeries = append(timeSeries, TimePoint{
+					Date:        dt.Format("02/01"),
+					Pageviews:   pvs,
+					Visitors:    visitors,
+					Conversions: convs,
+				})
+			}
+		}
+		return nil
+	})
+
+	// 3. Top Sources / Campanhas
+	var topSources []SourceItem
+	g.Go(func() error {
+		querySources := `
+			SELECT 
+				if(utm_source = '', '(direto)', utm_source) AS src,
+				if(utm_medium = '', '(nenhum)', utm_medium) AS med,
+				if(utm_campaign = '', '(sem campanha)', utm_campaign) AS camp,
+				count(*) AS total
+			FROM tracking_events.events
+			WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+			  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+			  AND event_time >= ? AND is_bot = 0
+			GROUP BY src, med, camp
+			ORDER BY total DESC
+			LIMIT 10
+		`
+		rowsSrc, err := c.Conn.Query(gctx, querySources, siteID, siteID, domainFilter, domainFilter, since)
+		if err != nil {
+			return nil
+		}
+		defer rowsSrc.Close()
+		for rowsSrc.Next() {
+			var src, med, camp string
+			var total uint64
+			if err := rowsSrc.Scan(&src, &med, &camp, &total); err == nil {
+				topSources = append(topSources, SourceItem{
+					Source:   src,
+					Medium:   med,
+					Campaign: camp,
+					Count:    total,
+				})
+			}
+		}
+		return nil
+	})
+
+	// 4. Dispositivos
+	deviceBreakdown := make(map[string]uint64)
+	g.Go(func() error {
+		queryDevices := `
+			SELECT 
+				if(device_type = '', 'desktop', device_type) AS dev,
+				count(*) AS total
+			FROM tracking_events.events
+			WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
+			  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
+			  AND event_time >= ? AND is_bot = 0
+			GROUP BY dev
+		`
+		rowsDev, err := c.Conn.Query(gctx, queryDevices, siteID, siteID, domainFilter, domainFilter, since)
+		if err != nil {
+			return nil
+		}
+		defer rowsDev.Close()
+		for rowsDev.Next() {
+			var dev string
+			var total uint64
+			if err := rowsDev.Scan(&dev, &total); err == nil {
+				deviceBreakdown[dev] = total
+			}
+		}
+		return nil
+	})
+
+	// 5. Top 5 Páginas com Mesma Query Canônica
+	var topPages []PageItem
+	g.Go(func() error {
+		pages, err := c.QueryConsolidatedPages(gctx, siteID, domainFilter, since, 5)
+		if err == nil {
+			topPages = pages
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	if timeSeries != nil {
+		stats.TimeSeries = timeSeries
+	}
+	if topSources != nil {
+		stats.TopSources = topSources
+	}
+	if len(deviceBreakdown) > 0 {
+		stats.DeviceBreakdown = deviceBreakdown
+	}
+	if topPages != nil {
+		stats.TopPages = topPages
+	}
+
+	return stats, nil
+}
 
 func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, domainFilter, rangeStr string) (*MonitoredPagesReport, error) {
 	if c.Conn == nil {
@@ -413,27 +498,16 @@ func (c *ClickHouseDB) GetMonitoredPagesReport(ctx context.Context, siteID, doma
 	}
 
 	// 2. Tabela de Páginas Consolidadas com Canonicalização e Extração de Título
-	rows, err := c.Conn.Query(ctx, MonitoredPagesQueryPages, siteID, siteID, domainFilter, domainFilter, since)
+	pages, err := c.QueryConsolidatedPages(ctx, siteID, domainFilter, since, 200)
 	if err != nil {
 		return nil, fmt.Errorf("falha ao consultar paginas: %w", err)
 	}
-	defer rows.Close()
+	report.Pages = pages
 
 	var totalPVs, totalConvs uint64
-	for rows.Next() {
-		var p PageItem
-		var rawTitle string
-		if err := rows.Scan(&p.PageURL, &rawTitle, &p.Pageviews, &p.Visitors, &p.Conversions, &p.LastSeenAt); err == nil {
-			p.PageTitle = strings.TrimSpace(rawTitle)
-			if p.PageURL != "" {
-				if p.Visitors > 0 {
-					p.ConversionRate = math.Round((float64(p.Conversions)/float64(p.Visitors)*100)*100) / 100
-				}
-				totalPVs += p.Pageviews
-				totalConvs += p.Conversions
-				report.Pages = append(report.Pages, p)
-			}
-		}
+	for _, p := range pages {
+		totalPVs += p.Pageviews
+		totalConvs += p.Conversions
 	}
 
 	report.Summary.TotalActivePages = uint64(len(report.Pages))

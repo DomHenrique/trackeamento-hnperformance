@@ -9,18 +9,37 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"tracking-engine/internal/storage"
 )
 
+// validateOptionalSiteUUID valida se site_id, quando informado, é um UUID v4/rfc4122 válido.
+// Se vazio, retorna nil (representa "todos os domínios").
+func validateOptionalSiteUUID(siteID string) error {
+	if siteID == "" {
+		return nil
+	}
+	if _, err := uuid.Parse(siteID); err != nil {
+		return fmt.Errorf("site_id inválido: deve ser um UUID válido ou vazio")
+	}
+	return nil
+}
+
 // HandleAnalyticsOverview retorna os KPIs gerais, série temporal e fontes de tráfego
 func (h *Handler) HandleAnalyticsOverview(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	if err := validateOptionalSiteUUID(siteID); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
 	if h.ch == nil || h.ch.Conn == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"error": "ClickHouse analítico indisponível",
 		})
 	}
 
-	siteID := strings.TrimSpace(c.Query("site_id"))
 	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 
@@ -36,13 +55,19 @@ func (h *Handler) HandleAnalyticsOverview(c *fiber.Ctx) error {
 
 // HandleAnalyticsPages lista o relatório de páginas monitoradas com séries temporais e canonicalização
 func (h *Handler) HandleAnalyticsPages(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	if err := validateOptionalSiteUUID(siteID); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
 	if h.ch == nil || h.ch.Conn == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"error": "ClickHouse analítico indisponível",
 		})
 	}
 
-	siteID := strings.TrimSpace(c.Query("site_id"))
 	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 
@@ -125,13 +150,19 @@ func (h *Handler) HandleAnalyticsPages(c *fiber.Ctx) error {
 
 // HandleAnalyticsLeads retorna a lista cronológica de conversões com auditoria de parâmetros
 func (h *Handler) HandleAnalyticsLeads(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	if err := validateOptionalSiteUUID(siteID); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
 	if h.ch == nil || h.ch.Conn == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"error": "ClickHouse analítico indisponível",
 		})
 	}
 
-	siteID := strings.TrimSpace(c.Query("site_id"))
 	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 	limit := c.QueryInt("limit", 100)
@@ -148,13 +179,19 @@ func (h *Handler) HandleAnalyticsLeads(c *fiber.Ctx) error {
 
 // HandleExportLeadsCSV gera e envia o streaming de download do arquivo CSV com auditoria
 func (h *Handler) HandleExportLeadsCSV(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	if err := validateOptionalSiteUUID(siteID); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
 	if h.ch == nil || h.ch.Conn == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"error": "ClickHouse analítico indisponível",
 		})
 	}
 
-	siteID := strings.TrimSpace(c.Query("site_id"))
 	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "30d"))
 
@@ -232,13 +269,19 @@ func (h *Handler) HandleExportLeadsCSV(c *fiber.Ctx) error {
 
 // HandleAnalyticsFunnel retorna as 4 etapas de conversão e taxas de abandono
 func (h *Handler) HandleAnalyticsFunnel(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	if err := validateOptionalSiteUUID(siteID); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
 	if h.ch == nil || h.ch.Conn == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"error": "ClickHouse analítico indisponível",
 		})
 	}
 
-	siteID := strings.TrimSpace(c.Query("site_id"))
 	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 
@@ -254,13 +297,19 @@ func (h *Handler) HandleAnalyticsFunnel(c *fiber.Ctx) error {
 
 // HandleAnalyticsAttributionPaths retorna as top sequências de canais e comparativo First vs Last Touch
 func (h *Handler) HandleAnalyticsAttributionPaths(c *fiber.Ctx) error {
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	if err := validateOptionalSiteUUID(siteID); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
 	if h.ch == nil || h.ch.Conn == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"error": "ClickHouse analítico indisponível",
 		})
 	}
 
-	siteID := strings.TrimSpace(c.Query("site_id"))
 	domain := strings.TrimSpace(c.Query("domain"))
 	rangeStr := strings.TrimSpace(c.Query("range", "7d"))
 	limit := c.QueryInt("limit", 15)
@@ -277,14 +326,19 @@ func (h *Handler) HandleAnalyticsAttributionPaths(c *fiber.Ctx) error {
 
 // HandleAnalyticsVisitorJourney retorna todos os eventos ordenados cronologicamente de um visitante
 func (h *Handler) HandleAnalyticsVisitorJourney(c *fiber.Ctx) error {
+	visitorID := strings.TrimSpace(c.Query("visitor_id"))
+	siteID := strings.TrimSpace(c.Query("site_id"))
+	if err := validateOptionalSiteUUID(siteID); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
 	if h.ch == nil || h.ch.Conn == nil {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"error": "ClickHouse analítico indisponível",
 		})
 	}
-
-	visitorID := strings.TrimSpace(c.Query("visitor_id"))
-	siteID := strings.TrimSpace(c.Query("site_id"))
 
 	if visitorID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

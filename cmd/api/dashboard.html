@@ -7064,6 +7064,105 @@ if (typeof fbq === 'function' && eventId) {
             }
         }
 
+        let activeDataAbortController = null;
+        let activeDataEpoch = 0;
+
+        function resetDashboardViewToLoading(siteLabel) {
+            // 1. KPIs
+            const kpiVis = document.getElementById('kpi-visitors');
+            if (kpiVis) kpiVis.textContent = '...';
+            const kpiEv = document.getElementById('kpi-events');
+            if (kpiEv) kpiEv.textContent = '...';
+            const kpiConv = document.getElementById('kpi-conversions');
+            if (kpiConv) kpiConv.textContent = '...';
+            const kpiNow = document.getElementById('kpi-active-now');
+            if (kpiNow) kpiNow.textContent = '...';
+
+            // 2. Gráfico da Visão Geral
+            if (typeof trafficChartInstance !== 'undefined' && trafficChartInstance) {
+                try { trafficChartInstance.destroy(); } catch(e) {}
+                trafficChartInstance = null;
+            }
+
+            // 3. Tabelas da Visão Geral
+            const safeLabel = escapeHTML(siteLabel || 'Site');
+            const overviewTop = document.getElementById('overview-top-pages');
+            if (overviewTop) {
+                overviewTop.innerHTML = `<tr><td colspan="2" style="color: #64748b; text-align: center; padding: 1.5rem;">⏳ Carregando páginas de ${safeLabel}...</td></tr>`;
+            }
+            const overviewSources = document.getElementById('overview-top-sources');
+            if (overviewSources) {
+                overviewSources.innerHTML = `<tr><td colspan="2" style="color: #64748b; text-align: center; padding: 1.5rem;">⏳ Carregando fontes de ${safeLabel}...</td></tr>`;
+            }
+
+            // 4. Origem e Dispositivos
+            const trafficSources = document.getElementById('traffic-sources-table');
+            if (trafficSources) {
+                trafficSources.innerHTML = `<tr><td colspan="4" style="color: #64748b; text-align: center; padding: 1.5rem;">⏳ Carregando tráfego de ${safeLabel}...</td></tr>`;
+            }
+            if (typeof deviceChartInstance !== 'undefined' && deviceChartInstance) {
+                try { deviceChartInstance.destroy(); } catch(e) {}
+                deviceChartInstance = null;
+            }
+
+            // 5. Páginas Monitoradas
+            const pagesTbody = document.getElementById('pages-table-body');
+            if (pagesTbody) {
+                pagesTbody.innerHTML = `<tr><td colspan="7" style="color: #64748b; text-align: center; padding: 2rem;">⏳ Carregando inventário de páginas de ${safeLabel}...</td></tr>`;
+            }
+            if (typeof pagesTrafficChartInstance !== 'undefined' && pagesTrafficChartInstance) {
+                try { pagesTrafficChartInstance.destroy(); } catch(e) {}
+                pagesTrafficChartInstance = null;
+            }
+
+            // 6. Conversões / Leads
+            const leadsTbody = document.getElementById('leads-table-body');
+            if (leadsTbody) {
+                leadsTbody.innerHTML = `<tr><td colspan="6" style="color: #64748b; text-align: center; padding: 2rem;">⏳ Carregando conversões de ${safeLabel}...</td></tr>`;
+            }
+
+            // 7. Funis & Atribuição
+            const funnelStepsList = document.getElementById('funnel-steps-list');
+            if (funnelStepsList) {
+                funnelStepsList.innerHTML = `<div style="color: #64748b; padding: 1rem 0;">⏳ Carregando etapas do funil de ${safeLabel}...</div>`;
+            }
+            const bottleneckBox = document.getElementById('funnel-bottleneck-box');
+            if (bottleneckBox) bottleneckBox.innerHTML = '';
+
+            const pathsTbody = document.getElementById('attribution-paths-tbody');
+            if (pathsTbody) {
+                pathsTbody.innerHTML = `<tr><td colspan="4" style="color: #64748b; text-align: center; padding: 1.5rem;">⏳ Carregando caminhos de ${safeLabel}...</td></tr>`;
+            }
+            const compareTbody = document.getElementById('channel-compare-tbody');
+            if (compareTbody) {
+                compareTbody.innerHTML = `<tr><td colspan="3" style="color: #64748b; text-align: center; padding: 1.5rem;">⏳ Carregando comparativo...</td></tr>`;
+            }
+        }
+
+        function renderOverviewTopPages(topPages) {
+            const overviewTop = document.getElementById('overview-top-pages');
+            if (!overviewTop) return;
+
+            if (!topPages || topPages.length === 0) {
+                overviewTop.innerHTML = '<tr><td colspan="2" style="color: #64748b; text-align: center; padding: 1.5rem;">Nenhuma página registrada no período.</td></tr>';
+                return;
+            }
+
+            let htmlTop = '';
+            topPages.slice(0, 5).forEach(p => {
+                const displayLabel = p.page_title && p.page_title.trim() !== '' ? p.page_title : (p.page_url || 'Sem título');
+                htmlTop += `
+                    <tr>
+                        <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHTML(p.page_url || '')}">
+                            <span style="color: #38bdf8; font-weight: 500;">${escapeHTML(displayLabel)}</span>
+                        </td>
+                        <td style="text-align: right; font-weight: 600;">${Number(p.pageviews || 0).toLocaleString('pt-BR')}</td>
+                    </tr>
+                `;
+            });
+            overviewTop.innerHTML = htmlTop;
+        }
+
         async function loadActiveData() {
             const sel = document.getElementById('select-site');
             if (sel && sel.value === '__new_site__') {
@@ -7090,17 +7189,30 @@ if (typeof fbq === 'function' && eventId) {
             const { siteID, domain } = getSelectedSiteAndDomain();
             const range = document.getElementById('select-range').value;
 
+            // 1. Cancela requisições assíncronas anteriores em voo e incrementa época
+            if (activeDataAbortController) {
+                try { activeDataAbortController.abort(); } catch(e) {}
+            }
+            activeDataAbortController = new AbortController();
+            const currentEpoch = ++activeDataEpoch;
+            const signal = activeDataAbortController.signal;
+
+            // 2. Zero-State Imediato: limpa widgets antes de qualquer busca para confidencialidade
+            const selectedOption = sel ? sel.options[sel.selectedIndex] : null;
+            const siteLabel = selectedOption ? selectedOption.textContent.replace(/^[^\w\s]+/, '').trim() : 'Site Selecionado';
+            resetDashboardViewToLoading(siteLabel);
+
             if (currentTab === 'overview' || currentTab === 'traffic') {
-                await loadOverview(siteID, domain, range);
+                await loadOverview(siteID, domain, range, signal, currentEpoch);
             }
             if (currentTab === 'pages') {
-                await loadPages(siteID, domain, range);
+                await loadPages(siteID, domain, range, signal, currentEpoch);
             }
             if (currentTab === 'leads') {
-                await loadLeads(siteID, domain, range);
+                await loadLeads(siteID, domain, range, signal, currentEpoch);
             }
             if (currentTab === 'funnels') {
-                await loadFunnelsData(siteID, domain, range);
+                await loadFunnelsData(siteID, domain, range, signal, currentEpoch);
             }
             if (currentTab === 'debug') {
                 initDebugView();
@@ -7122,11 +7234,20 @@ if (typeof fbq === 'function' && eventId) {
             }
         }
 
-        async function loadOverview(siteID, domain, range) {
+        async function loadOverview(siteID, domain, range, signal, epoch) {
             try {
-                const res = await fetch(`/api/v1/analytics/overview?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`);
-                if (!res.ok) throw new Error('Falha ao carregar visão geral');
+                const res = await fetch(`/api/v1/analytics/overview?site_id=${encodeURIComponent(siteID || '')}&domain=${encodeURIComponent(domain || '')}&range=${range}`, { signal });
+                if (!res.ok) {
+                    if (res.status === 400) {
+                        const errData = await res.json().catch(() => ({}));
+                        console.warn("[Analytics] Parâmetro inválido na visão geral:", errData.error);
+                    }
+                    throw new Error('Falha ao carregar visão geral');
+                }
                 const data = await res.json();
+                if (epoch !== undefined && epoch !== activeDataEpoch) {
+                    return; // descarta dados atrasados de seleção anterior
+                }
 
                 // 1. Atualiza KPIs
                 document.getElementById('kpi-visitors').textContent = (data.unique_visitors || 0).toLocaleString('pt-BR');
@@ -7146,7 +7267,11 @@ if (typeof fbq === 'function' && eventId) {
                 // 4. Dispositivos
                 renderDeviceChart(data.device_breakdown || {});
 
+                // 5. Top Páginas na Visão Geral (Sincronização Atômica)
+                renderOverviewTopPages(data.top_pages || []);
+
             } catch (e) {
+                if (e.name === 'AbortError') return;
                 console.error(e);
             }
         }
@@ -7498,13 +7623,13 @@ if (typeof fbq === 'function' && eventId) {
             renderPagesTable(filtered);
         }
 
-        async function loadPages(siteID, domain, range) {
+        async function loadPages(siteID, domain, range, signal, epoch) {
             const tbody = document.getElementById('pages-table-body');
-            const overviewTop = document.getElementById('overview-top-pages');
             try {
-                const res = await fetch(`/api/v1/analytics/pages?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`);
+                const res = await fetch(`/api/v1/analytics/pages?site_id=${encodeURIComponent(siteID || '')}&domain=${encodeURIComponent(domain || '')}&range=${range}`, { signal });
                 if (!res.ok) throw new Error('Erro ao carregar páginas');
                 const data = await res.json();
+                if (epoch !== undefined && epoch !== activeDataEpoch) return;
 
                 const pages = Array.isArray(data) ? data : (data.pages || []);
                 const timeSeries = Array.isArray(data) ? [] : (data.time_series || []);
@@ -7533,27 +7658,10 @@ if (typeof fbq === 'function' && eventId) {
                 renderPagesTrafficChart(timeSeries);
                 filterPagesTable();
 
-                if (overviewTop) {
-                    if (pages.length === 0) {
-                        overviewTop.innerHTML = '<tr><td colspan="2" style="color: #64748b;">Nenhuma página registrada.</td></tr>';
-                    } else {
-                        let htmlTop = '';
-                        pages.slice(0, 5).forEach(p => {
-                            const displayLabel = p.page_title && p.page_title.trim() !== '' ? p.page_title : p.page_url;
-                            htmlTop += `
-                                <tr>
-                                    <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHTML(p.page_url)}">
-                                        <span style="color: #38bdf8; font-weight: 500;">${escapeHTML(displayLabel)}</span>
-                                    </td>
-                                    <td style="text-align: right; font-weight: 600;">${Number(p.pageviews).toLocaleString('pt-BR')}</td>
-                                </tr>
-                            `;
-                        });
-                        overviewTop.innerHTML = htmlTop;
-                    }
-                }
+                renderOverviewTopPages(pages.slice(0, 5));
 
             } catch (e) {
+                if (e.name === 'AbortError') return;
                 console.error("Erro ao carregar páginas monitoradas:", e);
                 if (tbody) {
                     tbody.innerHTML = '<tr><td colspan="7" style="color: #f87171; text-align: center; padding: 2rem;">Falha ao carregar páginas monitoradas.</td></tr>';
@@ -7561,12 +7669,13 @@ if (typeof fbq === 'function' && eventId) {
             }
         }
 
-        async function loadLeads(siteID, domain, range) {
+        async function loadLeads(siteID, domain, range, signal, epoch) {
             const tbody = document.getElementById('leads-table-body');
             try {
-                const res = await fetch(`/api/v1/analytics/leads?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}&limit=100`);
+                const res = await fetch(`/api/v1/analytics/leads?site_id=${encodeURIComponent(siteID || '')}&domain=${encodeURIComponent(domain || '')}&range=${range}&limit=100`, { signal });
                 if (!res.ok) throw new Error('Erro ao carregar leads');
                 const leads = await res.json();
+                if (epoch !== undefined && epoch !== activeDataEpoch) return;
 
                 if (!leads || leads.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" style="color: #64748b;">Nenhuma conversão registrada no período.</td></tr>';
@@ -7609,6 +7718,7 @@ if (typeof fbq === 'function' && eventId) {
                 tbody.innerHTML = html;
 
             } catch (e) {
+                if (e.name === 'AbortError') return;
                 tbody.innerHTML = '<tr><td colspan="6" style="color: #f87171;">Falha ao carregar conversões.</td></tr>';
             }
         }
@@ -7616,7 +7726,7 @@ if (typeof fbq === 'function' && eventId) {
         function exportLeadsCSV() {
             const { siteID, domain } = getSelectedSiteAndDomain();
             const range = document.getElementById('select-range').value;
-            window.location.href = `/api/v1/analytics/leads/export?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`;
+            window.location.href = `/api/v1/analytics/leads/export?site_id=${encodeURIComponent(siteID || '')}&domain=${encodeURIComponent(domain || '')}&range=${range}`;
         }
 
         // --- Módulo de Funis & Atribuição Multi-Toque ---
@@ -7633,24 +7743,25 @@ if (typeof fbq === 'function' && eventId) {
 
             const { siteID, domain } = getSelectedSiteAndDomain();
             const range = document.getElementById('select-range').value;
-            if (subTabId === 'funnel-steps') loadFunnelSteps(siteID, domain, range);
-            if (subTabId === 'media-paths') loadAttributionPaths(siteID, domain, range);
+            if (subTabId === 'funnel-steps') loadFunnelSteps(siteID, domain, range, activeDataAbortController?.signal, activeDataEpoch);
+            if (subTabId === 'media-paths') loadAttributionPaths(siteID, domain, range, activeDataAbortController?.signal, activeDataEpoch);
         }
 
-        async function loadFunnelsData(siteID, domain, range) {
+        async function loadFunnelsData(siteID, domain, range, signal, epoch) {
             await Promise.all([
-                loadFunnelSteps(siteID, domain, range),
-                loadAttributionPaths(siteID, domain, range)
+                loadFunnelSteps(siteID, domain, range, signal, epoch),
+                loadAttributionPaths(siteID, domain, range, signal, epoch)
             ]);
         }
 
-        async function loadFunnelSteps(siteID, domain, range) {
+        async function loadFunnelSteps(siteID, domain, range, signal, epoch) {
             const container = document.getElementById('funnel-steps-list');
             const bottleneckBox = document.getElementById('funnel-bottleneck-box');
             try {
-                const res = await fetch(`/api/v1/analytics/funnel?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`);
+                const res = await fetch(`/api/v1/analytics/funnel?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`, { signal });
                 if (!res.ok) throw new Error('Erro ao carregar funil');
                 const data = await res.json();
+                if (epoch !== undefined && epoch !== activeDataEpoch) return;
 
                 if (!data.steps || data.steps.length === 0) {
                     container.innerHTML = '<div style="color: #64748b;">Nenhum dado de funil registrado no período.</div>';
@@ -7709,18 +7820,21 @@ if (typeof fbq === 'function' && eventId) {
                 }
 
             } catch (e) {
+                if (e.name === 'AbortError') return;
+                if (epoch !== undefined && epoch !== activeDataEpoch) return;
                 container.innerHTML = '<div style="color: #f87171;">Falha ao carregar análise de funil.</div>';
                 bottleneckBox.innerHTML = '';
             }
         }
 
-        async function loadAttributionPaths(siteID, domain, range) {
+        async function loadAttributionPaths(siteID, domain, range, signal, epoch) {
             const pathsTbody = document.getElementById('attribution-paths-tbody');
             const compareTbody = document.getElementById('channel-compare-tbody');
             try {
-                const res = await fetch(`/api/v1/analytics/attribution/paths?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`);
+                const res = await fetch(`/api/v1/analytics/attribution/paths?site_id=${siteID}&domain=${encodeURIComponent(domain || '')}&range=${range}`, { signal });
                 if (!res.ok) throw new Error('Erro ao carregar atribuição');
                 const data = await res.json();
+                if (epoch !== undefined && epoch !== activeDataEpoch) return;
 
                 if (!data.top_paths || data.top_paths.length === 0) {
                     pathsTbody.innerHTML = '<tr><td colspan="4" style="color: #64748b;">Nenhuma conversão com histórico de canais no período.</td></tr>';
@@ -7778,6 +7892,8 @@ if (typeof fbq === 'function' && eventId) {
                 }
 
             } catch (e) {
+                if (e.name === 'AbortError') return;
+                if (epoch !== undefined && epoch !== activeDataEpoch) return;
                 pathsTbody.innerHTML = '<tr><td colspan="4" style="color: #f87171;">Falha ao carregar caminhos de mídia.</td></tr>';
                 compareTbody.innerHTML = '<tr><td colspan="3" style="color: #f87171;">Falha ao carregar comparativo.</td></tr>';
             }
@@ -7792,8 +7908,8 @@ if (typeof fbq === 'function' && eventId) {
             summaryBox.style.display = 'none';
 
             try {
-                const siteID = document.getElementById('select-site').value;
-                const res = await fetch(`/api/v1/analytics/visitor/journey?visitor_id=${encodeURIComponent(visitorId)}&site_id=${siteID}`);
+                const { siteID } = getSelectedSiteAndDomain();
+                const res = await fetch(`/api/v1/analytics/visitor/journey?visitor_id=${encodeURIComponent(visitorId)}&site_id=${encodeURIComponent(siteID || '')}`);
                 if (!res.ok) throw new Error('Erro ao carregar jornada');
                 const data = await res.json();
 
