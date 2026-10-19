@@ -178,32 +178,38 @@ type AttributionPathsReport struct {
 }
 
 type JourneyEventItem struct {
-	EventID        string    `json:"event_id"`
-	EventName      string    `json:"event_name"`
-	EventTime      time.Time `json:"event_time"`
-	PageURL        string    `json:"page_url"`
-	LandingPage    string    `json:"landing_page"`
-	Referrer       string    `json:"referrer"`
-	UTMSource      string    `json:"utm_source"`
-	UTMMedium      string    `json:"utm_medium"`
-	UTMCampaign    string    `json:"utm_campaign"`
-	GCLID          string    `json:"gclid"`
-	FBCLID         string    `json:"fbclid"`
-	DeviceType     string    `json:"device_type"`
-	CustomDataJSON string    `json:"custom_data_json"`
+	EventID          string    `json:"event_id"`
+	EventName        string    `json:"event_name"`
+	EventTime        time.Time `json:"event_time"`
+	PageURL          string    `json:"page_url"`
+	LandingPage      string    `json:"landing_page"`
+	Referrer         string    `json:"referrer"`
+	UTMSource        string    `json:"utm_source"`
+	UTMMedium        string    `json:"utm_medium"`
+	UTMCampaign      string    `json:"utm_campaign"`
+	GCLID            string    `json:"gclid"`
+	FBCLID           string    `json:"fbclid"`
+	DeviceType       string    `json:"device_type"`
+	CustomDataJSON   string    `json:"custom_data_json"`
+	Source           string    `json:"source"`
+	Medium           string    `json:"medium"`
+	Channel          string    `json:"channel"`
+	AttributionBasis string    `json:"attribution_basis"`
+	Inherited        uint8     `json:"inherited"`
 }
 
 type VisitorJourneyReport struct {
-	VisitorID      string             `json:"visitor_id"`
-	SiteID         string             `json:"site_id"`
-	TotalEvents    int                `json:"total_events"`
-	FirstSeen      time.Time          `json:"first_seen"`
-	LastSeen       time.Time          `json:"last_seen"`
-	IsConverted    bool               `json:"is_converted"`
-	ConversionName string             `json:"conversion_name"`
-	FirstTouch     string             `json:"first_touch"`
-	LastTouch      string             `json:"last_touch"`
-	Events         []JourneyEventItem `json:"events"`
+	VisitorID          string             `json:"visitor_id"`
+	SiteID             string             `json:"site_id"`
+	TotalEvents        int                `json:"total_events"`
+	FirstSeen          time.Time          `json:"first_seen"`
+	LastSeen           time.Time          `json:"last_seen"`
+	IsConverted        bool               `json:"is_converted"`
+	ConversionName     string             `json:"conversion_name"`
+	FirstTouch         string             `json:"first_touch"`
+	LastTouch          string             `json:"last_touch"`
+	LastNonDirectTouch string             `json:"last_non_direct_touch,omitempty"`
+	Events             []JourneyEventItem `json:"events"`
 }
 
 func ParseDateRange(rangeStr string) time.Time {
@@ -375,9 +381,9 @@ func (c *ClickHouseDB) GetAnalyticsOverview(ctx context.Context, siteID, domainF
 	g.Go(func() error {
 		querySources := `
 			SELECT 
-				if(utm_source = '', '(direto)', utm_source) AS src,
-				if(utm_medium = '', '(nenhum)', utm_medium) AS med,
-				if(utm_campaign = '', '(sem campanha)', utm_campaign) AS camp,
+				multiIf(source != '', source, if(utm_source = '', if(gclid != '' OR gbraid != '' OR wbraid != '', 'google', 'direct'), utm_source)) AS src,
+				multiIf(medium != '', medium, if(utm_medium = '', if(gclid != '' OR gbraid != '' OR wbraid != '', 'cpc', 'none'), utm_medium)) AS med,
+				if(utm_campaign = '', 'not_set', utm_campaign) AS camp,
 				count(*) AS total
 			FROM tracking_events.events
 			WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
@@ -766,7 +772,7 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, domainFi
 			FROM (
 				SELECT 
 					visitor_id,
-					if(utm_source != '', utm_source, '(direto)') AS src,
+					multiIf(channel != '', channel, gclid != '' OR gbraid != '' OR wbraid != '', 'paid_search', ttclid != '' OR fbclid != '', 'paid_social', utm_source != '', 'other', 'direct') AS src,
 					min(event_time) AS first_seen,
 					max(event_time) AS conv_time
 				FROM tracking_events.events
@@ -808,10 +814,13 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, domainFi
 	firstMap := make(map[string]uint64)
 	queryFirst := `
 		SELECT 
-			if(utm_source != '', utm_source, '(direto)') AS chan,
+			chan,
 			count(DISTINCT visitor_id) AS total
 		FROM (
-			SELECT visitor_id, utm_source, row_number() OVER (PARTITION BY visitor_id ORDER BY event_time ASC) as rn
+			SELECT 
+				visitor_id,
+				multiIf(channel != '', channel, gclid != '' OR gbraid != '' OR wbraid != '', 'paid_search', ttclid != '' OR fbclid != '', 'paid_social', utm_source != '', 'other', 'direct') AS chan,
+				row_number() OVER (PARTITION BY visitor_id ORDER BY event_time ASC) as rn
 			FROM tracking_events.events
 			WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
 			  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
@@ -842,10 +851,27 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, domainFi
 	lastMap := make(map[string]uint64)
 	queryLast := `
 		SELECT 
-			if(utm_source != '', utm_source, '(direto)') AS chan,
+			chan,
 			count(DISTINCT visitor_id) AS total
 		FROM (
-			SELECT visitor_id, utm_source, row_number() OVER (PARTITION BY visitor_id ORDER BY event_time DESC) as rn
+			SELECT 
+				visitor_id,
+				multiIf(
+					argMaxIf(
+						multiIf(channel != '', channel, gclid != '' OR gbraid != '' OR wbraid != '', 'paid_search', ttclid != '' OR fbclid != '', 'paid_social', utm_source != '', 'other', 'direct'),
+						event_time,
+						multiIf(channel != '', channel, gclid != '' OR gbraid != '' OR wbraid != '', 'paid_search', ttclid != '' OR fbclid != '', 'paid_social', utm_source != '', 'other', 'direct') NOT IN ('direct', 'not_set')
+					) != '',
+					argMaxIf(
+						multiIf(channel != '', channel, gclid != '' OR gbraid != '' OR wbraid != '', 'paid_search', ttclid != '' OR fbclid != '', 'paid_social', utm_source != '', 'other', 'direct'),
+						event_time,
+						multiIf(channel != '', channel, gclid != '' OR gbraid != '' OR wbraid != '', 'paid_search', ttclid != '' OR fbclid != '', 'paid_social', utm_source != '', 'other', 'direct') NOT IN ('direct', 'not_set')
+					),
+					argMax(
+						multiIf(channel != '', channel, gclid != '' OR gbraid != '' OR wbraid != '', 'paid_search', ttclid != '' OR fbclid != '', 'paid_social', utm_source != '', 'other', 'direct'),
+						event_time
+					)
+				) AS chan
 			FROM tracking_events.events
 			WHERE (site_id = toUUIDOrZero(?) OR ? = '') 
 			  AND (domainWithoutWWW(if(page_url != '', page_url, landing_page)) = domainWithoutWWW(?) OR ? = '')
@@ -857,8 +883,9 @@ func (c *ClickHouseDB) GetAttributionPaths(ctx context.Context, siteID, domainFi
 				  AND event_time >= ? AND is_bot = 0
 				  AND (event_name IN ('lead', 'purchase', 'whatsapp_click') OR (event_name = 'form_submit' AND (form_lifecycle_state IN ('form_submit_success', 'form_client_validated') OR form_lifecycle_state = '')))
 			  )
+			GROUP BY visitor_id
 		)
-		WHERE rn = 1
+		WHERE chan != ''
 		GROUP BY chan
 	`
 	rowsLast, errL := c.Conn.Query(ctx, queryLast, siteID, siteID, domainFilter, domainFilter, since, siteID, siteID, domainFilter, domainFilter, since)
@@ -916,7 +943,8 @@ func (c *ClickHouseDB) GetVisitorJourney(ctx context.Context, visitorID, siteID 
 			event_name, event_time, 
 			page_url, landing_page, referrer,
 			utm_source, utm_medium, utm_campaign, 
-			gclid, fbclid, device_type, custom_data_json
+			gclid, fbclid, device_type, custom_data_json,
+			source, medium, channel, attribution_basis, inherited
 		FROM tracking_events.events
 		WHERE (visitor_id = toUUIDOrZero(?) OR toString(visitor_id) = ?)
 		  AND (site_id = toUUIDOrZero(?) OR ? = '')
@@ -936,6 +964,7 @@ func (c *ClickHouseDB) GetVisitorJourney(ctx context.Context, visitorID, siteID 
 		Events:    make([]JourneyEventItem, 0),
 	}
 
+	var conversionTime time.Time
 	for rows.Next() {
 		var item JourneyEventItem
 		var evSiteID string
@@ -945,6 +974,7 @@ func (c *ClickHouseDB) GetVisitorJourney(ctx context.Context, visitorID, siteID 
 			&item.PageURL, &item.LandingPage, &item.Referrer,
 			&item.UTMSource, &item.UTMMedium, &item.UTMCampaign,
 			&item.GCLID, &item.FBCLID, &item.DeviceType, &item.CustomDataJSON,
+			&item.Source, &item.Medium, &item.Channel, &item.AttributionBasis, &item.Inherited,
 		); err == nil {
 			if report.SiteID == "" && evSiteID != "" {
 				report.SiteID = evSiteID
@@ -954,29 +984,87 @@ func (c *ClickHouseDB) GetVisitorJourney(ctx context.Context, visitorID, siteID 
 			}
 			report.LastSeen = item.EventTime
 
+			// Fallback para histórico legado sem colunas novas preenchidas
+			if item.Channel == "" {
+				if item.GCLID != "" {
+					item.Source = "google"
+					item.Medium = "cpc"
+					item.Channel = "paid_search"
+					item.AttributionBasis = "click_id"
+				} else if item.FBCLID != "" {
+					item.Source = "meta"
+					item.Medium = "social"
+					item.Channel = "organic_social"
+					item.AttributionBasis = "click_id"
+				} else if item.UTMSource != "" {
+					item.Source = item.UTMSource
+					item.Medium = item.UTMMedium
+					item.Channel = "other"
+					item.AttributionBasis = "utm"
+				} else if item.Referrer != "" {
+					item.Source = item.Referrer
+					item.Medium = "referral"
+					item.Channel = "referral"
+					item.AttributionBasis = "referrer"
+				} else {
+					item.Source = "direct"
+					item.Medium = "none"
+					item.Channel = "direct"
+					item.AttributionBasis = "none"
+				}
+			}
+
 			name := strings.ToLower(item.EventName)
 			if name == "lead" || name == "purchase" || name == "whatsapp_click" || name == "contact" {
 				report.IsConverted = true
 				report.ConversionName = item.EventName
+				conversionTime = item.EventTime
 			}
 
-			src := item.UTMSource
-			if src == "" {
-				src = "(direto)"
+			dispSource := item.Source
+			if dispSource == "" || dispSource == "direct" {
+				dispSource = "direct"
 			}
 			if report.FirstTouch == "" {
-				report.FirstTouch = src
+				report.FirstTouch = dispSource
 			}
-			report.LastTouch = src
+			report.LastTouch = dispSource
 
 			report.Events = append(report.Events, item)
 		}
 	}
+
+	// Cálculo de Last Non-Direct Touch com janela de 30 dias até a conversão
+	windowEnd := report.LastSeen
+	if !conversionTime.IsZero() {
+		windowEnd = conversionTime
+	}
+	windowStart := windowEnd.AddDate(0, 0, -30)
+
+	lastNonDirect := ""
+	for i := len(report.Events) - 1; i >= 0; i-- {
+		ev := report.Events[i]
+		if ev.EventTime.Before(windowStart) || ev.EventTime.After(windowEnd) {
+			continue
+		}
+		if ev.Channel != "direct" && ev.Channel != "not_set" && ev.Channel != "legacy_unclassified" {
+			lastNonDirect = ev.Source
+			if lastNonDirect == "" {
+				lastNonDirect = ev.Channel
+			}
+			break
+		}
+	}
+	if lastNonDirect == "" {
+		lastNonDirect = report.LastTouch
+	}
+	report.LastNonDirectTouch = lastNonDirect
+
 	report.TotalEvents = len(report.Events)
 	return report, nil
 }
 
-// EnsureCanonicalColumns garante que as colunas page_key e canonical_url existam na tabela events
+// EnsureCanonicalColumns garante que as colunas page_key, canonical_url e de atribuição canônica existam na tabela events
 func (c *ClickHouseDB) EnsureCanonicalColumns(ctx context.Context) {
 	if c.Conn == nil {
 		return
@@ -984,7 +1072,12 @@ func (c *ClickHouseDB) EnsureCanonicalColumns(ctx context.Context) {
 	_ = c.Conn.Exec(ctx, `
 		ALTER TABLE tracking_events.events
 		ADD COLUMN IF NOT EXISTS page_key LowCardinality(String) DEFAULT '',
-		ADD COLUMN IF NOT EXISTS canonical_url String DEFAULT '';
+		ADD COLUMN IF NOT EXISTS canonical_url String DEFAULT '',
+		ADD COLUMN IF NOT EXISTS source LowCardinality(String) DEFAULT '',
+		ADD COLUMN IF NOT EXISTS medium LowCardinality(String) DEFAULT '',
+		ADD COLUMN IF NOT EXISTS channel LowCardinality(String) DEFAULT '',
+		ADD COLUMN IF NOT EXISTS attribution_basis LowCardinality(String) DEFAULT 'none',
+		ADD COLUMN IF NOT EXISTS inherited UInt8 DEFAULT 0;
 	`)
 }
 

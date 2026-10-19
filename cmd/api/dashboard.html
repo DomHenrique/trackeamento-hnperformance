@@ -7918,9 +7918,27 @@ if (typeof fbq === 'function' && eventId) {
                     return;
                 }
 
+                const formatChannelLabel = (val) => {
+                    if (!val || val === 'direct') return '(Direto)';
+                    if (val === 'not_set') return '(not set)';
+                    if (val === 'paid_search') return 'Google Ads / Busca Paga';
+                    if (val === 'paid_social') return 'Social Pago (Anúncios)';
+                    if (val === 'organic_search') return 'Busca Orgânica';
+                    if (val === 'organic_social') return 'Social Orgânico';
+                    if (val === 'referral') return 'Referência (Site Externo)';
+                    if (val === 'email') return 'E-mail / Newsletter';
+                    if (val === 'other') return 'Outro (Não Categorizado)';
+                    if (val === 'google') return 'Google Ads';
+                    if (val === 'meta') return 'Meta Ads';
+                    if (val === 'microsoft') return 'Microsoft Ads';
+                    if (val === 'tiktok') return 'TikTok Ads';
+                    if (val === 'linkedin') return 'LinkedIn Ads';
+                    return val;
+                };
+
                 document.getElementById('summary-visitor-id').textContent = data.visitor_id;
-                document.getElementById('summary-first-touch').textContent = data.first_touch || '(direto)';
-                document.getElementById('summary-last-touch').textContent = data.last_touch || '(direto)';
+                document.getElementById('summary-first-touch').textContent = formatChannelLabel(data.first_touch);
+                document.getElementById('summary-last-touch').textContent = formatChannelLabel(data.last_non_direct_touch || data.last_touch);
                 document.getElementById('summary-events-count').textContent = data.total_events;
                 
                 const statusEl = document.getElementById('summary-status');
@@ -7937,14 +7955,26 @@ if (typeof fbq === 'function' && eventId) {
                     const name = ev.event_name.toLowerCase();
                     const isConv = name === 'lead' || name === 'purchase' || name === 'whatsapp_click' || name === 'contact';
                     
+                    let channelLabel = formatChannelLabel(ev.source || ev.channel || ev.utm_source);
+                    let basisBadge = '';
+                    if (ev.inherited === 1) {
+                        basisBadge = `<span class="channel-pill" style="font-size: 0.68rem; background: rgba(148, 163, 184, 0.15); color: #94a3b8; border-color: rgba(148, 163, 184, 0.3);">Herdado da Sessão</span>`;
+                    } else if (ev.attribution_basis === 'click_id') {
+                        basisBadge = `<span class="channel-pill" style="font-size: 0.68rem; background: rgba(56, 189, 248, 0.12); color: #38bdf8; border-color: rgba(56, 189, 248, 0.25);">Inferido por Click ID</span>`;
+                    } else if (ev.attribution_basis === 'referrer') {
+                        basisBadge = `<span class="channel-pill" style="font-size: 0.68rem; background: rgba(168, 85, 247, 0.12); color: #c084fc; border-color: rgba(168, 85, 247, 0.25);">Referrer</span>`;
+                    }
+
                     let campaignInfo = '';
-                    if (ev.utm_source || ev.utm_campaign) {
+                    if (ev.utm_source || ev.utm_campaign || ev.gclid || ev.fbclid || ev.source || ev.channel) {
                         campaignInfo = `
-                            <div style="margin-top: 0.35rem; display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                                <span class="channel-pill" style="font-size: 0.7rem;">Origem: ${escapeHTML(ev.utm_source || 'direto')}</span>
+                            <div style="margin-top: 0.35rem; display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center;">
+                                <span class="channel-pill ${ev.channel === 'paid_search' ? 'google' : (ev.channel === 'paid_social' ? 'meta' : '')}" style="font-size: 0.7rem;">Origem: ${escapeHTML(channelLabel)}</span>
                                 ${ev.utm_campaign ? `<span class="channel-pill" style="font-size: 0.7rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">Campanha: ${escapeHTML(ev.utm_campaign)}</span>` : ''}
                                 ${ev.gclid ? `<span class="channel-pill google" style="font-size: 0.7rem;">Google Ads (GCLID)</span>` : ''}
                                 ${ev.fbclid ? `<span class="channel-pill meta" style="font-size: 0.7rem;">Meta Ads (FBCLID)</span>` : ''}
+                                ${ev.ttclid ? `<span class="channel-pill" style="font-size: 0.7rem; background: rgba(244, 63, 94, 0.15); color: #fda4af; border-color: rgba(244, 63, 94, 0.3);">TikTok Ads (TTCLID)</span>` : ''}
+                                ${basisBadge}
                             </div>
                         `;
                     }

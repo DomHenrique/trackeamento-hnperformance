@@ -130,9 +130,14 @@ func (w *CRMWebhook) SendWebhook(ctx context.Context, webhookURL, secretToken st
 		"ttclid":       ev.Attribution.TTCLID,
 		"fbp":          fbp,
 		"fbc":          fbc,
-		"ip":           ev.IPAddress,
-		"user_agent":   ev.UserAgent,
-		"device_type":  ev.DeviceType,
+		"source":            ev.Attribution.Source,
+		"medium":            ev.Attribution.Medium,
+		"channel":           ev.Attribution.Channel,
+		"attribution_basis": ev.Attribution.AttributionBasis,
+		"inherited":         ev.Attribution.Inherited,
+		"ip":                ev.IPAddress,
+		"user_agent":        ev.UserAgent,
+		"device_type":       ev.DeviceType,
 	}
 
 	// Se firstTouch estiver vazio, marshals como null

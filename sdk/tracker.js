@@ -1,6 +1,6 @@
 /**
- * HN Performance Server-Side Tracker SDK v1.0
- * Lightweight (< 4KB), zero-dependencies, 1st-party tracking & attribution.
+ * HN Performance Server-Side Tracker SDK v1.2
+ * Lightweight (< 4KB), zero-dependencies, 1st-party tracking, GA4-compliant canonical attribution & session propagation.
  */
 (function (window, document) {
     'use strict';
@@ -226,9 +226,16 @@
         debugLog('🔒 Preferências de privacidade atualizadas:', userConsent);
     }
 
-    // 5. Captura e Persistência de Atribuição (UTMs e Click IDs sob Consentimento de Marketing)
+    // 5. Propagação de Contexto de Sessão Sem Estado (Convenção GA4)
     var ATTR_STORAGE_KEY = '_hn_attr';
-    var trackedParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'ttclid'];
+    var ENTRY_CTX_KEY = '_hn_entry_ctx';
+    var SESSION_EXPIRY_MS = 30 * 60 * 1000; // 30 minutos
+
+    var trackedParams = [
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+        'gclid', 'gbraid', 'wbraid', 'fbclid', 'ttclid', 'msclkid', 'li_fat_id',
+        'gad_source', 'gad_campaignid'
+    ];
 
     function parseURLParams() {
         var params = {};
@@ -249,8 +256,50 @@
         return params;
     }
 
+    function hasNewCampaignSignal() {
+        var currentParams = parseURLParams();
+        for (var k in currentParams) {
+            if (currentParams.hasOwnProperty(k) && currentParams[k]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function initOrRefreshSessionContext() {
+        var now = Date.now();
+        var isNewSignal = hasNewCampaignSignal();
+        var stored = null;
+
+        try {
+            var raw = sessionStorage.getItem(ENTRY_CTX_KEY);
+            if (raw) stored = JSON.parse(raw);
+        } catch (e) {}
+
+        var isExpired = !stored || !stored.ts || (now - stored.ts > SESSION_EXPIRY_MS);
+
+        if (isExpired || isNewSignal) {
+            stored = {
+                entry_url: window.location.href,
+                entry_referrer: document.referrer || '',
+                ts: now
+            };
+            try {
+                sessionStorage.setItem(ENTRY_CTX_KEY, JSON.stringify(stored));
+            } catch (e) {}
+        } else {
+            stored.ts = now;
+            try {
+                sessionStorage.setItem(ENTRY_CTX_KEY, JSON.stringify(stored));
+            } catch (e) {}
+        }
+        return stored;
+    }
+
+    var sessionContext = initOrRefreshSessionContext();
+
     function persistURLParams() {
-        if (!userConsent.marketing) return; // Modo restrito: não persiste parâmetros de publicidade sem consentimento
+        if (!userConsent.marketing) return;
         var current = parseURLParams();
         var stored = {};
         try {
@@ -398,6 +447,10 @@
             url: window.location.href,
             canonical_url: canonicalUrl || undefined,
             referrer: document.referrer || '',
+            session_context: sessionContext ? {
+                entry_url: sessionContext.entry_url,
+                entry_referrer: sessionContext.entry_referrer
+            } : undefined,
             user_data: userData,
             custom_data: customData,
             client_signals: getClientSignals(),

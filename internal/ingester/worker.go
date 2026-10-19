@@ -237,7 +237,8 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 			ip_address, user_agent, device_type,
 			custom_data_json, is_bot, bot_reason, created_at,
 			submission_id, form_lifecycle_state, field_source,
-			page_key, canonical_url
+			page_key, canonical_url,
+			source, medium, channel, attribution_basis, inherited
 		)
 	`)
 	if err != nil {
@@ -320,6 +321,31 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 			}
 		}
 
+		src := ev.Attribution.Source
+		if src == "" {
+			if ev.Attribution.UTMSource != "" {
+				src = ev.Attribution.UTMSource
+			} else {
+				src = "direct"
+			}
+		}
+		med := ev.Attribution.Medium
+		if med == "" {
+			if ev.Attribution.UTMMedium != "" {
+				med = ev.Attribution.UTMMedium
+			} else {
+				med = "none"
+			}
+		}
+		chanVal := ev.Attribution.Channel
+		if chanVal == "" {
+			chanVal = "direct"
+		}
+		basis := ev.Attribution.AttributionBasis
+		if basis == "" {
+			basis = "none"
+		}
+
 		err := batch.Append(
 			eventUUID,
 			siteUUID,
@@ -352,6 +378,11 @@ func (w *Worker) insertBatchClickHouse(ctx context.Context, events []*collector.
 			fieldSource,
 			pageKey,
 			ev.CanonicalURL,
+			src,
+			med,
+			chanVal,
+			basis,
+			ev.Attribution.Inherited,
 		)
 		if err != nil {
 			log.Printf("Aviso: falha ao anexar evento no batch ClickHouse: %v", err)

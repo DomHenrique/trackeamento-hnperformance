@@ -244,8 +244,60 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		})
 	}
 
-	// 8. Extração de parâmetros de Atribuição
-	attrParams := attribution.ParseURL(pageURL, referrer)
+	// 8. Extração e Herança de Atribuição de Sessão (Convenção GA4)
+	opts := attribution.Options{
+		OwnHosts: append([]string{siteMeta.Domain}, siteMeta.AllowedDomains...),
+	}
+	attrParams := attribution.ParseURLWithOptions(pageURL, referrer, opts)
+
+	hasOwnSignal := (attrParams.Channel != attribution.ChannelDirect && attrParams.Channel != attribution.ChannelNotSet) ||
+		attrParams.HasClickID() || attrParams.UTMSource != "" || attrParams.UTMCampaign != ""
+
+	sessionKey := fmt.Sprintf("tracking:session_attr:%s:%s", siteID, sessionID)
+
+	if hasOwnSignal {
+		attrParams.Inherited = 0
+		if h.redis != nil && h.redis.Client != nil && sessionID != "" {
+			go func(k string, params attribution.Params) {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				if data, err := json.Marshal(params); err == nil {
+					_ = h.redis.Client.Set(ctx, k, data, 30*time.Minute).Err()
+				}
+			}(sessionKey, attrParams)
+		}
+	} else {
+		inherited := false
+		// 1. Tenta herdar do SessionContext reenviado pelo SDK
+		if req.SessionContext != nil && strings.TrimSpace(req.SessionContext.EntryURL) != "" {
+			entryAttr := attribution.ParseURLWithOptions(req.SessionContext.EntryURL, req.SessionContext.EntryReferrer, opts)
+			if (entryAttr.Channel != attribution.ChannelDirect && entryAttr.Channel != attribution.ChannelNotSet) || entryAttr.HasClickID() {
+				attrParams = entryAttr
+				attrParams.Inherited = 1
+				inherited = true
+			}
+		}
+
+		// 2. Se o SDK não enviou contexto válido, tenta recuperar do cache do Redis
+		if !inherited && h.redis != nil && h.redis.Client != nil && sessionID != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			cachedData, err := h.redis.Client.Get(ctx, sessionKey).Bytes()
+			cancel()
+			if err == nil && len(cachedData) > 0 {
+				var cachedAttr attribution.Params
+				if err := json.Unmarshal(cachedData, &cachedAttr); err == nil {
+					attrParams = cachedAttr
+					attrParams.Inherited = 1
+					// Renova TTL de forma leve sem reescrita quente
+					go func(k string) {
+						rCtx, rCancel := context.WithTimeout(context.Background(), 1*time.Second)
+						defer rCancel()
+						_ = h.redis.Client.Expire(rCtx, k, 30*time.Minute).Err()
+					}(sessionKey)
+				}
+			}
+		}
+	}
 
 	// 9. Normalização do nome do evento
 	eventName := strings.TrimSpace(req.EventName)

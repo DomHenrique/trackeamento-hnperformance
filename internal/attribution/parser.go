@@ -38,6 +38,16 @@ const (
 	ChannelOrganicSearch = "organic_search"
 	ChannelOrganicSocial = "organic_social"
 	ChannelReferral      = "referral"
+	ChannelOther         = "other"
+	ChannelNotSet        = "not_set"
+)
+
+// Bases de atribuição retornadas em Params.AttributionBasis.
+const (
+	BasisUTM      = "utm"
+	BasisClickID  = "click_id"
+	BasisReferrer = "referrer"
+	BasisNone     = "none"
 )
 
 type Params struct {
@@ -61,8 +71,13 @@ type Params struct {
 	GadSource     string `json:"gad_source,omitempty"`
 	GadCampaignID string `json:"gad_campaignid,omitempty"`
 
-	// Channel é a classificação do tráfego desta visita (ver constantes Channel*).
-	Channel string `json:"channel,omitempty"`
+	// Dimensões Canônicas Derivadas (Convenção GA4)
+	Source           string `json:"source,omitempty"`
+	Medium           string `json:"medium,omitempty"`
+	Channel          string `json:"channel,omitempty"`
+	AttributionBasis string `json:"attribution_basis,omitempty"`
+	Inherited        uint8  `json:"inherited,omitempty"`
+
 	// ReferrerHost é o host do referrer, em minúsculas.
 	ReferrerHost string `json:"referrer_host,omitempty"`
 	// IgnoredReferrer é true quando o referrer é do próprio site ou de um
@@ -102,7 +117,7 @@ func ParseURLWithOptions(rawURL, rawReferrer string, opts Options) Params {
 	if u, ok := parseHTTPURL(rawURL); ok {
 		p.applyPage(u)
 	}
-	p.Channel = classify(p)
+	classify(&p)
 	return p
 }
 
@@ -228,13 +243,13 @@ func truncateRunes(s string, n int) string {
 }
 
 // ---------------------------------------------------------------------------
-// Classificação de canal
+// Classificação de canal e normalização de dimensões canônicas (GA4)
 // ---------------------------------------------------------------------------
 
 var (
 	paidMediums = map[string]bool{
 		"cpc": true, "ppc": true, "cpm": true, "cpv": true, "display": true,
-		"retargeting": true, "remarketing": true,
+		"retargeting": true, "remarketing": true, "paid": true,
 	}
 	organicMediums = map[string]bool{"organic": true, "seo": true}
 	socialMediums  = map[string]bool{"social": true, "social-network": true, "social_network": true, "sm": true}
@@ -243,10 +258,11 @@ var (
 	socialSources = map[string]bool{
 		"facebook": true, "fb": true, "instagram": true, "ig": true, "meta": true,
 		"tiktok": true, "linkedin": true, "twitter": true, "x": true, "pinterest": true,
+		"reddit": true, "whatsapp": true,
 	}
 	searchSources = map[string]bool{
 		"google": true, "bing": true, "yahoo": true, "duckduckgo": true,
-		"baidu": true, "yandex": true, "ecosia": true,
+		"baidu": true, "yandex": true, "ecosia": true, "microsoft": true,
 	}
 
 	searchHostSuffixes = []string{
@@ -265,64 +281,174 @@ var (
 	}
 
 	googleHostPattern = regexp.MustCompile(`^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$`)
+
+	// Dicionário unificado de aliases canônicos (aplicado pós-lowercase)
+	canonicalSourceAliases = map[string]string{
+		"fb": "meta", "facebook": "meta", "ig": "meta", "instagram": "meta", "meta": "meta",
+		"adwords": "google", "googleads": "google", "gads": "google", "google": "google",
+		"bing": "microsoft", "bingads": "microsoft", "msn": "microsoft", "microsoft": "microsoft",
+		"tiktok": "tiktok", "tt": "tiktok", "bytedance": "tiktok",
+		"linkedin": "linkedin", "lnkd": "linkedin",
+		"twitter": "twitter", "x": "twitter", "t.co": "twitter",
+		"pinterest": "pinterest", "pin": "pinterest",
+		"whatsapp": "whatsapp", "wa": "whatsapp",
+	}
 )
 
 func isPaidMedium(m string) bool {
 	return paidMediums[m] || strings.HasPrefix(m, "paid")
 }
 
-func classify(p Params) string {
-	medium, source := p.UTMMedium, p.UTMSource
+func normalizeSource(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if alias, ok := canonicalSourceAliases[s]; ok {
+		return alias
+	}
+	return s
+}
 
-	// 1) UTM declarando mídia paga.
-	if isPaidMedium(medium) {
-		switch {
-		case socialSources[source]:
-			return ChannelPaidSocial
-		case searchSources[source] || p.GCLID != "" || p.GBRAID != "" || p.WBRAID != "" || p.MSCLKID != "":
-			return ChannelPaidSearch
-		default:
-			return ChannelPaidOther
+func resolveSearchEngine(host string) string {
+	if googleHostPattern.MatchString(host) {
+		return "google"
+	}
+	for _, sfx := range searchHostSuffixes {
+		if host == sfx || strings.HasSuffix(host, "."+sfx) {
+			name := strings.TrimSuffix(sfx, ".com")
+			name = strings.TrimSuffix(name, ".org")
+			name = strings.TrimSuffix(name, ".ru")
+			return normalizeSource(name)
 		}
 	}
+	return "google"
+}
 
-	// 2) Click IDs de anúncio (fbclid fica de fora: também é anexado em
-	// cliques orgânicos vindos do Facebook).
-	switch {
-	case p.GCLID != "" || p.GBRAID != "" || p.WBRAID != "" || p.MSCLKID != "":
-		return ChannelPaidSearch
-	case p.TTCLID != "" || p.LIFATID != "":
-		return ChannelPaidSocial
-	case p.DCLID != "":
-		return ChannelPaidOther
+func resolveSocialNetwork(host string) string {
+	for _, sfx := range socialHostSuffixes {
+		if host == sfx || strings.HasSuffix(host, "."+sfx) {
+			name := strings.TrimSuffix(sfx, ".com")
+			name = strings.TrimSuffix(name, ".in")
+			name = strings.TrimSuffix(name, ".me")
+			return normalizeSource(name)
+		}
+	}
+	return "meta"
+}
+
+func classify(p *Params) {
+	// 1) Caso de Campanha Órfã: utm_campaign preenchido sem utm_source e sem click ID
+	if p.UTMSource == "" && !p.HasClickID() && p.UTMCampaign != "" {
+		p.Source = "not_set"
+		p.Medium = "not_set"
+		p.Channel = ChannelNotSet
+		p.AttributionBasis = BasisUTM
+		return
 	}
 
-	// 3) Demais UTMs.
-	switch {
-	case emailMediums[medium]:
-		return ChannelEmail
-	case organicMediums[medium]:
-		return ChannelOrganicSearch
-	case socialMediums[medium]:
-		return ChannelOrganicSocial
+	// 2) UTM Declarado (Source ou Medium preenchidos)
+	if p.UTMSource != "" || p.UTMMedium != "" {
+		p.AttributionBasis = BasisUTM
+		p.Source = normalizeSource(p.UTMSource)
+		if p.Source == "" {
+			p.Source = "not_set"
+		}
+		p.Medium = strings.ToLower(strings.TrimSpace(p.UTMMedium))
+		if p.Medium == "" {
+			p.Medium = "not_set"
+		}
+
+		switch {
+		case isPaidMedium(p.Medium):
+			switch {
+			case socialSources[p.Source] || p.Source == "meta" || p.TTCLID != "" || p.LIFATID != "":
+				p.Channel = ChannelPaidSocial
+			case searchSources[p.Source] || p.Source == "microsoft" || p.GCLID != "" || p.GBRAID != "" || p.WBRAID != "" || p.MSCLKID != "":
+				p.Channel = ChannelPaidSearch
+			default:
+				p.Channel = ChannelPaidOther
+			}
+		case emailMediums[p.Medium]:
+			p.Channel = ChannelEmail
+		case organicMediums[p.Medium]:
+			p.Channel = ChannelOrganicSearch
+		case socialMediums[p.Medium]:
+			p.Channel = ChannelOrganicSocial
+		default:
+			// Regra GA4 Unassigned: UTMs desconhecidas viram "other", nunca "direct"!
+			p.Channel = ChannelOther
+		}
+		return
 	}
 
-	// 4) Referrer.
+	// 3) Click IDs Oficiais (Sem UTMs declaradas)
+	if p.GCLID != "" || p.GBRAID != "" || p.WBRAID != "" {
+		p.Source = "google"
+		p.Medium = "cpc"
+		p.Channel = ChannelPaidSearch
+		p.AttributionBasis = BasisClickID
+		return
+	}
+	if p.MSCLKID != "" {
+		p.Source = "microsoft"
+		p.Medium = "cpc"
+		p.Channel = ChannelPaidSearch
+		p.AttributionBasis = BasisClickID
+		return
+	}
+	if p.TTCLID != "" {
+		p.Source = "tiktok"
+		p.Medium = "cpc"
+		p.Channel = ChannelPaidSocial
+		p.AttributionBasis = BasisClickID
+		return
+	}
+	if p.LIFATID != "" {
+		p.Source = "linkedin"
+		p.Medium = "cpc"
+		p.Channel = ChannelPaidSocial
+		p.AttributionBasis = BasisClickID
+		return
+	}
+	if p.DCLID != "" {
+		p.Source = "google"
+		p.Medium = "cpm"
+		p.Channel = ChannelPaidOther
+		p.AttributionBasis = BasisClickID
+		return
+	}
+	if p.FBCLID != "" {
+		// fbclid isolado não comprova mídia paga (anexado também em posts/mensagens orgânicas)
+		p.Source = "meta"
+		p.Medium = "social"
+		p.Channel = ChannelOrganicSocial
+		p.AttributionBasis = BasisClickID
+		return
+	}
+
+	// 4) Referrer (Sem UTMs e sem Click IDs)
 	if p.ReferrerHost != "" && !p.IgnoredReferrer {
+		p.AttributionBasis = BasisReferrer
 		switch {
 		case isSearchHost(p.ReferrerHost):
-			return ChannelOrganicSearch
+			p.Source = resolveSearchEngine(p.ReferrerHost)
+			p.Medium = "organic"
+			p.Channel = ChannelOrganicSearch
 		case matchesAny(p.ReferrerHost, socialHostSuffixes):
-			return ChannelOrganicSocial
+			p.Source = resolveSocialNetwork(p.ReferrerHost)
+			p.Medium = "referral"
+			p.Channel = ChannelOrganicSocial
 		default:
-			return ChannelReferral
+			p.Source = p.ReferrerHost
+			p.Medium = "referral"
+			p.Channel = ChannelReferral
 		}
+		return
 	}
 
-	if p.FBCLID != "" {
-		return ChannelOrganicSocial
-	}
-	return ChannelDirect
+	// 5) Acesso Direto Puro
+	p.Source = "direct"
+	p.Medium = "none"
+	p.Channel = ChannelDirect
+	p.AttributionBasis = BasisNone
 }
 
 func isSearchHost(host string) bool {

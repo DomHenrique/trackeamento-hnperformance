@@ -169,3 +169,116 @@ func TestMatchesAny_NoPartialSuffix(t *testing.T) {
 		t.Error("subdomínio deveria casar")
 	}
 }
+
+func TestParseURL_CanonicalDimensionsAndGA4Conventions(t *testing.T) {
+	tests := []struct {
+		name        string
+		rawURL      string
+		rawReferrer string
+		wantSource  string
+		wantMedium  string
+		wantChannel string
+		wantBasis   string
+	}{
+		{
+			name:        "Caso Real SPS Power (GCLID + Campanha sem utm_source)",
+			rawURL:      "https://spspower.com.br/?gad_campaignid=18939184497&gad_source=1&gbraid=0AAAAABD0k6t&gclid=EAIaIQob_123&utm_campaign=Search_Info_sps&utm_term=nobreak",
+			rawReferrer: "",
+			wantSource:  "google",
+			wantMedium:  "cpc",
+			wantChannel: ChannelPaidSearch,
+			wantBasis:   BasisClickID,
+		},
+		{
+			name:        "Aliases de Origem Meta (fb, ig)",
+			rawURL:      "https://example.com/?utm_source=FB&utm_medium=CPC",
+			rawReferrer: "",
+			wantSource:  "meta",
+			wantMedium:  "cpc",
+			wantChannel: ChannelPaidSocial,
+			wantBasis:   BasisUTM,
+		},
+		{
+			name:        "Aliases de Origem Microsoft (bingads)",
+			rawURL:      "https://example.com/?utm_source=BingAds&utm_medium=cpc",
+			rawReferrer: "",
+			wantSource:  "microsoft",
+			wantMedium:  "cpc",
+			wantChannel: ChannelPaidSearch,
+			wantBasis:   BasisUTM,
+		},
+		{
+			name:        "Campanha Órfã (utm_campaign sem utm_source nem click ID)",
+			rawURL:      "https://example.com/?utm_campaign=BlackFriday2026",
+			rawReferrer: "",
+			wantSource:  "not_set",
+			wantMedium:  "not_set",
+			wantChannel: ChannelNotSet,
+			wantBasis:   BasisUTM,
+		},
+		{
+			name:        "UTM Desconhecida (GA4 Unassigned -> other, nunca direct)",
+			rawURL:      "https://example.com/?utm_source=afiliado_x&utm_medium=banner_customizado",
+			rawReferrer: "",
+			wantSource:  "afiliado_x",
+			wantMedium:  "banner_customizado",
+			wantChannel: ChannelOther,
+			wantBasis:   BasisUTM,
+		},
+		{
+			name:        "FBCLID Isolado (Conservador: Social Orgânico, não pago)",
+			rawURL:      "https://example.com/?fbclid=IwAR3XYZ",
+			rawReferrer: "",
+			wantSource:  "meta",
+			wantMedium:  "social",
+			wantChannel: ChannelOrganicSocial,
+			wantBasis:   BasisClickID,
+		},
+		{
+			name:        "TikTok Click ID Isolado",
+			rawURL:      "https://example.com/?ttclid=TT123",
+			rawReferrer: "",
+			wantSource:  "tiktok",
+			wantMedium:  "cpc",
+			wantChannel: ChannelPaidSocial,
+			wantBasis:   BasisClickID,
+		},
+		{
+			name:        "Referrer Orgânico do Google",
+			rawURL:      "https://example.com/produtos",
+			rawReferrer: "https://www.google.com.br/search?q=nobreak",
+			wantSource:  "google",
+			wantMedium:  "organic",
+			wantChannel: ChannelOrganicSearch,
+			wantBasis:   BasisReferrer,
+		},
+		{
+			name:        "Acesso Direto",
+			rawURL:      "https://example.com/",
+			rawReferrer: "",
+			wantSource:  "direct",
+			wantMedium:  "none",
+			wantChannel: ChannelDirect,
+			wantBasis:   BasisNone,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := ParseURL(tc.rawURL, tc.rawReferrer)
+			if p.Source != tc.wantSource {
+				t.Errorf("Source = %q, want %q", p.Source, tc.wantSource)
+			}
+			if p.Medium != tc.wantMedium {
+				t.Errorf("Medium = %q, want %q", p.Medium, tc.wantMedium)
+			}
+			if p.Channel != tc.wantChannel {
+				t.Errorf("Channel = %q, want %q", p.Channel, tc.wantChannel)
+			}
+			if p.AttributionBasis != tc.wantBasis {
+				t.Errorf("AttributionBasis = %q, want %q", p.AttributionBasis, tc.wantBasis)
+			}
+		})
+	}
+}
+

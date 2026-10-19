@@ -19,25 +19,31 @@ type ClientSignals struct {
 	TimeOnPageMs     int64  `json:"time_on_page_ms"`
 }
 
+type SessionContext struct {
+	EntryURL      string `json:"entry_url,omitempty"`
+	EntryReferrer string `json:"entry_referrer,omitempty"`
+}
+
 type EventRequest struct {
-	SiteKey       string                 `json:"site_key"`
-	VisitorID     string                 `json:"visitor_id,omitempty"`
-	EventName     string                 `json:"event_name"`
-	EventID       string                 `json:"event_id,omitempty"` // Se passado pelo frontend para deduplicação com Meta Pixel
-	SessionID     string                 `json:"session_id,omitempty"`
-	URL                string                 `json:"url,omitempty"`
-	PageURL            string                 `json:"page_url,omitempty"`
-	CanonicalURL       string                 `json:"canonical_url,omitempty"`
-	Referrer           string                 `json:"referrer,omitempty"`
-	UserData           map[string]interface{} `json:"user_data,omitempty"`   // email, phone, name
-	CustomData         map[string]interface{} `json:"custom_data,omitempty"` // value, currency, etc.
-	SubmissionID       string                 `json:"submission_id,omitempty"`
-	FormLifecycleState string                 `json:"form_lifecycle_state,omitempty"`
-	FieldSource        string                 `json:"field_source,omitempty"`
-	ClientSignals      *ClientSignals         `json:"client_signals,omitempty"`
-	Consent            *ConsentState          `json:"consent,omitempty"`
-	ExplicitLeadConsent bool                  `json:"explicit_lead_consent,omitempty"`
-	IsDebug            bool                   `json:"is_debug,omitempty"`
+	SiteKey             string                 `json:"site_key"`
+	VisitorID           string                 `json:"visitor_id,omitempty"`
+	EventName           string                 `json:"event_name"`
+	EventID             string                 `json:"event_id,omitempty"` // Se passado pelo frontend para deduplicação com Meta Pixel
+	SessionID           string                 `json:"session_id,omitempty"`
+	URL                 string                 `json:"url,omitempty"`
+	PageURL             string                 `json:"page_url,omitempty"`
+	CanonicalURL        string                 `json:"canonical_url,omitempty"`
+	Referrer            string                 `json:"referrer,omitempty"`
+	SessionContext      *SessionContext        `json:"session_context,omitempty"`
+	UserData            map[string]interface{} `json:"user_data,omitempty"`   // email, phone, name
+	CustomData          map[string]interface{} `json:"custom_data,omitempty"` // value, currency, etc.
+	SubmissionID        string                 `json:"submission_id,omitempty"`
+	FormLifecycleState  string                 `json:"form_lifecycle_state,omitempty"`
+	FieldSource         string                 `json:"field_source,omitempty"`
+	ClientSignals       *ClientSignals         `json:"client_signals,omitempty"`
+	Consent             *ConsentState          `json:"consent,omitempty"`
+	ExplicitLeadConsent bool                   `json:"explicit_lead_consent,omitempty"`
+	IsDebug             bool                   `json:"is_debug,omitempty"`
 }
 
 type EventPayload struct {
