@@ -38,6 +38,7 @@ type WorkerPool struct {
 	metaCAPI     *integrations.MetaCAPI
 	ga4MP        *integrations.GA4MP
 	googleAds    *integrations.GoogleAds
+	googleDM     *integrations.GoogleDataManager
 	linkedinCAPI *integrations.LinkedInCAPI
 	crm          *integrations.CRMWebhook
 }
@@ -63,6 +64,7 @@ func NewWorkerPool(cfg *config.Config, rdb *storage.RedisClient, pg *storage.Pos
 		metaCAPI:     integrations.NewMetaCAPI(client),
 		ga4MP:        integrations.NewGA4MP(client),
 		googleAds:    integrations.NewGoogleAds(client),
+		googleDM:     integrations.NewGoogleDataManager(client),
 		linkedinCAPI: integrations.NewLinkedInCAPI(client),
 		crm:          integrations.NewCRMWebhook(client),
 	}
@@ -309,16 +311,62 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 				callErr = wp.ga4MP.SendEvent(callCtx, measurementID, apiSecret, targetEv)
 
 			case "google_ads":
-				endpointURL := it.Credentials["endpoint_url"]
-				token := it.Credentials["api_token"]
-				env := "production"
-				if wp.cfg != nil && wp.cfg.Env != "" {
-					env = wp.cfg.Env
+				// 1. Gatekeeper de Sinais: exige ao menos um identificador de correspondência
+				hasIDs := targetEv.Attribution.GCLID != "" || targetEv.Attribution.GBRAID != "" || targetEv.Attribution.WBRAID != ""
+				if !hasIDs && targetEv.UserData != nil {
+					hasIDs = targetEv.UserData["email"] != nil || targetEv.UserData["phone"] != nil
 				}
-				if ssrfErr := integrations.ValidateOutboundURL(endpointURL, env); ssrfErr != nil {
-					callErr = fmt.Errorf("envio bloqueado por seguranca anti-ssrf: %w", ssrfErr)
+				if !hasIDs {
+					log.Printf("[Dispatcher] IGNORADO google_ads: evento '%s' (%s) sem identificadores validos (gclid/gbraid/wbraid/contato)", targetEv.EventName, targetEv.EventID)
+					_ = wp.redis.RecordRoutingDecision(ctx, ev.SiteID, storage.RoutingDecisionRecord{
+						EventID:      ev.EventID,
+						EventName:    ev.EventName,
+						SiteID:       ev.SiteID,
+						Platform:     it.Platform,
+						Timestamp:    time.Now().UTC().Format(time.RFC3339),
+						Status:       "ignored_no_identifiers",
+						StatusCode:   200,
+						LatencyMs:    time.Since(callStart).Milliseconds(),
+						ConsentFlags: map[string]bool{"marketing": ev.Consent.Marketing, "analytics": ev.Consent.Analytics, "lead_consent": hasDirectLeadConsent},
+					})
+					return
+				}
+
+				// 2. Despacho via Google Data Manager API (OAuth2)
+				if it.Credentials["client_id"] != "" && it.Credentials["refresh_token"] != "" {
+					convActionID := it.Credentials["conversion_action_id"]
+					if it.EventMappings != nil && it.EventMappings[targetEv.EventName] != "" {
+						convActionID = it.EventMappings[targetEv.EventName]
+					}
+
+					dmCfg := integrations.GoogleDataManagerConfig{
+						ClientID:           it.Credentials["client_id"],
+						ClientSecret:       it.Credentials["client_secret"],
+						RefreshToken:       it.Credentials["refresh_token"],
+						OperatingAccountID: it.Credentials["operating_account_id"],
+						LoginAccountID:     it.Credentials["login_account_id"],
+						ConversionActionID: convActionID,
+					}
+
+					dmEvent, fmtErr := integrations.FormatEvent(targetEv)
+					if fmtErr != nil {
+						callErr = fmt.Errorf("erro formatando evento para Google Data Manager: %w", fmtErr)
+					} else {
+						_, _, callErr = wp.googleDM.IngestEvents(callCtx, dmCfg, []integrations.DMEvent{*dmEvent}, false)
+					}
 				} else {
-					callErr = wp.googleAds.SendConversion(callCtx, endpointURL, token, targetEv)
+					// Fallback para endpoint legado se configurado
+					endpointURL := it.Credentials["endpoint_url"]
+					token := it.Credentials["api_token"]
+					env := "production"
+					if wp.cfg != nil && wp.cfg.Env != "" {
+						env = wp.cfg.Env
+					}
+					if ssrfErr := integrations.ValidateOutboundURL(endpointURL, env); ssrfErr != nil {
+						callErr = fmt.Errorf("envio bloqueado por seguranca anti-ssrf: %w", ssrfErr)
+					} else {
+						callErr = wp.googleAds.SendConversion(callCtx, endpointURL, token, targetEv)
+					}
 				}
 
 			case "linkedin_capi":

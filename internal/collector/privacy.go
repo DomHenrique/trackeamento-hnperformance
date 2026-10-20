@@ -10,6 +10,7 @@ type ConsentState struct {
 	Necessary bool `json:"necessary"`
 	Analytics bool `json:"analytics"`
 	Marketing bool `json:"marketing"`
+	Collected bool `json:"collected,omitempty"`
 }
 
 // PrivacySignals representa os sinais técnicos de privacidade emitidos pelo navegador

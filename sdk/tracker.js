@@ -463,6 +463,19 @@
             is_debug: !!eventIsDebug
         };
 
+        var subId = (customData && customData.submission_id) ? customData.submission_id : (eventName === 'form_submit' ? eventId : '');
+        if (subId) {
+            payload.submission_id = subId;
+            try {
+                window.dataLayer = window.dataLayer || [];
+                window.dataLayer.push({
+                    'event': 'hn_lead_capture',
+                    'transaction_id': subId,
+                    'submission_id': subId
+                });
+            } catch (e) {}
+        }
+
         debugLog('🚀 Disparando evento "' + eventName + '" [' + eventId + ']' + (eventIsDebug ? ' (DEBUG)' : ''), payload);
 
         var jsonStr = JSON.stringify(payload);

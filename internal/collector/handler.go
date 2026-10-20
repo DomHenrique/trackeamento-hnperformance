@@ -160,6 +160,7 @@ func (h *Handler) HandleCollect(c *fiber.Ctx) error {
 		// Preferência explícita do usuário enviada pelo SDK/CMP
 		consent.Analytics = req.Consent.Analytics
 		consent.Marketing = req.Consent.Marketing
+		consent.Collected = true
 	} else {
 		// Se não foi informada escolha explícita, respeita a política configurada para o site
 		consent.Analytics = !analyticsPolicy.RequiresConsent

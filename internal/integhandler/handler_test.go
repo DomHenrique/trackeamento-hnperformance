@@ -364,6 +364,95 @@ func TestKeyRing_IntegrationsHandler_EncryptionAndFallback(t *testing.T) {
 	}
 }
 
+func TestHandleSaveIntegration_GoogleAds_DataManagerCredentials(t *testing.T) {
+	cfg := &config.Config{Env: "test"}
+	h := NewIntegrationsHandler(cfg, nil, nil)
 
+	app := fiber.New()
+	app.Put("/api/v1/sites/:site_id/integrations/:platform", h.HandleSaveIntegration)
 
+	validUUID := "22222222-2222-2222-2222-222222222222"
 
+	// 1. Rejeita chave desconhecida em google_ads
+	reqBodyInvalid := `{"is_active": true, "credentials": {"unsupported_key": "123"}}`
+	reqInvalid := httptest.NewRequest("PUT", "/api/v1/sites/"+validUUID+"/integrations/google_ads", bytes.NewBufferString(reqBodyInvalid))
+	reqInvalid.Header.Set("Content-Type", "application/json")
+	respInvalid, _ := app.Test(reqInvalid)
+	if respInvalid.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("esperava 400 para chave desconhecida em google_ads, obteve %d", respInvalid.StatusCode)
+	}
+
+	// 2. Chaves oficiais do Google Data Manager são aceitas na whitelist
+	allowedKeys := []string{
+		"endpoint_url",
+		"api_token",
+		"conversion_action",
+		"client_id",
+		"client_secret",
+		"refresh_token",
+		"operating_account_id",
+		"login_account_id",
+		"conversion_action_id",
+	}
+	for _, key := range allowedKeys {
+		if !PlatformAllowedCredentials["google_ads"][key] {
+			t.Errorf("esperava chave %q na whitelist de google_ads", key)
+		}
+	}
+}
+
+func TestHandleTestIntegration_GoogleDataManager_Validation(t *testing.T) {
+	cfg := &config.Config{Env: "test"}
+	h := NewIntegrationsHandler(cfg, nil, nil)
+
+	app := fiber.New()
+	app.Post("/api/v1/sites/:site_id/integrations/:platform/test", h.HandleTestIntegration)
+
+	validUUID := "22222222-2222-2222-2222-222222222222"
+
+	// 1. Sem OAuth2 e sem endpoint_url
+	reqNoCreds := httptest.NewRequest("POST", "/api/v1/sites/"+validUUID+"/integrations/google_ads/test", bytes.NewBufferString(`{"credentials": {}}`))
+	reqNoCreds.Header.Set("Content-Type", "application/json")
+	respNoCreds, _ := app.Test(reqNoCreds)
+	if respNoCreds.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("esperava 400 quando faltam credenciais do Google Ads, obteve %d", respNoCreds.StatusCode)
+	}
+
+	// 2. Com OAuth2 mas sem operating_account_id
+	reqNoAccount := httptest.NewRequest("POST", "/api/v1/sites/"+validUUID+"/integrations/google_ads/test", bytes.NewBufferString(`{
+		"credentials": {
+			"client_id": "oauth-client-id.apps.googleusercontent.com",
+			"refresh_token": "1//test-refresh-token",
+			"conversion_action_id": "123456789"
+		}
+	}`))
+	reqNoAccount.Header.Set("Content-Type", "application/json")
+	respNoAccount, _ := app.Test(reqNoAccount)
+	if respNoAccount.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("esperava 400 quando falta operating_account_id, obteve %d", respNoAccount.StatusCode)
+	}
+	var errAccountBody map[string]interface{}
+	_ = json.NewDecoder(respNoAccount.Body).Decode(&errAccountBody)
+	if !strings.Contains(errAccountBody["error"].(string), "operating_account_id") {
+		t.Errorf("esperava erro mencionando operating_account_id, obteve %v", errAccountBody["error"])
+	}
+
+	// 3. Com OAuth2 mas sem conversion_action_id
+	reqNoAction := httptest.NewRequest("POST", "/api/v1/sites/"+validUUID+"/integrations/google_ads/test", bytes.NewBufferString(`{
+		"credentials": {
+			"client_id": "oauth-client-id.apps.googleusercontent.com",
+			"refresh_token": "1//test-refresh-token",
+			"operating_account_id": "1234567890"
+		}
+	}`))
+	reqNoAction.Header.Set("Content-Type", "application/json")
+	respNoAction, _ := app.Test(reqNoAction)
+	if respNoAction.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("esperava 400 quando falta conversion_action_id, obteve %d", respNoAction.StatusCode)
+	}
+	var errActionBody map[string]interface{}
+	_ = json.NewDecoder(respNoAction.Body).Decode(&errActionBody)
+	if !strings.Contains(errActionBody["error"].(string), "conversion_action_id") {
+		t.Errorf("esperava erro mencionando conversion_action_id, obteve %v", errActionBody["error"])
+	}
+}

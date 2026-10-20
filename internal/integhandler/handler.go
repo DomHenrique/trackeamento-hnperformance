@@ -59,11 +59,12 @@ func (h *IntegrationsHandler) SetOnKeyRevoked(fn func(key string)) {
 
 // IntegrationItem representa uma integração de plataforma retornada para a UI
 type IntegrationItem struct {
-	Platform    string            `json:"platform"`
-	IsActive    bool              `json:"is_active"`
-	Credentials map[string]string `json:"credentials"`
-	HasToken    bool              `json:"has_token"`
-	UpdatedAt   *time.Time        `json:"updated_at,omitempty"`
+	Platform      string            `json:"platform"`
+	IsActive      bool              `json:"is_active"`
+	Credentials   map[string]string `json:"credentials"`
+	HasToken      bool              `json:"has_token"`
+	EventMappings map[string]string `json:"event_mappings,omitempty"`
+	UpdatedAt     *time.Time        `json:"updated_at,omitempty"`
 }
 
 // PlatformAllowedCredentials define a whitelist estrita de campos de credenciais por plataforma
@@ -74,9 +75,15 @@ var PlatformAllowedCredentials = map[string]map[string]bool{
 		"test_event_code": true,
 	},
 	"google_ads": {
-		"endpoint_url":      true,
-		"api_token":         true,
-		"conversion_action": true,
+		"endpoint_url":         true,
+		"api_token":            true,
+		"conversion_action":    true,
+		"client_id":            true,
+		"client_secret":        true,
+		"refresh_token":        true,
+		"operating_account_id": true,
+		"login_account_id":     true,
+		"conversion_action_id": true,
 	},
 	"ga4": {
 		"measurement_id": true,
@@ -135,7 +142,7 @@ func (h *IntegrationsHandler) HandleGetIntegrations(c *fiber.Ctx) error {
 	}
 
 	rows, err := h.pg.Pool.Query(c.Context(), `
-		SELECT platform, is_active, credentials, updated_at
+		SELECT platform, is_active, credentials, COALESCE(event_mappings, '{}'::jsonb), updated_at
 		FROM site_integrations
 		WHERE site_id = $1
 	`, siteUUID)
@@ -150,9 +157,10 @@ func (h *IntegrationsHandler) HandleGetIntegrations(c *fiber.Ctx) error {
 		var platform string
 		var isActive bool
 		var credsBytes []byte
+		var eventMappingsBytes []byte
 		var updatedAt time.Time
 
-		if err := rows.Scan(&platform, &isActive, &credsBytes, &updatedAt); err != nil {
+		if err := rows.Scan(&platform, &isActive, &credsBytes, &eventMappingsBytes, &updatedAt); err != nil {
 			log.Printf("[Integrations] Erro no scan de integração para site %s: %v", siteUUID, err)
 			continue
 		}
@@ -161,6 +169,13 @@ func (h *IntegrationsHandler) HandleGetIntegrations(c *fiber.Ctx) error {
 		if err := json.Unmarshal(credsBytes, &creds); err != nil {
 			log.Printf("[Integrations] Erro ao deserializar credenciais do site %s plataforma %s: %v", siteUUID, platform, err)
 			creds = make(map[string]string)
+		}
+
+		var eventMappings map[string]string
+		if len(eventMappingsBytes) > 0 {
+			if err := json.Unmarshal(eventMappingsBytes, &eventMappings); err != nil {
+				log.Printf("[Integrations] Erro ao deserializar event_mappings do site %s plataforma %s: %v", siteUUID, platform, err)
+			}
 		}
 
 		maskedCreds := make(map[string]string)
@@ -192,11 +207,12 @@ func (h *IntegrationsHandler) HandleGetIntegrations(c *fiber.Ctx) error {
 		}
 
 		integrationsMap[platform] = IntegrationItem{
-			Platform:    platform,
-			IsActive:    isActive,
-			Credentials: maskedCreds,
-			HasToken:    hasToken,
-			UpdatedAt:   &updatedAt,
+			Platform:      platform,
+			IsActive:      isActive,
+			Credentials:   maskedCreds,
+			HasToken:      hasToken,
+			EventMappings: eventMappings,
+			UpdatedAt:     &updatedAt,
 		}
 	}
 
@@ -477,28 +493,54 @@ func (h *IntegrationsHandler) HandleTestIntegration(c *fiber.Ctx) error {
 		respBody, statusCode, testErr = ga4.TestPing(ctx, measurementID, apiSecret)
 
 	case "google_ads":
-		endpointURL := strings.TrimSpace(creds["endpoint_url"])
-		token := strings.TrimSpace(creds["api_token"])
-		action := strings.TrimSpace(creds["conversion_action"])
+		// 1. Se possuir credenciais Google Data Manager (OAuth2)
+		if strings.TrimSpace(creds["client_id"]) != "" && strings.TrimSpace(creds["refresh_token"]) != "" {
+			dmCfg := integrations.GoogleDataManagerConfig{
+				ClientID:           strings.TrimSpace(creds["client_id"]),
+				ClientSecret:       strings.TrimSpace(creds["client_secret"]),
+				RefreshToken:       strings.TrimSpace(creds["refresh_token"]),
+				OperatingAccountID: strings.TrimSpace(creds["operating_account_id"]),
+				LoginAccountID:     strings.TrimSpace(creds["login_account_id"]),
+				ConversionActionID: strings.TrimSpace(creds["conversion_action_id"]),
+			}
+			if dmCfg.OperatingAccountID == "" {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "operating_account_id é obrigatório para testar o Google Data Manager",
+				})
+			}
+			if dmCfg.ConversionActionID == "" {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "conversion_action_id é obrigatório para testar o Google Data Manager",
+				})
+			}
 
-		if endpointURL == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "endpoint_url é obrigatório para testar o Google Ads",
-			})
-		}
+			dm := integrations.NewGoogleDataManager(client)
+			respBody, statusCode, testErr = dm.TestPing(ctx, dmCfg)
+		} else {
+			// 2. Fallback para webhook legado
+			endpointURL := strings.TrimSpace(creds["endpoint_url"])
+			token := strings.TrimSpace(creds["api_token"])
+			action := strings.TrimSpace(creds["conversion_action"])
 
-		env := "production"
-		if h.cfg != nil && h.cfg.Env != "" {
-			env = h.cfg.Env
-		}
-		if err := integrations.ValidateOutboundURL(endpointURL, env); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": fmt.Sprintf("endpoint_url invalido ou restrito: %v", err),
-			})
-		}
+			if endpointURL == "" {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "endpoint_url ou credenciais OAuth2 do Data Manager são obrigatórios para testar o Google Ads",
+				})
+			}
 
-		gads := integrations.NewGoogleAds(client)
-		respBody, statusCode, testErr = gads.TestPing(ctx, endpointURL, token, action)
+			env := "production"
+			if h.cfg != nil && h.cfg.Env != "" {
+				env = h.cfg.Env
+			}
+			if err := integrations.ValidateOutboundURL(endpointURL, env); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": fmt.Sprintf("endpoint_url invalido ou restrito: %v", err),
+				})
+			}
+
+			gads := integrations.NewGoogleAds(client)
+			respBody, statusCode, testErr = gads.TestPing(ctx, endpointURL, token, action)
+		}
 
 	case "linkedin_capi":
 		token := strings.TrimSpace(creds["access_token"])
