@@ -82,6 +82,23 @@ func HashHMACSHA256(val, pepper string) string {
 
 // ReconcileAndRoute processa a identidade do visitante no PostgreSQL e encaminha conversões para o Dispatcher
 func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayload) error {
+	// 1. Extração de dados de contato caso existam no payload
+	var rawEmail, rawPhone, rawName string
+	if ev != nil && ev.UserData != nil {
+		if e, ok := ev.UserData["email"].(string); ok {
+			rawEmail = NormalizeEmail(e)
+		}
+		if p, ok := ev.UserData["phone"].(string); ok {
+			rawPhone = NormalizePhone(p)
+		}
+		if n, ok := ev.UserData["name"].(string); ok {
+			rawName = strings.TrimSpace(n)
+		}
+	}
+
+	// 2. Cache temporário de identificadores no Redis para hidratação de conversões subsequentes (Camada 2)
+	s.cacheSubmissionContactData(ctx, ev, rawEmail, rawPhone, rawName)
+
 	if s.pg == nil || s.pg.Pool == nil {
 		// Sem banco configurado, apenas encaminha conversões
 		return s.checkAndRouteDispatch(ctx, ev, nil)
@@ -96,20 +113,6 @@ func (s *Service) ReconcileAndRoute(ctx context.Context, ev *collector.EventPayl
 	if err != nil {
 		log.Printf("[Identity] SiteID inválido (%s): %v", ev.SiteID, err)
 		return s.checkAndRouteDispatch(ctx, ev, nil)
-	}
-
-	// Extração de dados de contato caso existam no payload
-	var rawEmail, rawPhone, rawName string
-	if ev.UserData != nil {
-		if e, ok := ev.UserData["email"].(string); ok {
-			rawEmail = NormalizeEmail(e)
-		}
-		if p, ok := ev.UserData["phone"].(string); ok {
-			rawPhone = NormalizePhone(p)
-		}
-		if n, ok := ev.UserData["name"].(string); ok {
-			rawName = strings.TrimSpace(n)
-		}
 	}
 
 	emailHash := HashHMACSHA256(rawEmail, s.pepper)
@@ -712,4 +715,49 @@ func (s *Service) ReconcileOfflineConversion(ctx context.Context, siteID string,
 		Event:      ev,
 		FirstTouch: firstTouch,
 	}, nil
+}
+
+// cacheSubmissionContactData armazena temporariamente os identificadores de contato de uma submissão no Redis (TTL 15m)
+// para hidratação de estágios posteriores de conversão (form_client_validated, form_submit_success)
+func (s *Service) cacheSubmissionContactData(ctx context.Context, ev *collector.EventPayload, rawEmail, rawPhone, rawName string) {
+	if s.redis == nil || ev == nil {
+		return
+	}
+	subID := strings.TrimSpace(ev.SubmissionID)
+	if subID == "" && ev.CustomData != nil {
+		if sid, ok := ev.CustomData["submission_id"].(string); ok {
+			subID = strings.TrimSpace(sid)
+		}
+	}
+	if subID == "" || (rawEmail == "" && rawPhone == "") {
+		return
+	}
+
+	cacheUserData := make(map[string]interface{})
+	if rawEmail != "" {
+		cacheUserData["email"] = rawEmail
+	}
+	if rawPhone != "" {
+		cacheUserData["phone"] = rawPhone
+	}
+	if rawName != "" {
+		cacheUserData["name"] = rawName
+	}
+
+	leadRec := &storage.LeadCacheRecord{
+		SubmissionID: subID,
+		SiteID:       ev.SiteID,
+		UserData:     cacheUserData,
+		Consent: storage.LeadCacheConsent{
+			Necessary: ev.Consent.Necessary,
+			Analytics: ev.Consent.Analytics,
+			Marketing: ev.Consent.Marketing,
+		},
+		ExplicitLeadConsent: ev.ExplicitLeadConsent,
+		CachedAt:            time.Now().UTC(),
+	}
+
+	if err := s.redis.SaveLeadCache(ctx, leadRec); err != nil {
+		log.Printf("[Identity] Erro ao gravar LeadCacheRecord no Redis (subID=%s): %v", subID, err)
+	}
 }

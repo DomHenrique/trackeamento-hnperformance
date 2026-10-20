@@ -505,4 +505,140 @@ func (r *RedisClient) GetRecentRoutingDecisions(ctx context.Context, siteID stri
 	return results, nil
 }
 
+// LeadCacheConsent modela as permissões de consentimento associadas ao lead em cache
+type LeadCacheConsent struct {
+	Necessary bool `json:"necessary"`
+	Analytics bool `json:"analytics"`
+	Marketing bool `json:"marketing"`
+}
+
+// LeadCacheRecord armazena os dados de contato e consentimento de uma submissão de formulário
+type LeadCacheRecord struct {
+	SubmissionID        string                 `json:"submission_id"`
+	SiteID              string                 `json:"site_id"`
+	UserData            map[string]interface{} `json:"user_data"`
+	Consent             LeadCacheConsent       `json:"consent"`
+	ExplicitLeadConsent bool                   `json:"explicit_lead_consent"`
+	CachedAt            time.Time              `json:"cached_at"`
+}
+
+// SaveLeadCache armazena dados de contato temporários de uma submissão no Redis com TTL de 15 minutos
+func (r *RedisClient) SaveLeadCache(ctx context.Context, record *LeadCacheRecord) error {
+	if r.Client == nil || record == nil || record.SiteID == "" || record.SubmissionID == "" {
+		return nil
+	}
+	if record.CachedAt.IsZero() {
+		record.CachedAt = time.Now().UTC()
+	}
+	data, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("erro serializando LeadCacheRecord: %w", err)
+	}
+	key := fmt.Sprintf("tracking:lead_cache:%s:%s", record.SiteID, record.SubmissionID)
+	return r.Client.Set(ctx, key, data, 15*time.Minute).Err()
+}
+
+// GetLeadCache recupera dados de contato temporários de uma submissão do Redis
+func (r *RedisClient) GetLeadCache(ctx context.Context, siteID, submissionID string) (*LeadCacheRecord, error) {
+	if r.Client == nil || siteID == "" || submissionID == "" {
+		return nil, nil
+	}
+	key := fmt.Sprintf("tracking:lead_cache:%s:%s", siteID, submissionID)
+	val, err := r.Client.Get(ctx, key).Bytes()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var record LeadCacheRecord
+	if err := json.Unmarshal(val, &record); err != nil {
+		return nil, fmt.Errorf("erro deserializando LeadCacheRecord: %w", err)
+	}
+	return &record, nil
+}
+
+// DeleteLeadCache purga explicitamente os dados de contato em conformidade com a LGPD
+func (r *RedisClient) DeleteLeadCache(ctx context.Context, siteID, submissionID string) error {
+	if r.Client == nil || siteID == "" || submissionID == "" {
+		return nil
+	}
+	key := fmt.Sprintf("tracking:lead_cache:%s:%s", siteID, submissionID)
+	return r.Client.Del(ctx, key).Err()
+}
+
+// AcquireSubmissionDispatchLease obtém lease de submissão por integração, garantindo que múltiplos
+// estágios da mesma submissão (ex: form_client_validated e form_submit_success) não gerem disparos duplicados.
+func (r *RedisClient) AcquireSubmissionDispatchLease(ctx context.Context, integrationID, submissionID string, leaseDuration time.Duration) (acquired bool, alreadySucceeded bool, err error) {
+	if r.Client == nil || submissionID == "" {
+		return true, false, nil
+	}
+	key := fmt.Sprintf("dispatch:sub_lock:%s:%s", integrationID, submissionID)
+	now := time.Now().UTC()
+	nowMs := now.UnixMilli()
+
+	vals, err := r.Client.HGetAll(ctx, key).Result()
+	if err != nil && err != redis.Nil {
+		return false, false, err
+	}
+
+	parseMs := func(val string) int64 {
+		v, _ := strconv.ParseInt(val, 10, 64)
+		if v > 0 && v < 100000000000 {
+			return v * 1000
+		}
+		return v
+	}
+
+	if len(vals) == 0 {
+		pipe := r.Client.TxPipeline()
+		pipe.HSet(ctx, key, map[string]interface{}{
+			"status":           "processing",
+			"lease_expires_at": now.Add(leaseDuration).UnixMilli(),
+		})
+		pipe.Expire(ctx, key, 24*time.Hour)
+		_, err = pipe.Exec(ctx)
+		if err != nil {
+			return false, false, err
+		}
+		return true, false, nil
+	}
+
+	status := vals["status"]
+	if status == "succeeded" {
+		return false, true, nil
+	}
+
+	if status == "processing" {
+		leaseExpMs := parseMs(vals["lease_expires_at"])
+		if leaseExpMs > nowMs {
+			return false, false, nil
+		}
+		// Lease expirou sem conclusão; renova lease
+		r.Client.HSet(ctx, key, map[string]interface{}{
+			"status":           "processing",
+			"lease_expires_at": now.Add(leaseDuration).UnixMilli(),
+		})
+		return true, false, nil
+	}
+
+	return true, false, nil
+}
+
+// MarkSubmissionDispatchSuccess registra a conclusão com êxito do despacho para aquela submissão e integração
+func (r *RedisClient) MarkSubmissionDispatchSuccess(ctx context.Context, integrationID, submissionID string) error {
+	if r.Client == nil || submissionID == "" {
+		return nil
+	}
+	key := fmt.Sprintf("dispatch:sub_lock:%s:%s", integrationID, submissionID)
+	pipe := r.Client.TxPipeline()
+	pipe.HSet(ctx, key, map[string]interface{}{
+		"status":       "succeeded",
+		"succeeded_at": time.Now().UTC().UnixMilli(),
+	})
+	pipe.Expire(ctx, key, 24*time.Hour)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
 

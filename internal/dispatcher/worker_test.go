@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"tracking-engine/internal/collector"
 	"tracking-engine/internal/config"
+	"tracking-engine/internal/integrations"
 	"tracking-engine/internal/storage"
 )
 
@@ -447,6 +451,316 @@ func TestWorkerPool_EventMapping(t *testing.T) {
 	}
 	if origEv.EventName != "form_submit" {
 		t.Errorf("evento original não deveria ter sido modificado. Esperado 'form_submit', obtido '%s'", origEv.EventName)
+	}
+}
+
+func TestWorkerPool_LeadHydration(t *testing.T) {
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:6379", 500*time.Millisecond)
+	if err != nil {
+		t.Skip("Redis local não disponível, pulando teste")
+	}
+	_ = conn.Close()
+
+	cfg := &config.Config{Env: "test", RedisAddr: "127.0.0.1:6379"}
+	rdb, err := storage.NewRedis(cfg)
+	if err != nil || rdb.Client == nil {
+		t.Skip("Falha conectando ao Redis")
+	}
+
+	ctx := context.Background()
+	siteID := fmt.Sprintf("site_hyd_%d", time.Now().UnixNano())
+	subID := fmt.Sprintf("sub_hyd_%d", time.Now().UnixNano())
+
+	// Grava registro no Redis
+	_ = rdb.SaveLeadCache(ctx, &storage.LeadCacheRecord{
+		SubmissionID: subID,
+		SiteID:       siteID,
+		UserData: map[string]interface{}{
+			"email": "eduardo@teste.com",
+			"phone": "5554991143857",
+			"name":  "Eduardo Rosalem",
+		},
+		Consent:             storage.LeadCacheConsent{Analytics: true, Marketing: true},
+		ExplicitLeadConsent: true,
+		CachedAt:            time.Now().UTC(),
+	})
+	defer func() {
+		_ = rdb.DeleteLeadCache(ctx, siteID, subID)
+	}()
+
+	pool := NewWorkerPool(cfg, rdb, nil)
+
+	// Evento chega com UserData vazio
+	ev := &collector.EventPayload{
+		EventID:      fmt.Sprintf("ev_hyd_%d", time.Now().UnixNano()),
+		SiteID:       siteID,
+		SubmissionID: subID,
+		EventName:    "form_submit",
+		UserData:     map[string]interface{}{},
+		Consent:      collector.ConsentState{Analytics: true, Marketing: true},
+	}
+
+	hydrated := pool.HydrateEventLeadData(ctx, ev)
+	if !hydrated {
+		t.Fatalf("esperava hidratação bem-sucedida, obtido false")
+	}
+
+	// Valida que ev.UserData foi hidratado
+	if ev.UserData["email"] != "eduardo@teste.com" {
+		t.Errorf("esperava email hidratado 'eduardo@teste.com', obtido '%v'", ev.UserData["email"])
+	}
+	if ev.UserData["phone"] != "5554991143857" {
+		t.Errorf("esperava phone hidratado '5554991143857', obtido '%v'", ev.UserData["phone"])
+	}
+	if !ev.ExplicitLeadConsent {
+		t.Errorf("esperava ExplicitLeadConsent true, obtido false")
+	}
+
+	// Teste adicional: Chave inexistente/expirada retorna false
+	evInvalido := &collector.EventPayload{
+		EventID:      fmt.Sprintf("ev_inv_%d", time.Now().UnixNano()),
+		SiteID:       siteID,
+		SubmissionID: "sub_inexistente_12345",
+		EventName:    "form_submit",
+		UserData:     map[string]interface{}{},
+		Consent:      collector.ConsentState{Analytics: true, Marketing: true},
+	}
+	if pool.HydrateEventLeadData(ctx, evInvalido) {
+		t.Errorf("não deveria hidratar evento com submissão inexistente no Redis")
+	}
+}
+
+func TestWorkerPool_LeadHydration_OutOfOrder(t *testing.T) {
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:6379", 500*time.Millisecond)
+	if err != nil {
+		t.Skip("Redis local não disponível, pulando teste")
+	}
+	_ = conn.Close()
+
+	cfg := &config.Config{Env: "test", RedisAddr: "127.0.0.1:6379"}
+	rdb, err := storage.NewRedis(cfg)
+	if err != nil || rdb.Client == nil {
+		t.Skip("Falha conectando ao Redis")
+	}
+
+	ctx := context.Background()
+	siteID := fmt.Sprintf("site_ooo_%d", time.Now().UnixNano())
+	subID := fmt.Sprintf("sub_ooo_%d", time.Now().UnixNano())
+
+	defer func() {
+		_ = rdb.DeleteLeadCache(ctx, siteID, subID)
+	}()
+
+	pool := NewWorkerPool(cfg, rdb, nil)
+
+	// Simula gravação assíncrona com atraso de 100ms (chega enquanto o worker está tentando)
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		_ = rdb.SaveLeadCache(ctx, &storage.LeadCacheRecord{
+			SubmissionID: subID,
+			SiteID:       siteID,
+			UserData: map[string]interface{}{
+				"email": "concorrente@teste.com",
+				"phone": "5511999998888",
+			},
+			ExplicitLeadConsent: true,
+			CachedAt:            time.Now().UTC(),
+		})
+	}()
+
+	ev := &collector.EventPayload{
+		EventID:      fmt.Sprintf("ev_ooo_%d", time.Now().UnixNano()),
+		SiteID:       siteID,
+		SubmissionID: subID,
+		EventName:    "form_submit",
+		UserData:     map[string]interface{}{},
+		Consent:      collector.ConsentState{Analytics: true, Marketing: true},
+	}
+
+	hydrated := pool.HydrateEventLeadData(ctx, ev)
+	if !hydrated {
+		t.Fatalf("esperava hidratação bem-sucedida após retry de evento fora de ordem")
+	}
+
+	if ev.UserData["email"] != "concorrente@teste.com" {
+		t.Errorf("esperava email hidratado após retry fora de ordem, obtido '%v'", ev.UserData["email"])
+	}
+	if ev.UserData["phone"] != "5511999998888" {
+		t.Errorf("esperava phone hidratado após retry fora de ordem, obtido '%v'", ev.UserData["phone"])
+	}
+}
+
+func TestWorkerPool_LeadHydration_DeniedConsent(t *testing.T) {
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:6379", 500*time.Millisecond)
+	if err != nil {
+		t.Skip("Redis local não disponível, pulando teste")
+	}
+	_ = conn.Close()
+
+	cfg := &config.Config{Env: "test", RedisAddr: "127.0.0.1:6379"}
+	rdb, err := storage.NewRedis(cfg)
+	if err != nil || rdb.Client == nil {
+		t.Skip("Falha conectando ao Redis")
+	}
+
+	ctx := context.Background()
+	siteID := fmt.Sprintf("site_noconsent_%d", time.Now().UnixNano())
+	subID := fmt.Sprintf("sub_noconsent_%d", time.Now().UnixNano())
+
+	// Grava registro no Redis com consentimento negado
+	_ = rdb.SaveLeadCache(ctx, &storage.LeadCacheRecord{
+		SubmissionID: subID,
+		SiteID:       siteID,
+		UserData: map[string]interface{}{
+			"email": "negado@teste.com",
+		},
+		Consent:             storage.LeadCacheConsent{Analytics: true, Marketing: false},
+		ExplicitLeadConsent: false,
+		CachedAt:            time.Now().UTC(),
+	})
+	defer func() {
+		_ = rdb.DeleteLeadCache(ctx, siteID, subID)
+	}()
+
+	pool := NewWorkerPool(cfg, rdb, nil)
+
+	ev := &collector.EventPayload{
+		EventID:      fmt.Sprintf("ev_noconsent_%d", time.Now().UnixNano()),
+		SiteID:       siteID,
+		SubmissionID: subID,
+		EventName:    "form_submit",
+		UserData:     map[string]interface{}{},
+		Consent:      collector.ConsentState{Analytics: true, Marketing: false},
+	}
+
+	hydrated := pool.HydrateEventLeadData(ctx, ev)
+	if hydrated {
+		t.Errorf("hidratação deveria ter sido vetada por falta de consentimento, mas retornou true")
+	}
+
+	// Não deve ter hidratado o email pois consentimento foi negado
+	if ev.UserData["email"] != nil {
+		t.Errorf("hidratação não deveria ter ocorrido com consentimento negado, obtido '%v'", ev.UserData["email"])
+	}
+}
+
+func TestWorkerPool_SubmissionDeduplication(t *testing.T) {
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:6379", 500*time.Millisecond)
+	if err != nil {
+		t.Skip("Redis local não disponível, pulando teste")
+	}
+	_ = conn.Close()
+
+	cfg := &config.Config{Env: "test", RedisAddr: "127.0.0.1:6379"}
+	rdb, err := storage.NewRedis(cfg)
+	if err != nil || rdb.Client == nil {
+		t.Skip("Falha conectando ao Redis")
+	}
+
+	ctx := context.Background()
+	integID := fmt.Sprintf("integ_test_%d", time.Now().UnixNano())
+	subID := fmt.Sprintf("sub_dedup_test_%d", time.Now().UnixNano())
+
+	defer func() {
+		key := fmt.Sprintf("dispatch:sub_lock:%s:%s", integID, subID)
+		_ = rdb.Client.Del(ctx, key).Err()
+	}()
+
+	// 1. Simula que a submissão já teve sucesso em despacho prévio
+	_ = rdb.MarkSubmissionDispatchSuccess(ctx, integID, subID)
+
+	// 2. Tenta adquirir lease para o mesmo submission_id -> deve retornar alreadySucceeded = true
+	acquired, alreadySucceeded, err := rdb.AcquireSubmissionDispatchLease(ctx, integID, subID, 10*time.Second)
+	if err != nil {
+		t.Fatalf("erro ao verificar lease: %v", err)
+	}
+	if acquired || !alreadySucceeded {
+		t.Errorf("esperado acquired=false e alreadySucceeded=true, obtido acquired=%v alreadySucceeded=%v", acquired, alreadySucceeded)
+	}
+}
+
+func TestWorkerPool_LinkedInCAPI_E2E_BricksHydration(t *testing.T) {
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:6379", 500*time.Millisecond)
+	if err != nil {
+		t.Skip("Redis local não disponível, pulando teste")
+	}
+	_ = conn.Close()
+
+	// Servidor Mock da LinkedIn Conversions API
+	var receivedBody []byte
+	mockLinkedIn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		receivedBody = body
+		_ = receivedBody
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"status": "created"}`))
+	}))
+	defer mockLinkedIn.Close()
+
+	cfg := &config.Config{Env: "test", RedisAddr: "127.0.0.1:6379"}
+	rdb, err := storage.NewRedis(cfg)
+	if err != nil || rdb.Client == nil {
+		t.Skip("Falha conectando ao Redis")
+	}
+
+	ctx := context.Background()
+	siteID := fmt.Sprintf("site_bricks_%d", time.Now().UnixNano())
+	subID := fmt.Sprintf("sub_bricks_%d", time.Now().UnixNano())
+
+	// 1. Simula Evento 1 do Bricks: form_attempt capturou PII no navegador e gravou no Redis
+	_ = rdb.SaveLeadCache(ctx, &storage.LeadCacheRecord{
+		SubmissionID: subID,
+		SiteID:       siteID,
+		UserData: map[string]interface{}{
+			"email": "eduardorosalem@soprano.com.br",
+			"phone": "5554991143857",
+			"name":  "Eduardo Rosalem",
+		},
+		Consent:             storage.LeadCacheConsent{Analytics: true, Marketing: true},
+		ExplicitLeadConsent: true,
+		CachedAt:            time.Now().UTC(),
+	})
+	defer func() {
+		_ = rdb.DeleteLeadCache(ctx, siteID, subID)
+	}()
+
+	// 2. Simula Evento 2 do Bricks: form_submit_success chega com UserData vazio
+	evSuccess := &collector.EventPayload{
+		EventID:            fmt.Sprintf("ev_success_%d", time.Now().UnixNano()),
+		SiteID:             siteID,
+		SubmissionID:       subID,
+		EventName:          "form_submit",
+		FormLifecycleState: "form_submit_success",
+		UserData:           map[string]interface{}{}, // Vazio do navegador!
+		Consent:            collector.ConsentState{Analytics: true, Marketing: true},
+		EventTime:          time.Now().UTC(),
+	}
+
+	pool := NewWorkerPool(cfg, rdb, nil)
+
+	// 3. Executa a hidratação server-side
+	hydrated := pool.HydrateEventLeadData(ctx, evSuccess)
+	if !hydrated {
+		t.Fatalf("esperava hidratação bem-sucedida para o evento de sucesso")
+	}
+
+	// Valida que o evento foi hidratado com o email e telefone do Eduardo Rosalem
+	if evSuccess.UserData["email"] != "eduardorosalem@soprano.com.br" {
+		t.Fatalf("esperava email hidratado 'eduardorosalem@soprano.com.br', obtido '%v'", evSuccess.UserData["email"])
+	}
+	if evSuccess.UserData["phone"] != "5554991143857" {
+		t.Fatalf("esperava phone hidratado '5554991143857', obtido '%v'", evSuccess.UserData["phone"])
+	}
+
+	// Valida que o envio direto para a LinkedIn CAPI aceita os dados hidratados
+	httpClient := integrations.NewHTTPClient(5 * time.Second)
+	liCAPI := integrations.NewLinkedInCAPI(httpClient)
+	// Como a URL padrão da LinkedIn aponta para api.linkedin.com, validamos a função SendEvent até a formatação:
+	liErr := liCAPI.SendEvent(ctx, "test_token", "urn:li:conversionRule:123456", evSuccess)
+	// O erro não deve ser "validação pré-despacho falhou: nenhum identificador de usuário"
+	if liErr != nil && strings.Contains(liErr.Error(), "nenhum identificador de usuário") {
+		t.Fatalf("LinkedIn CAPI rejeitou evento por falta de identificador mesmo após hidratação: %v", liErr)
 	}
 }
 

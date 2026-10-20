@@ -207,6 +207,9 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 		return
 	}
 
+	// 0. Resolução de submission_id e Hidratação Server-Side de Identificadores (Camada 2)
+	wp.HydrateEventLeadData(ctx, ev)
+
 	// Gatekeeper Final de Privacidade: mensagens passivas sem consentimento de marketing ou sob GPC são descartadas.
 	// No entanto, submissões voluntárias de contato (com dados de lead) preservam autorização para despacho.
 	hasDirectLeadConsent := ev.ExplicitLeadConsent
@@ -283,6 +286,35 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 				allSettled = false
 				mu.Unlock()
 				return
+			}
+
+			// 1.1 Verificação de deduplicação por submissão (impede que form_client_validated e form_submit_success disparem 2x)
+			if ev.SubmissionID != "" && wp.redis != nil {
+				subAcquired, subAlreadySucceeded, subErr := wp.redis.AcquireSubmissionDispatchLease(ctx, integID, ev.SubmissionID, 45*time.Second)
+				if subErr != nil {
+					log.Printf("[Dispatcher] Erro ao adquirir lease de submissão (%s / %s): %v", integID, ev.SubmissionID, subErr)
+				} else if subAlreadySucceeded {
+					log.Printf("[Dispatcher] Submissão %s já foi despachada anteriormente para integração %s. Ignorando reenvio de estágio secundário.", ev.SubmissionID, integID)
+					_ = wp.redis.RecordRoutingDecision(ctx, ev.SiteID, storage.RoutingDecisionRecord{
+						EventID:      ev.EventID,
+						EventName:    ev.EventName,
+						SiteID:       ev.SiteID,
+						Platform:     it.Platform,
+						Timestamp:    time.Now().UTC().Format(time.RFC3339),
+						Status:       "ignored_duplicate_submission",
+						StatusCode:   200,
+						LatencyMs:    0,
+						Reason:       "Submissão já processada com sucesso anteriormente (deduplicação idempotente)",
+						ConsentFlags: map[string]bool{"marketing": ev.Consent.Marketing, "analytics": ev.Consent.Analytics, "lead_consent": hasDirectLeadConsent},
+					})
+					return
+				} else if !subAcquired {
+					log.Printf("[Dispatcher] Submissão %s em processamento concorrente para integração %s.", ev.SubmissionID, integID)
+					mu.Lock()
+					allSettled = false
+					mu.Unlock()
+					return
+				}
 			}
 
 			callStart := time.Now()
@@ -393,6 +425,9 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 			if callErr == nil {
 				log.Printf("[Dispatcher] SUCESSO %s: evento '%s' (%s) enviado com êxito!", it.Platform, ev.EventName, ev.EventID)
 				_ = wp.redis.MarkDispatchSuccess(ctx, integID, ev.EventID)
+				if ev.SubmissionID != "" {
+					_ = wp.redis.MarkSubmissionDispatchSuccess(ctx, integID, ev.SubmissionID)
+				}
 				_ = wp.redis.RecordRoutingDecision(ctx, ev.SiteID, storage.RoutingDecisionRecord{
 					EventID:      ev.EventID,
 					EventName:    ev.EventName,
@@ -454,6 +489,11 @@ func (wp *WorkerPool) processMessage(ctx context.Context, stream, group string, 
 
 	dispatchWG.Wait()
 
+	// Purga explícita do cache de lead conforme LGPD assim que todos os despachos estiverem assentados
+	if allSettled && ev.SubmissionID != "" && wp.redis != nil {
+		_ = wp.redis.DeleteLeadCache(ctx, ev.SiteID, ev.SubmissionID)
+	}
+
 	// Só confirma XACK se todos os destinos foram resolvidos (ou sucesso, ou DLQ definitivo)
 	if allSettled {
 		_ = wp.redis.Client.XAck(ctx, stream, group, msg.ID).Err()
@@ -465,6 +505,70 @@ type SiteIntegrationRecord struct {
 	Platform      string
 	Credentials   map[string]string
 	EventMappings map[string]string
+}
+
+// HydrateEventLeadData busca dados de contato no cache do Redis pelo submission_id caso o evento
+// tenha chegado sem identificadores diretos (ex: form_submit_success ou form_client_validated).
+// Implementa até 3 tentativas de backoff curto para tolerância a eventos assíncronos fora de ordem.
+func (wp *WorkerPool) HydrateEventLeadData(ctx context.Context, ev *collector.EventPayload) bool {
+	if ev == nil || wp.redis == nil {
+		return false
+	}
+
+	if ev.SubmissionID == "" && ev.CustomData != nil {
+		if sid, ok := ev.CustomData["submission_id"].(string); ok {
+			ev.SubmissionID = strings.TrimSpace(sid)
+		}
+	}
+
+	hasContact := false
+	if ev.UserData != nil {
+		if em, ok := ev.UserData["email"].(string); ok && strings.TrimSpace(em) != "" {
+			hasContact = true
+		}
+		if ph, ok := ev.UserData["phone"].(string); ok && strings.TrimSpace(ph) != "" {
+			hasContact = true
+		}
+	}
+
+	if hasContact || ev.SubmissionID == "" {
+		return false
+	}
+
+	backoffs := []time.Duration{0, 300 * time.Millisecond, 800 * time.Millisecond, 1500 * time.Millisecond}
+	for attempt, sleepDur := range backoffs {
+		if sleepDur > 0 {
+			select {
+			case <-ctx.Done():
+				return false
+			case <-time.After(sleepDur):
+			}
+		}
+		leadRec, err := wp.redis.GetLeadCache(ctx, ev.SiteID, ev.SubmissionID)
+		if err == nil && leadRec != nil {
+			// Verifica conformidade de consentimento antes de hidratar
+			if leadRec.ExplicitLeadConsent || leadRec.Consent.Marketing {
+				if ev.UserData == nil {
+					ev.UserData = make(map[string]interface{})
+				}
+				for k, v := range leadRec.UserData {
+					if ev.UserData[k] == nil || ev.UserData[k] == "" {
+						ev.UserData[k] = v
+					}
+				}
+				if leadRec.ExplicitLeadConsent {
+					ev.ExplicitLeadConsent = true
+				}
+				if leadRec.Consent.Marketing {
+					ev.Consent.Marketing = true
+				}
+				log.Printf("[Dispatcher] Hidratação server-side bem-sucedida para evento %s (subID=%s, tentativa=%d)", ev.EventID, ev.SubmissionID, attempt+1)
+				return true
+			}
+			return false
+		}
+	}
+	return false
 }
 
 func (wp *WorkerPool) loadSiteIntegrations(ctx context.Context, siteIDStr string) []SiteIntegrationRecord {

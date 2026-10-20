@@ -2,10 +2,14 @@ package identity
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"testing"
 	"time"
 
 	"tracking-engine/internal/collector"
+	"tracking-engine/internal/config"
+	"tracking-engine/internal/storage"
 )
 
 func TestNormalizeEmail(t *testing.T) {
@@ -234,6 +238,91 @@ func TestReconcileAndRoute_CrossMidnightSessionStitching(t *testing.T) {
 	err2 := svc.ReconcileAndRoute(ctx, ev2)
 	if err2 != nil {
 		t.Fatalf("erro ao processar evento 2: %v", err2)
+	}
+}
+
+func TestReconcileAndRoute_LeadCacheStorage(t *testing.T) {
+	// Verifica se há Redis local disponível
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:6379", 500*time.Millisecond)
+	if err != nil {
+		t.Skip("Redis local 127.0.0.1:6379 não disponível, pulando teste de cache de lead")
+	}
+	_ = conn.Close()
+
+	cfg := &config.Config{
+		RedisAddr: "127.0.0.1:6379",
+	}
+	rdb, err := storage.NewRedis(cfg)
+	if err != nil || rdb.Client == nil {
+		t.Skip("Falha conectando ao Redis local")
+	}
+
+	ctx := context.Background()
+	svc := NewService(nil, rdb, "test_pepper")
+
+	siteID := fmt.Sprintf("site_cache_%d", time.Now().UnixNano())
+	subID := fmt.Sprintf("sub_cache_%d", time.Now().UnixNano())
+
+	defer func() {
+		_ = rdb.DeleteLeadCache(ctx, siteID, subID)
+	}()
+
+	// 1. Evento com contato válido e submission_id -> Deve gravar no Redis
+	ev := &collector.EventPayload{
+		SiteID:       siteID,
+		VisitorID:    "hn_vis_1234567890",
+		SessionID:    "hn_ses_1234567890",
+		SubmissionID: subID,
+		EventName:    "form_submit",
+		UserData: map[string]interface{}{
+			"email": "eduardorosalem@soprano.com.br",
+			"phone": "54 99114.3857",
+			"name":  "Eduardo Rosalem",
+		},
+		Consent:             collector.ConsentState{Analytics: true, Marketing: true},
+		ExplicitLeadConsent: true,
+	}
+
+	err = svc.ReconcileAndRoute(ctx, ev)
+	if err != nil {
+		t.Fatalf("erro em ReconcileAndRoute: %v", err)
+	}
+
+	cached, err := rdb.GetLeadCache(ctx, siteID, subID)
+	if err != nil {
+		t.Fatalf("erro ao buscar cache gravado: %v", err)
+	}
+	if cached == nil {
+		t.Fatalf("LeadCacheRecord não foi gravado no Redis")
+	}
+	if cached.UserData["email"] != "eduardorosalem@soprano.com.br" {
+		t.Errorf("esperado email normalizado, obtido %v", cached.UserData["email"])
+	}
+	if cached.UserData["phone"] != "5554991143857" { // normalizado com DDI 55
+		t.Errorf("esperado phone normalizado '5554991143857', obtido '%v'", cached.UserData["phone"])
+	}
+	if !cached.ExplicitLeadConsent {
+		t.Errorf("esperado ExplicitLeadConsent=true")
+	}
+
+	// 2. Evento subsequente sem dados de contato -> Não deve sobrescrever com vazio
+	evEmpty := &collector.EventPayload{
+		SiteID:       siteID,
+		VisitorID:    "hn_vis_1234567890",
+		SessionID:    "hn_ses_1234567890",
+		SubmissionID: subID,
+		EventName:    "form_submit",
+		UserData:     map[string]interface{}{},
+		Consent:      collector.ConsentState{Analytics: true, Marketing: true},
+	}
+	err = svc.ReconcileAndRoute(ctx, evEmpty)
+	if err != nil {
+		t.Fatalf("erro no evento vazio: %v", err)
+	}
+
+	cachedStillThere, _ := rdb.GetLeadCache(ctx, siteID, subID)
+	if cachedStillThere == nil || cachedStillThere.UserData["email"] != "eduardorosalem@soprano.com.br" {
+		t.Errorf("cache foi indevidamente apagado ou sobrescrito por evento vazio")
 	}
 }
 
