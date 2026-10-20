@@ -253,7 +253,7 @@ func (r *RedisClient) MarkDispatchPermanentFailure(ctx context.Context, integrat
 	return err
 }
 
-// PushDeadLetter enfileira mensagem na Dead-Letter Queue com metadados detalhados de diagnóstico
+// PushDeadLetter enfileira mensagem na Dead-Letter Queue com metadados detalhados de diagnóstico e TTL de 24h
 func (r *RedisClient) PushDeadLetter(ctx context.Context, stream string, data map[string]interface{}) error {
 	if r.Client == nil {
 		return nil
@@ -265,14 +265,85 @@ func (r *RedisClient) PushDeadLetter(ctx context.Context, stream string, data ma
 	if err != nil {
 		return err
 	}
-	return r.Client.XAdd(ctx, &redis.XAddArgs{
+	pipe := r.Client.TxPipeline()
+	pipe.XAdd(ctx, &redis.XAddArgs{
 		Stream: stream,
 		MaxLen: 50000,
 		Approx: true,
 		Values: map[string]interface{}{
 			"payload": b,
 		},
-	}).Err()
+	})
+	pipe.Expire(ctx, stream, 24*time.Hour)
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+// SaveEventHydratedUserData armazena os dados de contato hidratados no Redis para garantir preservação em retries
+func (r *RedisClient) SaveEventHydratedUserData(ctx context.Context, eventID string, userData map[string]interface{}, ttl time.Duration) error {
+	if r.Client == nil || eventID == "" || len(userData) == 0 {
+		return nil
+	}
+	key := fmt.Sprintf("dispatch:event_user_data:%s", eventID)
+	data, err := json.Marshal(userData)
+	if err != nil {
+		return err
+	}
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+	}
+	return r.Client.Set(ctx, key, data, ttl).Err()
+}
+
+// GetEventHydratedUserData recupera os dados de contato hidratados previamente para o evento
+func (r *RedisClient) GetEventHydratedUserData(ctx context.Context, eventID string) (map[string]interface{}, error) {
+	if r.Client == nil || eventID == "" {
+		return nil, nil
+	}
+	key := fmt.Sprintf("dispatch:event_user_data:%s", eventID)
+	data, err := r.Client.Get(ctx, key).Bytes()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var res map[string]interface{}
+	if err := json.Unmarshal(data, &res); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// CheckAndSetSubmissionDispatchedNX verifica e registra atomicamente se a submissão já foi enviada para a plataforma
+func (r *RedisClient) CheckAndSetSubmissionDispatchedNX(ctx context.Context, platform, submissionID string) (bool, error) {
+	if r.Client == nil || platform == "" || submissionID == "" {
+		return true, nil
+	}
+	key := fmt.Sprintf("dispatched:sub:%s:%s", platform, submissionID)
+	return r.Client.SetNX(ctx, key, "1", 24*time.Hour).Result()
+}
+
+// IsSubmissionDispatched verifica se a submissão já teve despacho concluído com sucesso para a plataforma
+func (r *RedisClient) IsSubmissionDispatched(ctx context.Context, platform, submissionID string) (bool, error) {
+	if r.Client == nil || platform == "" || submissionID == "" {
+		return false, nil
+	}
+	key := fmt.Sprintf("dispatched:sub:%s:%s", platform, submissionID)
+	exists, err := r.Client.Exists(ctx, key).Result()
+	return exists > 0, err
+}
+
+// MarkSubmissionDispatched registra no Redis a conclusão com sucesso do despacho para a submissão na plataforma (TTL de 24h)
+func (r *RedisClient) MarkSubmissionDispatched(ctx context.Context, platform, submissionID string, ttl time.Duration) error {
+	if r.Client == nil || platform == "" || submissionID == "" {
+		return nil
+	}
+	key := fmt.Sprintf("dispatched:sub:%s:%s", platform, submissionID)
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+	}
+	return r.Client.Set(ctx, key, "1", ttl).Err()
 }
 
 // AutoClaimPending reivindica mensagens pendentes no PEL há mais tempo que minIdle
@@ -519,6 +590,7 @@ type LeadCacheRecord struct {
 	UserData            map[string]interface{} `json:"user_data"`
 	Consent             LeadCacheConsent       `json:"consent"`
 	ExplicitLeadConsent bool                   `json:"explicit_lead_consent"`
+	ConsentStatus       string                 `json:"consent_status,omitempty"` // "granted", "denied", "pending"
 	CachedAt            time.Time              `json:"cached_at"`
 }
 

@@ -30,6 +30,7 @@ func main() {
 	dryRunFlag := flag.Bool("dry-run", false, "Simula o reprocessamento sem enfileirar nem gravar dados")
 	consentFlag := flag.Bool("explicit-consent", true, "Confirmação de consentimento explícito do lead (LGPD)")
 	queueDirectFlag := flag.Bool("queue", true, "Enfileira no stream Redis para despacho assíncrono pelos workers")
+	platformFlag := flag.String("platform", "", "Plataforma de destino exclusiva (ex: linkedin_capi, meta_capi, google_ads). Se omitido, despacha para todas as integrações ativas")
 
 	flag.Parse()
 
@@ -116,6 +117,12 @@ func main() {
 		userData["name"] = strings.TrimSpace(*nameFlag)
 	}
 
+	customData := make(map[string]interface{})
+	if strings.TrimSpace(*platformFlag) != "" {
+		customData["target_platform"] = strings.TrimSpace(*platformFlag)
+		log.Printf("[DIRECIONAMENTO] Envio exclusivo para a plataforma: %s", *platformFlag)
+	}
+
 	evPayload := &collector.EventPayload{
 		EventID:             fmt.Sprintf("ev_retro_%d", time.Now().UnixNano()),
 		SiteID:              siteUUID.String(),
@@ -123,6 +130,7 @@ func main() {
 		EventName:           *eventNameFlag,
 		FormLifecycleState:  *lifecycleStateFlag,
 		UserData:            userData,
+		CustomData:          customData,
 		Consent:             collector.ConsentState{Analytics: true, Marketing: true},
 		ExplicitLeadConsent: true,
 		EventTime:           eventTime,

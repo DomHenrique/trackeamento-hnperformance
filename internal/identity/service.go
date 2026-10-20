@@ -744,6 +744,13 @@ func (s *Service) cacheSubmissionContactData(ctx context.Context, ev *collector.
 		cacheUserData["name"] = rawName
 	}
 
+	consentStatus := "pending"
+	if ev.ExplicitLeadConsent || ev.Consent.Marketing {
+		consentStatus = "granted"
+	} else if ev.Consent.Collected && !ev.Consent.Marketing {
+		consentStatus = "denied"
+	}
+
 	leadRec := &storage.LeadCacheRecord{
 		SubmissionID: subID,
 		SiteID:       ev.SiteID,
@@ -754,6 +761,7 @@ func (s *Service) cacheSubmissionContactData(ctx context.Context, ev *collector.
 			Marketing: ev.Consent.Marketing,
 		},
 		ExplicitLeadConsent: ev.ExplicitLeadConsent,
+		ConsentStatus:       consentStatus,
 		CachedAt:            time.Now().UTC(),
 	}
 

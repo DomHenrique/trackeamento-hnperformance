@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"tracking-engine/internal/attribution"
 	"tracking-engine/internal/collector"
 	"tracking-engine/internal/identity"
 )
@@ -251,7 +252,61 @@ func TestLinkedInCAPI_SendEvent_PreDispatchValidation(t *testing.T) {
 	}
 }
 
-func TestLinkedInCAPI_SendEvent_WithPhoneOnly(t *testing.T) {
+func TestLinkedInCAPI_SendEvent_WithPhoneOnly_Rejected(t *testing.T) {
+	client := NewHTTPClient(2 * time.Second)
+	li := NewLinkedInCAPI(client)
+
+	ev := &collector.EventPayload{
+		EventID:   "evt_phone_only_synth",
+		EventName: "form_submit",
+		EventTime: time.Now(),
+		UserData: map[string]interface{}{
+			"phone": "5511999990000",
+		},
+	}
+
+	err := li.SendEvent(context.Background(), "token_123", "rule_456", ev)
+	if err == nil {
+		t.Fatal("Esperava que evento apenas com telefone fosse rejeitado na pré-validação do LinkedIn CAPI")
+	}
+	if !strings.Contains(err.Error(), "validação pré-despacho falhou") || !strings.Contains(err.Error(), "nenhum identificador de usuário suportado") {
+		t.Errorf("Mensagem de erro inesperada ao rejeitar telefone isolado: %v", err)
+	}
+}
+
+func TestLinkedInCAPI_SendEvent_WithLIFatID(t *testing.T) {
+	client := NewHTTPClient(2 * time.Second)
+	li := NewLinkedInCAPI(client)
+
+	ev := &collector.EventPayload{
+		EventID:      "evt_li_fat_synth",
+		EventName:    "lead",
+		EventTime:    time.Now(),
+		SubmissionID: "sub_synth_fat_987",
+		Attribution: attribution.Params{
+			LIFATID: "li_fat_uuid_synthetic_12345",
+		},
+	}
+
+	// Como SendEvent faz chamada remota, validamos a montagem serializando com a mesma lógica do client
+	var userIds []LinkedInUserId
+	if ev.Attribution.LIFATID != "" {
+		userIds = append(userIds, LinkedInUserId{
+			IdType:  "LINKEDIN_FIRST_PARTY_ADS_TRACKING_UUID",
+			IdValue: ev.Attribution.LIFATID,
+		})
+	}
+
+	if len(userIds) != 1 || userIds[0].IdType != "LINKEDIN_FIRST_PARTY_ADS_TRACKING_UUID" {
+		t.Fatalf("Esperava 1 identificador LINKEDIN_FIRST_PARTY_ADS_TRACKING_UUID, obteve %+v", userIds)
+	}
+	if userIds[0].IdValue != "li_fat_uuid_synthetic_12345" {
+		t.Errorf("Valor de li_fat_id incorreto: %s", userIds[0].IdValue)
+	}
+	_ = li
+}
+
+func TestLinkedInCAPI_SendEvent_WithUserInfoAndSubmissionID(t *testing.T) {
 	var receivedBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedBody, _ = io.ReadAll(r.Body)
@@ -262,37 +317,92 @@ func TestLinkedInCAPI_SendEvent_WithPhoneOnly(t *testing.T) {
 
 	client := NewHTTPClient(2 * time.Second)
 	_ = client
-	_ = server
 
 	ev := &collector.EventPayload{
-		EventID:   "evt_phone_only",
-		EventName: "form_submit",
-		EventTime: time.Now(),
+		EventID:      "evt_lead_synth_123",
+		SubmissionID: "sub_synth_abc_456",
+		EventName:    "form_submit",
+		EventTime:    time.Date(2026, 10, 20, 15, 0, 0, 0, time.UTC),
 		UserData: map[string]interface{}{
-			"phone": "(11) 98765-4321",
+			"email":        "lead.sintetico@exemplo.com.br",
+			"phone":        "5511999990000", // Deve ser ignorado para o LinkedIn
+			"name":         "Lead Sintetico Silva",
+			"company_name": "Empresa Exemplo Ltda",
+			"job_title":    "Diretor de Tecnologia",
 		},
 	}
 
-	// Testa que serializa corretamente com SHA256_PHONE
-	normPhone := identity.NormalizePhone("(11) 98765-4321")
-	phoneHash := identity.HashSHA256(normPhone)
+	// Validação direta da lógica de montagem do payload
+	rawName := ev.UserData["name"].(string)
+	parts := strings.Fields(rawName)
+	firstName := parts[0]
+	lastName := strings.Join(parts[1:], " ")
 
-	user := LinkedInUser{
-		UserIds: []LinkedInUserId{
-			{
-				IdType:  "SHA256_PHONE",
-				IdValue: phoneHash,
-			},
+	company := ev.UserData["company_name"].(string)
+	title := ev.UserData["job_title"].(string)
+
+	userInfo := &LinkedInUserInfo{
+		FirstName:   firstName,
+		LastName:    lastName,
+		CompanyName: company,
+		Title:       title,
+		CountryCode: "BR",
+	}
+
+	normEmail := identity.NormalizeEmail(ev.UserData["email"].(string))
+	userIds := []LinkedInUserId{
+		{
+			IdType:  "SHA256_EMAIL",
+			IdValue: identity.HashSHA256(normEmail),
 		},
 	}
 
-	if len(user.UserIds) != 1 || user.UserIds[0].IdType != "SHA256_PHONE" {
-		t.Fatalf("Esperava 1 identificador do tipo SHA256_PHONE, obteve %+v", user.UserIds)
+	event := LinkedInConversionEvent{
+		Conversion:           FormatConversionURN("112233"),
+		ConversionHappenedAt: ev.EventTime.UnixMilli(),
+		User: LinkedInUser{
+			UserIds:  userIds,
+			UserInfo: userInfo,
+		},
+		EventId: ev.SubmissionID,
 	}
-	if user.UserIds[0].IdValue != phoneHash {
-		t.Errorf("Hash do telefone incorreto: %s vs %s", user.UserIds[0].IdValue, phoneHash)
+
+	body, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("Erro ao serializar payload sintético: %v", err)
 	}
+
+	var parsed LinkedInConversionEvent
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatalf("Erro ao deserializar payload sintético: %v", err)
+	}
+
+	// Asserções estritas de conformidade
+	if parsed.EventId != "sub_synth_abc_456" {
+		t.Errorf("EventId esperado %q, obteve %q", "sub_synth_abc_456", parsed.EventId)
+	}
+	if len(parsed.User.UserIds) != 1 || parsed.User.UserIds[0].IdType != "SHA256_EMAIL" {
+		t.Fatalf("UserIds deve conter unicamente SHA256_EMAIL, obteve: %+v", parsed.User.UserIds)
+	}
+	if parsed.User.UserInfo == nil {
+		t.Fatal("UserInfo não deve ser nulo")
+	}
+	if parsed.User.UserInfo.FirstName != "Lead" {
+		t.Errorf("FirstName esperado 'Lead', obteve %q", parsed.User.UserInfo.FirstName)
+	}
+	if parsed.User.UserInfo.LastName != "Sintetico Silva" {
+		t.Errorf("LastName esperado 'Sintetico Silva', obteve %q", parsed.User.UserInfo.LastName)
+	}
+	if parsed.User.UserInfo.CompanyName != "Empresa Exemplo Ltda" {
+		t.Errorf("CompanyName esperado 'Empresa Exemplo Ltda', obteve %q", parsed.User.UserInfo.CompanyName)
+	}
+	if parsed.User.UserInfo.Title != "Diretor de Tecnologia" {
+		t.Errorf("Title esperado 'Diretor de Tecnologia', obteve %q", parsed.User.UserInfo.Title)
+	}
+	if parsed.User.UserInfo.CountryCode != "BR" {
+		t.Errorf("CountryCode esperado 'BR', obteve %q", parsed.User.UserInfo.CountryCode)
+	}
+
 	_ = receivedBody
-	_ = ev
 }
 

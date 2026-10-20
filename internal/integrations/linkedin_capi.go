@@ -148,6 +148,7 @@ type LinkedInUserInfo struct {
 	LastName    string `json:"lastName,omitempty"`
 	Title       string `json:"title,omitempty"`
 	CompanyPage string `json:"companyPage,omitempty"`
+	CompanyName string `json:"companyName,omitempty"`
 	CountryCode string `json:"countryCode,omitempty"`
 }
 
@@ -202,19 +203,77 @@ func (l *LinkedInCAPI) SendEvent(ctx context.Context, accessToken, conversionRul
 				})
 			}
 		}
-		if ph, ok := ev.UserData["phone"].(string); ok && ph != "" {
-			norm := identity.NormalizePhone(ph)
-			if norm != "" {
-				userIds = append(userIds, LinkedInUserId{
-					IdType:  "SHA256_PHONE",
-					IdValue: identity.HashSHA256(norm),
-				})
-			}
+	}
+
+	// Suporte a LINKEDIN_FIRST_PARTY_ADS_TRACKING_UUID (li_fat_id)
+	var liFatID string
+	if ev.Attribution.LIFATID != "" {
+		liFatID = strings.TrimSpace(ev.Attribution.LIFATID)
+	}
+	if liFatID == "" && ev.UserData != nil {
+		if s, ok := ev.UserData["li_fat_id"].(string); ok && s != "" {
+			liFatID = strings.TrimSpace(s)
 		}
+	}
+	if liFatID == "" && ev.CustomData != nil {
+		if s, ok := ev.CustomData["li_fat_id"].(string); ok && s != "" {
+			liFatID = strings.TrimSpace(s)
+		}
+	}
+	if liFatID != "" {
+		userIds = append(userIds, LinkedInUserId{
+			IdType:  "LINKEDIN_FIRST_PARTY_ADS_TRACKING_UUID",
+			IdValue: liFatID,
+		})
 	}
 
 	if len(userIds) == 0 {
-		return fmt.Errorf("validação pré-despacho falhou: nenhum identificador de usuário (email ou telefone) fornecido para LinkedIn Conversions API")
+		return fmt.Errorf("validação pré-despacho falhou: nenhum identificador de usuário suportado (SHA256_EMAIL ou li_fat_id) fornecido para LinkedIn Conversions API")
+	}
+
+	// Construção de user.userInfo (texto simples) com separação segura de nomes e metadados contextuais
+	var userInfo *LinkedInUserInfo
+	if ev.UserData != nil {
+		rawName, _ := ev.UserData["name"].(string)
+		rawName = strings.TrimSpace(rawName)
+
+		var firstName, lastName string
+		if rawName != "" {
+			parts := strings.Fields(rawName)
+			if len(parts) >= 2 {
+				firstName = parts[0]
+				lastName = strings.Join(parts[1:], " ")
+			} else if len(parts) == 1 {
+				firstName = parts[0]
+			}
+		}
+
+		company, _ := ev.UserData["company"].(string)
+		if company == "" {
+			company, _ = ev.UserData["company_name"].(string)
+		}
+		company = strings.TrimSpace(company)
+
+		title, _ := ev.UserData["title"].(string)
+		if title == "" {
+			title, _ = ev.UserData["job_title"].(string)
+		}
+		title = strings.TrimSpace(title)
+
+		countryCode := "BR"
+		if cc, ok := ev.UserData["country_code"].(string); ok && strings.TrimSpace(cc) != "" {
+			countryCode = strings.ToUpper(strings.TrimSpace(cc))
+		}
+
+		if firstName != "" || lastName != "" || company != "" || title != "" {
+			userInfo = &LinkedInUserInfo{
+				FirstName:   firstName,
+				LastName:    lastName,
+				CompanyName: company,
+				Title:       title,
+				CountryCode: countryCode,
+			}
+		}
 	}
 
 	eventTimeMs := ev.EventTime.UnixMilli()
@@ -222,13 +281,20 @@ func (l *LinkedInCAPI) SendEvent(ctx context.Context, accessToken, conversionRul
 		eventTimeMs = time.Now().UnixMilli()
 	}
 
+	// Prioriza submission_id para deduplicação robusta na plataforma
+	eventID := strings.TrimSpace(ev.SubmissionID)
+	if eventID == "" {
+		eventID = strings.TrimSpace(ev.EventID)
+	}
+
 	eventPayload := LinkedInConversionEvent{
 		Conversion:           urn,
 		ConversionHappenedAt: eventTimeMs,
 		User: LinkedInUser{
-			UserIds: userIds,
+			UserIds:  userIds,
+			UserInfo: userInfo,
 		},
-		EventId: ev.EventID,
+		EventId: eventID,
 	}
 
 	// Se houver valor na conversão

@@ -708,17 +708,18 @@ func TestWorkerPool_LinkedInCAPI_E2E_BricksHydration(t *testing.T) {
 	siteID := fmt.Sprintf("site_bricks_%d", time.Now().UnixNano())
 	subID := fmt.Sprintf("sub_bricks_%d", time.Now().UnixNano())
 
-	// 1. Simula Evento 1 do Bricks: form_attempt capturou PII no navegador e gravou no Redis
+	// 1. Simula Evento 1 do Bricks: form_attempt capturou PII sintética no navegador e gravou no Redis
 	_ = rdb.SaveLeadCache(ctx, &storage.LeadCacheRecord{
 		SubmissionID: subID,
 		SiteID:       siteID,
 		UserData: map[string]interface{}{
-			"email": "eduardorosalem@soprano.com.br",
-			"phone": "5554991143857",
-			"name":  "Eduardo Rosalem",
+			"email": "lead.sintetico@exemplo.com.br",
+			"phone": "5511999990000",
+			"name":  "Lead Sintetico de Teste",
 		},
 		Consent:             storage.LeadCacheConsent{Analytics: true, Marketing: true},
 		ExplicitLeadConsent: true,
+		ConsentStatus:       "granted",
 		CachedAt:            time.Now().UTC(),
 	})
 	defer func() {
@@ -745,22 +746,166 @@ func TestWorkerPool_LinkedInCAPI_E2E_BricksHydration(t *testing.T) {
 		t.Fatalf("esperava hidratação bem-sucedida para o evento de sucesso")
 	}
 
-	// Valida que o evento foi hidratado com o email e telefone do Eduardo Rosalem
-	if evSuccess.UserData["email"] != "eduardorosalem@soprano.com.br" {
-		t.Fatalf("esperava email hidratado 'eduardorosalem@soprano.com.br', obtido '%v'", evSuccess.UserData["email"])
+	// Valida que o evento foi hidratado com o email e telefone sintéticos
+	if evSuccess.UserData["email"] != "lead.sintetico@exemplo.com.br" {
+		t.Fatalf("esperava email hidratado 'lead.sintetico@exemplo.com.br', obtido '%v'", evSuccess.UserData["email"])
 	}
-	if evSuccess.UserData["phone"] != "5554991143857" {
-		t.Fatalf("esperava phone hidratado '5554991143857', obtido '%v'", evSuccess.UserData["phone"])
+	if evSuccess.UserData["phone"] != "5511999990000" {
+		t.Fatalf("esperava phone hidratado '5511999990000', obtido '%v'", evSuccess.UserData["phone"])
 	}
 
 	// Valida que o envio direto para a LinkedIn CAPI aceita os dados hidratados
 	httpClient := integrations.NewHTTPClient(5 * time.Second)
 	liCAPI := integrations.NewLinkedInCAPI(httpClient)
-	// Como a URL padrão da LinkedIn aponta para api.linkedin.com, validamos a função SendEvent até a formatação:
-	liErr := liCAPI.SendEvent(ctx, "test_token", "urn:li:conversionRule:123456", evSuccess)
-	// O erro não deve ser "validação pré-despacho falhou: nenhum identificador de usuário"
-	if liErr != nil && strings.Contains(liErr.Error(), "nenhum identificador de usuário") {
+	liErr := liCAPI.SendEvent(ctx, "test_token", "urn:lla:llaPartnerConversion:123456", evSuccess)
+	if liErr != nil && strings.Contains(liErr.Error(), "nenhum identificador de usuário suportado") {
 		t.Fatalf("LinkedIn CAPI rejeitou evento por falta de identificador mesmo após hidratação: %v", liErr)
+	}
+}
+
+func TestHydrateEventLeadData_RaceCondition_OrderInverted(t *testing.T) {
+	cfg := &config.Config{Env: "test", RedisAddr: "127.0.0.1:6379"}
+	rdb, err := storage.NewRedis(cfg)
+	if err != nil || rdb.Client == nil {
+		t.Skip("Falha conectando ao Redis")
+	}
+
+	ctx := context.Background()
+	siteID := fmt.Sprintf("site_race_%d", time.Now().UnixNano())
+	subID := fmt.Sprintf("sub_race_%d", time.Now().UnixNano())
+	defer func() {
+		_ = rdb.DeleteLeadCache(ctx, siteID, subID)
+	}()
+
+	// Simula a chegada invertida: Evento B (form_client_validated) inicia o processamento ANTES de A gravar no Redis
+	evB := &collector.EventPayload{
+		EventID:            fmt.Sprintf("ev_b_%d", time.Now().UnixNano()),
+		SiteID:             siteID,
+		SubmissionID:       subID,
+		EventName:          "form_submit",
+		FormLifecycleState: "form_client_validated",
+		UserData:           map[string]interface{}{}, // Vazio do navegador
+		Consent:            collector.ConsentState{Analytics: true, Marketing: true},
+		EventTime:          time.Now().UTC(),
+	}
+
+	pool := NewWorkerPool(cfg, rdb, nil)
+
+	// Goroutine que simula o Evento A terminando a gravação após um atraso proposital de 300ms
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		_ = rdb.SaveLeadCache(ctx, &storage.LeadCacheRecord{
+			SubmissionID: subID,
+			SiteID:       siteID,
+			UserData: map[string]interface{}{
+				"email": "lead.invertido@exemplo.com.br",
+				"phone": "5511988887777",
+			},
+			Consent:             storage.LeadCacheConsent{Analytics: true, Marketing: true},
+			ExplicitLeadConsent: true,
+			ConsentStatus:       "granted",
+			CachedAt:            time.Now().UTC(),
+		})
+	}()
+
+	// Evento B executa hidratação com polling curto (deve esperar e encontrar na tentativa 2)
+	start := time.Now()
+	hydrated := pool.HydrateEventLeadData(ctx, evB)
+	elapsed := time.Since(start)
+
+	if !hydrated {
+		t.Fatalf("Esperava que o polling curto tolerasse a gravação atrasada de A e hidratasse B")
+	}
+	if elapsed < 200*time.Millisecond {
+		t.Errorf("Tempo decorrido (%v) deveria refletir ao menos 1 backoff", elapsed)
+	}
+	if evB.UserData["email"] != "lead.invertido@exemplo.com.br" {
+		t.Errorf("E-mail hidratado incorreto: %v", evB.UserData["email"])
+	}
+}
+
+func TestDispatcher_SubmissionDeduplication_Origin(t *testing.T) {
+	cfg := &config.Config{Env: "test", RedisAddr: "127.0.0.1:6379"}
+	rdb, err := storage.NewRedis(cfg)
+	if err != nil || rdb.Client == nil {
+		t.Skip("Falha conectando ao Redis")
+	}
+
+	ctx := context.Background()
+	subID := fmt.Sprintf("sub_dedup_%d", time.Now().UnixNano())
+	platform := "linkedin_capi"
+	defer func() {
+		_ = rdb.Client.Del(ctx, fmt.Sprintf("dispatched:sub:%s:%s", platform, subID)).Err()
+	}()
+
+	// 1. Antes do envio ou em caso de falha inicial, a chave não existe
+	dispatchedBefore, errBefore := rdb.IsSubmissionDispatched(ctx, platform, subID)
+	if errBefore != nil {
+		t.Fatalf("Erro ao verificar IsSubmissionDispatched: %v", errBefore)
+	}
+	if dispatchedBefore {
+		t.Fatalf("A submissão não deve constar como despachada antes do sucesso")
+	}
+
+	// 2. Grava sucesso no primeiro envio
+	errMark := rdb.MarkSubmissionDispatched(ctx, platform, subID, 24*time.Hour)
+	if errMark != nil {
+		t.Fatalf("Erro ao marcar submissão como despachada: %v", errMark)
+	}
+
+	// 3. Segundo envio (ex: evento irmão form_submit_success) detecta que já foi despachado com sucesso
+	dispatchedAfter, errAfter := rdb.IsSubmissionDispatched(ctx, platform, subID)
+	if errAfter != nil {
+		t.Fatalf("Erro ao verificar IsSubmissionDispatched após sucesso: %v", errAfter)
+	}
+	if !dispatchedAfter {
+		t.Fatalf("Segundo envio deveria detectar submissão já despachada")
+	}
+}
+
+func TestDispatcher_ConsentGatekeeper_LeadCache(t *testing.T) {
+	cfg := &config.Config{Env: "test", RedisAddr: "127.0.0.1:6379"}
+	rdb, err := storage.NewRedis(cfg)
+	if err != nil || rdb.Client == nil {
+		t.Skip("Falha conectando ao Redis")
+	}
+
+	ctx := context.Background()
+	siteID := fmt.Sprintf("site_consent_%d", time.Now().UnixNano())
+	subID := fmt.Sprintf("sub_consent_%d", time.Now().UnixNano())
+	defer func() {
+		_ = rdb.DeleteLeadCache(ctx, siteID, subID)
+	}()
+
+	// Grava registro com consentimento recusado
+	_ = rdb.SaveLeadCache(ctx, &storage.LeadCacheRecord{
+		SubmissionID: subID,
+		SiteID:       siteID,
+		UserData: map[string]interface{}{
+			"email": "sem.consentimento@exemplo.com.br",
+		},
+		Consent:             storage.LeadCacheConsent{Analytics: false, Marketing: false},
+		ExplicitLeadConsent: false,
+		ConsentStatus:       "denied",
+		CachedAt:            time.Now().UTC(),
+	})
+
+	ev := &collector.EventPayload{
+		EventID:      fmt.Sprintf("ev_no_consent_%d", time.Now().UnixNano()),
+		SiteID:       siteID,
+		SubmissionID: subID,
+		EventName:    "form_submit",
+		UserData:     map[string]interface{}{},
+		Consent:      collector.ConsentState{Analytics: false, Marketing: false},
+	}
+
+	pool := NewWorkerPool(cfg, rdb, nil)
+	hydrated := pool.HydrateEventLeadData(ctx, ev)
+	if hydrated {
+		t.Fatalf("Não deve hidratar dados quando o consentimento foi recusado")
+	}
+	if ev.UserData["email"] != nil {
+		t.Fatalf("UserData deve permanecer vazio quando hidratação for vetada por compliance")
 	}
 }
 
